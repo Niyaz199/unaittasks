@@ -1,31 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createServerClient } from "@supabase/ssr";
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({ request: { headers: request.headers } });
-  type CookieToSet = { name: string; value: string; options?: Parameters<typeof response.cookies.set>[2] };
+  const hasAuthCookie = request.cookies.getAll().some((cookie) => cookie.name.includes("-auth-token"));
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet: CookieToSet[]) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value));
-          response = NextResponse.next({ request: { headers: request.headers } });
-          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
-        }
-      }
-    }
-  );
+  if (!hasAuthCookie) {
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.search = "";
+    return NextResponse.redirect(loginUrl);
+  }
 
-  await supabase.auth.getUser();
-  return response;
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|sw.js|manifest.webmanifest).*)"]
+  matcher: ["/my", "/new", "/archive", "/tasks/:path*", "/objects/:path*", "/users/:path*", "/audit", "/profile"]
 };
