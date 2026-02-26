@@ -1,22 +1,17 @@
-import { unstable_cache } from "next/cache";
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Profile, Role } from "@/lib/types";
 
-const getProfileByUserIdCached = (userId: string) =>
-  unstable_cache(
-    async () => {
-      const supabase = await createSupabaseServerClient();
-      const { data } = await supabase
-        .from("profiles")
-        .select("id,full_name,role")
-        .eq("id", userId)
-        .single();
-      return data as Profile | null;
-    },
-    ["profile-by-user-id", userId],
-    { revalidate: 300 }
-  )();
+const getProfileByUserId = cache(async (userId: string) => {
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("id,full_name,role")
+    .eq("id", userId)
+    .single();
+  return data as Profile | null;
+});
 
 export async function getSessionUser() {
   const supabase = await createSupabaseServerClient();
@@ -52,7 +47,7 @@ export async function requireProfile() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const profile = await getProfileByUserIdCached(user.id);
+  const profile = await getProfileByUserId(user.id);
   if (!profile) {
     await supabase.auth.signOut();
     redirect("/login?error=profile_missing");
