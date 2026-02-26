@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Route } from "next";
 import { takeTaskInWork } from "@/app/actions/task-actions";
 import { canChangeStatus } from "@/lib/task-permissions";
 import type { Role, TaskItem } from "@/lib/types";
@@ -75,7 +76,7 @@ export function TaskList({
         })();
         return (
           <div className="section-card task-row-shell" key={task.id}>
-            <Link className="task-row-main" href={`/tasks/${task.id}`}>
+            <Link className="task-row-main" href={`/tasks/${task.id}` as Route}>
               <div className="task-row-left">
                 <div className="task-row-title">{task.title}</div>
                 <div className="task-row-meta">

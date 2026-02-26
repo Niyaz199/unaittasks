@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { Route } from "next";
 import { z } from "zod";
 import { canManageUsers, requireProfile } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -26,8 +27,8 @@ const deleteSchema = z.object({
   userId: z.string().uuid()
 });
 
-function buildCreateUserErrorRedirect(message: string) {
-  return `/users/create?error=${encodeURIComponent(message)}`;
+function buildCreateUserErrorRedirect(message: string): Route {
+  return `/users/create?error=${encodeURIComponent(message)}` as Route;
 }
 
 export async function createUserAction(formData: FormData) {

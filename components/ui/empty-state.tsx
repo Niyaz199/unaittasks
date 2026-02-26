@@ -1,10 +1,11 @@
 import Link from "next/link";
+import type { Route } from "next";
 
 type Props = {
   message: string;
   hint?: string;
   actionLabel?: string;
-  actionHref?: string;
+  actionHref?: Route;
 };
 
 export function EmptyState({ message, hint, actionLabel, actionHref }: Props) {

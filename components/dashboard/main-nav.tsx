@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Route } from "next";
 import type { Role } from "@/lib/types";
 
 type Props = {
@@ -6,13 +7,13 @@ type Props = {
   currentPath: string;
 };
 
-function isActive(currentPath: string, href: string) {
+function isActive(currentPath: string, href: Route) {
   if (currentPath === href || currentPath.startsWith(`${href}/`)) return true;
   if (href === "/my") return currentPath === "/my" || currentPath.startsWith("/tasks/");
   return false;
 }
 
-function Item({ href, label, currentPath }: { href: string; label: string; currentPath: string }) {
+function Item({ href, label, currentPath }: { href: Route; label: string; currentPath: string }) {
   const active = isActive(currentPath, href);
   return (
     <Link href={href} className={`side-nav-link${active ? " active" : ""}`}>

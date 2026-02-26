@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import type { Role } from "@/lib/types";
 
 export function MobileTabs({ role }: { role: Role }) {
   const pathname = usePathname();
   const canManageDirectories = role === "admin" || role === "chief";
-  const tabs = [
+  const tabs: Array<{ href: Route; label: string }> = [
     { href: "/my", label: "Мои" },
     { href: "/new", label: "Новые" },
     { href: "/archive", label: "Архив" },

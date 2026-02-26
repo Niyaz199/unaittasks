@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { useMemo, useState } from "react";
 import type { ObjectItem } from "@/lib/types";
 
@@ -18,8 +19,8 @@ type Props = {
     sort?: string;
   };
   showCreateButton?: boolean;
-  createHref?: string;
-  listHref?: string;
+  createHref?: Route;
+  listHref?: Route;
 };
 
 export function TaskFilters({
@@ -44,7 +45,7 @@ export function TaskFilters({
     [initial]
   );
 
-  function buildHref(overrides: Record<string, string>) {
+  function buildHref(overrides: Record<string, string>): Route {
     const params = new URLSearchParams();
     params.set("q", initial.q ?? "");
     params.set("status", initial.status ?? "all");
@@ -55,10 +56,10 @@ export function TaskFilters({
     params.set("due", initial.due ?? "all");
     params.set("sort", initial.sort ?? "due_asc");
     Object.entries(overrides).forEach(([key, value]) => params.set(key, value));
-    return `${listHref}?${params.toString()}`;
+    return `${listHref}?${params.toString()}` as Route;
   }
 
-  const quickChips = [
+  const quickChips: Array<{ key: string; label: string; href: Route; active: boolean }> = [
     {
       key: "all",
       label: "Все",
