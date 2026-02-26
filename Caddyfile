@@ -1,0 +1,3 @@
+unaittasks.tech {
+  reverse_proxy app:3000
+}

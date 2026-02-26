@@ -1,0 +1,17 @@
+{
+  "name": "Задачник эксплуатации",
+  "short_name": "Задачник",
+  "description": "PWA для задач инженеров по объектам",
+  "start_url": "/my",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
