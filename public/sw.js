@@ -20,7 +20,24 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") return;
+
+  if (event.request.headers.has("range")) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  if (url.searchParams.has("_rsc")) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  if (event.request.method !== "GET") {
+    event.respondWith(fetch(event.request));
+    return;
+  }
 
   const accept = event.request.headers.get("accept") || "";
   const isHtmlNavigation = event.request.mode === "navigate" || accept.includes("text/html");
@@ -29,7 +46,10 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  const url = new URL(event.request.url);
+  if (url.pathname.startsWith("/_next/data/") || url.pathname.startsWith("/_next/webpack-hmr")) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
   const isNextStatic = url.pathname.startsWith("/_next/static/");
   const isManifest = url.pathname === "/manifest.webmanifest";
   const isIcon = url.pathname === "/icon.svg";
