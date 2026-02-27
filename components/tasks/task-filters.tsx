@@ -1,9 +1,25 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import type { Route } from "next";
 import { useMemo, useState } from "react";
-import type { ObjectItem } from "@/lib/types";
+import type { ObjectItem, TaskItem } from "@/lib/types";
+import { isOverdue, isDueToday } from "@/lib/task-sort";
+
+// Шторка фильтров загружается лениво — пользователь видит её только после клика «Фильтры»
+const FiltersDrawer = dynamic(
+  () => import("@/components/tasks/filters-drawer").then((m) => m.FiltersDrawer),
+  { ssr: false }
+);
+
+export type KpiData = {
+  overdue: number;
+  today: number;
+  critical: number;
+  inProgress: number;
+  newCount: number;
+};
 
 type Props = {
   objects: ObjectItem[];
@@ -17,10 +33,15 @@ type Props = {
     teamMember?: string;
     due?: string;
     sort?: string;
+    clientSort?: string;
+    groupBy?: string;
   };
   showCreateButton?: boolean;
   createHref?: Route;
   listHref?: Route;
+  tasks?: TaskItem[];
+  /** Полный список задач без фильтров — для KPI */
+  allTasks?: TaskItem[];
 };
 
 export function TaskFilters({
@@ -29,22 +50,35 @@ export function TaskFilters({
   initial,
   showCreateButton = false,
   createHref = "/tasks/create",
-  listHref = "/my"
+  listHref = "/my",
+  tasks = [],
+  allTasks
 }: Props) {
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
 
+  // KPI считается от полного списка (без фильтров), если он передан, иначе от текущего
+  const kpiSource = allTasks ?? tasks;
+  const kpi = useMemo<KpiData>(() => {
+    const overdue = kpiSource.filter((t) => isOverdue(t)).length;
+    const today = kpiSource.filter((t) => isDueToday(t)).length;
+    const critical = kpiSource.filter((t) => t.priority === "critical" && t.status !== "done").length;
+    const inProgress = kpiSource.filter((t) => t.status === "in_progress").length;
+    const newCount = kpiSource.filter((t) => t.status === "new").length;
+    return { overdue, today, critical, inProgress, newCount };
+  }, [kpiSource]);
+
+  // Индикатор "Фильтры" горит только от медленных фильтров шторки (объект/исполнитель/команда),
+  // не от quick-чипов (status/priority/due) — они управляются через чипы и KPI.
   const hasAdvancedFilters = useMemo(
     () =>
-      (initial.status ?? "all") !== "all" ||
-      (initial.priority ?? "all") !== "all" ||
       (initial.object ?? "all") !== "all" ||
       (initial.assignee ?? "all") !== "all" ||
-      (initial.teamMember ?? "all") !== "all" ||
-      (initial.due ?? "all") !== "all" ||
-      (initial.sort ?? "due_asc") !== "due_asc",
+      (initial.teamMember ?? "all") !== "all",
     [initial]
   );
 
+  // Строит href, сохраняя ВСЕ текущие параметры и перезаписывая нужные.
+  // Используется только для формы поиска.
   function buildHref(overrides: Record<string, string>): Route {
     const params = new URLSearchParams();
     params.set("q", initial.q ?? "");
@@ -55,55 +89,73 @@ export function TaskFilters({
     params.set("team_member", initial.teamMember ?? "all");
     params.set("due", initial.due ?? "all");
     params.set("sort", initial.sort ?? "due_asc");
+    params.set("client_sort", initial.clientSort ?? "smart");
+    params.set("group_by", initial.groupBy ?? "none");
     Object.entries(overrides).forEach(([key, value]) => params.set(key, value));
     return `${listHref}?${params.toString()}` as Route;
   }
 
-  const quickChips: Array<{ key: string; label: string; href: Route; active: boolean }> = [
-    {
-      key: "all",
-      label: "Все",
-      href: buildHref({ status: "all", due: "all" }),
-      active: (initial.status ?? "all") === "all" && (initial.due ?? "all") === "all"
-    },
-    {
-      key: "new",
-      label: "Новые",
-      href: buildHref({ status: "new", due: "all" }),
-      active: (initial.status ?? "all") === "new" && (initial.due ?? "all") === "all"
-    },
-    {
-      key: "in_progress",
-      label: "В работе",
-      href: buildHref({ status: "in_progress", due: "all" }),
-      active: (initial.status ?? "all") === "in_progress" && (initial.due ?? "all") === "all"
-    },
-    {
-      key: "paused",
-      label: "Пауза",
-      href: buildHref({ status: "paused", due: "all" }),
-      active: (initial.status ?? "all") === "paused" && (initial.due ?? "all") === "all"
-    },
-    {
-      key: "done",
-      label: "Выполненные",
-      href: buildHref({ status: "done", due: "all" }),
-      active: (initial.status ?? "all") === "done" && (initial.due ?? "all") === "all"
-    },
-    {
-      key: "overdue",
-      label: "Просроченные",
-      href: buildHref({ status: "all", due: "overdue" }),
-      active: (initial.status ?? "all") === "all" && (initial.due ?? "all") === "overdue"
-    }
+  // Строит href для чипов и KPI-плиток: сбрасывает ВСЕ quick-параметры
+  // (status/priority/due), сохраняет только "медленные" (object/assignee/team/sort/etc.)
+  // и применяет только то, что явно передано.
+  function buildQuickHref(quick: Record<string, string>): Route {
+    const params = new URLSearchParams();
+    params.set("q", initial.q ?? "");
+    params.set("status", "all");
+    params.set("priority", "all");
+    params.set("due", "all");
+    params.set("object", initial.object ?? "all");
+    params.set("assignee", initial.assignee ?? "all");
+    params.set("team_member", initial.teamMember ?? "all");
+    params.set("sort", initial.sort ?? "due_asc");
+    params.set("client_sort", initial.clientSort ?? "smart");
+    params.set("group_by", initial.groupBy ?? "none");
+    Object.entries(quick).forEach(([key, value]) => params.set(key, value));
+    return `${listHref}?${params.toString()}` as Route;
+  }
+
+  const activeChip = useMemo(() => {
+    const s = initial.status ?? "all";
+    const p = initial.priority ?? "all";
+    const d = initial.due ?? "all";
+    if (d === "overdue") return "overdue";
+    if (d === "today") return "today";
+    if (p === "critical" && s === "all" && d === "all") return "critical";
+    return s;
+  }, [initial.status, initial.priority, initial.due]);
+
+  const quickChips: Array<{ key: string; label: string; href: Route }> = [
+    { key: "all",         label: "Все",          href: buildQuickHref({}) },
+    { key: "overdue",     label: "Просрочено",   href: buildQuickHref({ due: "overdue" }) },
+    { key: "today",       label: "Сегодня",      href: buildQuickHref({ due: "today" }) },
+    { key: "in_progress", label: "В работе",     href: buildQuickHref({ status: "in_progress" }) },
+    { key: "new",         label: "Новые",        href: buildQuickHref({ status: "new" }) },
+    { key: "done",        label: "Выполненные",  href: buildQuickHref({ status: "done" }) },
+  ];
+
+  const kpiItems: Array<{ label: string; value: number; href: Route; accent?: string }> = [
+    { label: "Просрочено",  value: kpi.overdue,    href: buildQuickHref({ due: "overdue" }),        accent: "danger" },
+    { label: "Сегодня",     value: kpi.today,      href: buildQuickHref({ due: "today" }),          accent: "warning" },
+    { label: "Критических", value: kpi.critical,   href: buildQuickHref({ priority: "critical" }),  accent: "critical" },
+    { label: "В работе",    value: kpi.inProgress, href: buildQuickHref({ status: "in_progress" }), accent: "info" },
+    { label: "Новых",       value: kpi.newCount,   href: buildQuickHref({ status: "new" }),          accent: "neutral" },
   ];
 
   return (
     <>
-      <div className="section-card grid">
-        <div className="task-toolbar">
-          <form className="task-search-form" action="">
-            <input className="input" name="q" defaultValue={initial.q ?? ""} placeholder="Поиск по названию задачи" />
+      <div className="tl-kpi-bar">
+        {kpiItems.map((item) => (
+          <Link key={item.label} href={item.href} className={`tl-kpi-card tl-kpi-${item.accent}`}>
+            <span className="tl-kpi-value">{item.value}</span>
+            <span className="tl-kpi-label">{item.label}</span>
+          </Link>
+        ))}
+      </div>
+
+      <div className="tl-sticky-bar">
+        <div className="tl-search-row">
+          <form className="tl-search-form" action="">
+            <input className="input tl-search-input" name="q" defaultValue={initial.q ?? ""} placeholder="Поиск по задаче…" />
             <input type="hidden" name="status" value={initial.status ?? "all"} />
             <input type="hidden" name="priority" value={initial.priority ?? "all"} />
             <input type="hidden" name="object" value={initial.object ?? "all"} />
@@ -111,101 +163,47 @@ export function TaskFilters({
             <input type="hidden" name="team_member" value={initial.teamMember ?? "all"} />
             <input type="hidden" name="due" value={initial.due ?? "all"} />
             <input type="hidden" name="sort" value={initial.sort ?? "due_asc"} />
-            <button className="btn btn-ghost" type="submit">
-              Поиск
+            <input type="hidden" name="client_sort" value={initial.clientSort ?? "smart"} />
+            <input type="hidden" name="group_by" value={initial.groupBy ?? "none"} />
+            <button className="btn tl-search-btn" type="submit" aria-label="Найти">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             </button>
           </form>
-
-          <div className="row">
+          <div className="tl-toolbar-actions">
             {showCreateButton ? (
-              <Link className="btn btn-accent" href={createHref}>
-                + Новая задача
+              <Link className="btn btn-accent tl-btn-new" href={createHref}>
+                + Задача
               </Link>
             ) : null}
-            <button className="btn" type="button" onClick={() => setIsFiltersOpen(true)}>
+            <button
+              className={`btn tl-btn-filters${hasAdvancedFilters ? " tl-btn-filters--active" : ""}`}
+              type="button"
+              onClick={() => setIsFiltersOpen(true)}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
               Фильтры
+              {hasAdvancedFilters ? <span className="tl-filters-dot" aria-hidden="true" /> : null}
             </button>
           </div>
         </div>
-        <div className="filter-chips-row">
+
+        <div className="tl-chips-scroll">
           {quickChips.map((chip) => (
-            <Link key={chip.key} href={chip.href} className={`filter-chip${chip.active ? " active" : ""}`}>
+            <Link key={chip.key} href={chip.href} className={`tl-chip${activeChip === chip.key ? " tl-chip--active" : ""}`}>
               {chip.label}
             </Link>
           ))}
         </div>
-        {hasAdvancedFilters ? (
-          <div className="text-soft task-advanced-hint">
-            Применены расширенные фильтры
-          </div>
-        ) : null}
       </div>
 
       {isFiltersOpen ? (
-        <div className="filters-overlay" onClick={() => setIsFiltersOpen(false)} role="presentation">
-          <aside className="filters-drawer" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="modal-title">Фильтры</h2>
-              <button className="btn btn-ghost" type="button" onClick={() => setIsFiltersOpen(false)}>
-                Закрыть
-              </button>
-            </div>
-            <p className="text-soft filters-drawer-hint">
-              Уточните список по объекту, исполнителю, участнику команды, приоритету и сроку.
-            </p>
-            <form className="grid" action="">
-              <input type="hidden" name="q" value={initial.q ?? ""} />
-              <input type="hidden" name="status" value={initial.status ?? "all"} />
-              <input type="hidden" name="sort" value={initial.sort ?? "due_asc"} />
-
-              <select className="select" name="object" defaultValue={initial.object ?? "all"}>
-                <option value="all">Любой объект</option>
-                {objects.map((obj) => (
-                  <option key={obj.id} value={obj.id}>
-                    {obj.name}
-                  </option>
-                ))}
-              </select>
-              <select className="select" name="assignee" defaultValue={initial.assignee ?? "all"}>
-                <option value="all">Любой ответственный</option>
-                {assignees.map((assignee) => (
-                  <option key={assignee.id} value={assignee.id}>
-                    {assignee.full_name}
-                  </option>
-                ))}
-              </select>
-              <select className="select" name="team_member" defaultValue={initial.teamMember ?? "all"}>
-                <option value="all">Любой участник команды</option>
-                {assignees.map((assignee) => (
-                  <option key={assignee.id} value={assignee.id}>
-                    {assignee.full_name}
-                  </option>
-                ))}
-              </select>
-              <select className="select" name="priority" defaultValue={initial.priority ?? "all"}>
-                <option value="all">Любой приоритет</option>
-                <option value="low">Низкий</option>
-                <option value="medium">Средний</option>
-                <option value="high">Высокий</option>
-                <option value="critical">Критический</option>
-              </select>
-              <select className="select" name="due" defaultValue={initial.due ?? "all"}>
-                <option value="all">Любой срок</option>
-                <option value="overdue">Просрочено</option>
-                <option value="today">Сегодня</option>
-                <option value="week">Ближайшая неделя</option>
-              </select>
-              <div className="row filters-actions">
-                <button className="btn btn-accent" type="submit">
-                  Применить
-                </button>
-                <Link className="btn" href={listHref}>
-                  Сбросить
-                </Link>
-              </div>
-            </form>
-          </aside>
-        </div>
+        <FiltersDrawer
+          objects={objects}
+          assignees={assignees}
+          initial={initial}
+          listHref={listHref as Route}
+          onClose={() => setIsFiltersOpen(false)}
+        />
       ) : null}
     </>
   );

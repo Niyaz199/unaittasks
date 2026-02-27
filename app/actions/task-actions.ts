@@ -410,6 +410,103 @@ export async function createTaskAction(formData: FormData) {
   revalidatePath("/new");
 }
 
+export async function createTaskActionSafe(
+  formData: FormData
+): Promise<{ ok: true; taskId: string } | { ok: false; error: string }> {
+  try {
+    const { profile } = await requireProfile();
+    if (!canEditTasks(profile.role)) return { ok: false, error: "Нет прав на создание задач" };
+
+    const payload = taskCreateSchema.parse({
+      title: String(formData.get("title") ?? ""),
+      description: String(formData.get("description") ?? ""),
+      objectId: String(formData.get("object_id") ?? ""),
+      priority: String(formData.get("priority") ?? "medium"),
+      dueAt: String(formData.get("due_at") ?? ""),
+      assignedTo: String(formData.get("assigned_to") ?? ""),
+      teamMemberIds: formData.getAll("team_member_ids").map(String).filter(Boolean)
+    });
+
+    const dueAtIso = payload.dueAt?.trim()
+      ? (() => {
+          const date = new Date(payload.dueAt);
+          if (Number.isNaN(date.getTime())) throw new Error("Некорректный срок due_at");
+          return date.toISOString();
+        })()
+      : null;
+
+    const supabase = await createSupabaseServerClient();
+    const assigneeRole = await getRoleByUserId(supabase, payload.assignedTo);
+    if (!assigneeRole) return { ok: false, error: "Не найден профиль исполнителя" };
+
+    const objectEngineerId = await getObjectEngineerByObjectId(supabase, payload.objectId);
+    const canAssign = canCreateOrAssignTask(profile.role, assigneeRole, {
+      objectEngineerScoped: objectEngineerId === profile.id
+    });
+    if (!canAssign) return { ok: false, error: "Недостаточно прав для назначения выбранного исполнителя" };
+
+    const { data, error } = await supabase
+      .from("tasks")
+      .insert({
+        title: payload.title.trim(),
+        description: payload.description?.trim() || null,
+        object_id: payload.objectId,
+        status: "new",
+        priority: payload.priority,
+        due_at: dueAtIso,
+        created_by: profile.id,
+        assigned_to: payload.assignedTo
+      })
+      .select("id,title")
+      .single();
+    if (error) return { ok: false, error: "Ошибка при создании задачи" };
+
+    const dedupTeamMemberIds = [...new Set((payload.teamMemberIds ?? []).filter((id) => id !== payload.assignedTo))];
+    if (dedupTeamMemberIds.length) {
+      const rows = dedupTeamMemberIds.map((memberId) => ({
+        task_id: data.id,
+        user_id: memberId,
+        added_by: profile.id
+      }));
+      const { error: teamError } = await supabase.from("task_team_members").upsert(rows);
+      if (teamError) return { ok: false, error: "Задача создана, но не удалось добавить участников команды" };
+    }
+
+    await writeAudit({
+      actorId: profile.id,
+      action: "create_task",
+      entityType: "task",
+      entityId: data.id,
+      meta: { assigned_to: payload.assignedTo, team_member_ids: dedupTeamMemberIds, priority: payload.priority, due_at: dueAtIso }
+    });
+
+    if (payload.assignedTo !== profile.id) {
+      await writeAudit({
+        actorId: profile.id,
+        action: "assign_task",
+        entityType: "task",
+        entityId: data.id,
+        meta: { assigned_to: payload.assignedTo }
+      });
+    }
+
+    await sendPushToUser(payload.assignedTo, {
+      title: "Новая задача",
+      body: payload.title,
+      taskId: data.id,
+      url: `/tasks/${data.id}`
+    });
+
+    revalidatePath("/my");
+    revalidatePath("/new");
+
+    return { ok: true, taskId: data.id };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Неизвестная ошибка";
+    return { ok: false, error: message };
+  }
+}
+
 export async function addTaskTeamMemberAction(formData: FormData) {
   const { profile } = await requireProfile();
   if (!canManageTaskTeam(profile.role)) {
