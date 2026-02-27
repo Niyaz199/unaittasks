@@ -1631,6 +1631,130 @@ textarea {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   TASK LIST – mobile polish
+   ───────────────────────────────────────────────────────────── */
+
+/* 1. KPI сворачиваемый блок */
+.tl-kpi-section {
+  display: grid;
+  gap: 0.35rem;
+}
+
+/* На мобиле KPI по умолчанию свёрнут: одна строка, горизонтальный скролл */
+.tl-kpi-bar {
+  /* уже grid 2-col на мобиле, переключаем на flex-scroll в свёрнутом виде */
+}
+
+/* Свёрнутое состояние (по умолчанию mobile) */
+@media (max-width: 639px) {
+  .tl-kpi-bar:not(.tl-kpi-bar--expanded) {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 0.42rem;
+  }
+  .tl-kpi-bar:not(.tl-kpi-bar--expanded)::-webkit-scrollbar { display: none; }
+
+  .tl-kpi-bar:not(.tl-kpi-bar--expanded) .tl-kpi-card {
+    flex-shrink: 0;
+    min-width: 80px;
+    min-height: 52px;
+    padding: 0.45rem 0.5rem;
+    border-radius: 10px;
+  }
+  .tl-kpi-bar:not(.tl-kpi-bar--expanded) .tl-kpi-value {
+    font-size: 1.25rem;
+  }
+  .tl-kpi-bar:not(.tl-kpi-bar--expanded) .tl-kpi-label {
+    font-size: 0.64rem;
+  }
+
+  /* Развёрнутое состояние на мобиле: 2x3 сетка */
+  .tl-kpi-bar--expanded {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .tl-kpi-bar--expanded .tl-kpi-card {
+    min-height: 60px;
+    padding: 0.6rem 0.5rem;
+  }
+  .tl-kpi-bar--expanded .tl-kpi-value {
+    font-size: 1.4rem;
+  }
+}
+
+/* Кнопка-тоггл KPI (только mobile) */
+.tl-kpi-toggle {
+  display: none;
+}
+@media (max-width: 639px) {
+  .tl-kpi-toggle {
+    display: inline-flex;
+    align-self: flex-start;
+    border: none;
+    background: transparent;
+    color: var(--text-soft);
+    font-size: 0.76rem;
+    padding: 0.15rem 0.1rem;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-color: color-mix(in srgb, var(--text-soft) 40%, transparent);
+  }
+  .tl-kpi-toggle:hover { color: var(--text); }
+}
+
+/* 2. Скрыть описание PageHeader на мобиле */
+@media (max-width: 639px) {
+  .tl-page .page-description {
+    display: none;
+  }
+}
+
+/* 3. padding-bottom для списка задач — не перекрывается нижним nav */
+.tl-list {
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 1024px) {
+  /* На десктопе нижнего nav нет */
+  .tl-list {
+    padding-bottom: 0.5rem;
+  }
+}
+
+/* 4. Sticky-бар: добавить отступ снизу, чтобы первая карточка не залезала под шапку */
+.tl-sticky-bar {
+  /* Добавляем нижнюю тень-разделитель, чтобы контент под ним был виден */
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--bg) 80%, transparent);
+}
+/* Список начинается с небольшим gap от sticky, который уже есть в .tl-page gap:0.75rem — достаточно */
+
+/* 5. Меню ⋯ на мобиле: фиксируем dropdown чтобы не обрезался overflow:hidden карточки */
+@media (max-width: 639px) {
+  .tl-action-dropdown {
+    position: fixed;
+    /* Позиционируем через JS-переменные не нужны — используем bottom/right */
+    bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px) + 0.5rem);
+    right: 0.75rem;
+    top: auto;
+    left: auto;
+    min-width: 180px;
+    z-index: 100;
+  }
+
+  /* Backdrop для меню занимает весь экран включая scroll area */
+  .tl-action-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 99;
+    /* Полупрозрачный фон чтобы было понятно что меню открыто */
+    background: rgba(2, 8, 20, 0.3);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
    CREATE TASK FORM (ctf-*)
    ───────────────────────────────────────────────────────────── */
 

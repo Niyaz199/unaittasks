@@ -55,6 +55,7 @@ export function TaskFilters({
   allTasks
 }: Props) {
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  const [kpiExpanded, setKpiExpanded] = useState(false);
 
   // KPI считается от полного списка (без фильтров), если он передан, иначе от текущего
   const kpiSource = allTasks ?? tasks;
@@ -143,13 +144,23 @@ export function TaskFilters({
 
   return (
     <>
-      <div className="tl-kpi-bar">
-        {kpiItems.map((item) => (
-          <Link key={item.label} href={item.href} className={`tl-kpi-card tl-kpi-${item.accent}`}>
-            <span className="tl-kpi-value">{item.value}</span>
-            <span className="tl-kpi-label">{item.label}</span>
-          </Link>
-        ))}
+      <div className="tl-kpi-section">
+        <div className={`tl-kpi-bar${kpiExpanded ? " tl-kpi-bar--expanded" : ""}`}>
+          {kpiItems.map((item) => (
+            <Link key={item.label} href={item.href} className={`tl-kpi-card tl-kpi-${item.accent}`}>
+              <span className="tl-kpi-value">{item.value}</span>
+              <span className="tl-kpi-label">{item.label}</span>
+            </Link>
+          ))}
+        </div>
+        <button
+          className="tl-kpi-toggle"
+          type="button"
+          onClick={() => setKpiExpanded((v) => !v)}
+          aria-expanded={kpiExpanded}
+        >
+          {kpiExpanded ? "Свернуть" : "Аналитика"}
+        </button>
       </div>
 
       <div className="tl-sticky-bar">
