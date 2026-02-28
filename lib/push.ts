@@ -16,25 +16,55 @@ function ensureConfigured() {
   return true;
 }
 
-export async function sendPushToUser(userId: string, payload: Record<string, unknown>) {
-  if (!ensureConfigured()) return;
+export type PushResult = {
+  total: number;
+  sent: number;
+  failed: number;
+  cleaned: number;
+  errors: string[];
+};
+
+export async function sendPushToUser(
+  userId: string,
+  payload: Record<string, unknown>
+): Promise<PushResult> {
+  const result: PushResult = { total: 0, sent: 0, failed: 0, cleaned: 0, errors: [] };
+
+  if (!ensureConfigured()) return result;
+
   const supabase = createSupabaseAdminClient();
   const { data } = await supabase
     .from("push_subscriptions")
     .select("id,endpoint,p256dh,auth")
     .eq("user_id", userId);
 
-  for (const row of data ?? []) {
+  const rows = data ?? [];
+  result.total = rows.length;
+
+  for (const row of rows) {
     try {
       await webpush.sendNotification(
-        {
-          endpoint: row.endpoint,
-          keys: { p256dh: row.p256dh, auth: row.auth }
-        },
+        { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
         JSON.stringify(payload)
       );
-    } catch {
-      // Unsubscribed endpoints can be cleaned later by housekeeping job.
+      result.sent++;
+    } catch (err: unknown) {
+      const statusCode =
+        err && typeof err === "object" && "statusCode" in err
+          ? (err as { statusCode: number }).statusCode
+          : 0;
+
+      // 410 Gone / 404 Not Found — браузер отписался, удаляем запись
+      if (statusCode === 410 || statusCode === 404) {
+        await supabase.from("push_subscriptions").delete().eq("id", row.id);
+        result.cleaned++;
+      } else {
+        result.failed++;
+        const message = err instanceof Error ? err.message : String(err);
+        result.errors.push(message);
+      }
     }
   }
+
+  return result;
 }
