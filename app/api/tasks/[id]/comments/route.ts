@@ -27,16 +27,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       team_members: Array<{ user_id: string }> | null;
     };
 
-    const { data: task } = await supabase
+    const { data: task, error: taskError } = await supabase
       .from("tasks")
-      .select(
-        "id,title,assigned_to,created_by,object_id,objects(name,object_engineer_id),team_members:task_team_members(user_id)"
-      )
+      .select("id, title, assigned_to, created_by, object_id, objects(name, object_engineer_id), team_members:task_team_members(user_id)")
       .eq("id", id)
       .single();
+    if (taskError) console.error("[comments] task fetch error:", taskError);
     if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
 
     const row = task as unknown as TaskRow;
+
+    console.log("[comments] raw task row:", {
+      id: row.id,
+      title: row.title,
+      assigned_to: row.assigned_to,
+      created_by: row.created_by,
+      team_members: row.team_members,
+    });
+
     const teamMemberIds = (row.team_members ?? []).map((member) => member.user_id);
     const objectsRelation = row.objects;
     const objectName = Array.isArray(objectsRelation)
@@ -115,11 +123,21 @@ type CommentPushParams = {
 };
 
 async function sendCommentPushes(p: CommentPushParams) {
-  // Collect unique observer IDs, exclude the actor (comment author)
-  const observers = [...new Set([p.assignedTo, p.createdBy, ...p.teamMemberIds])].filter(
-    (uid) => uid && uid !== p.actorId
+  const candidates = [p.assignedTo, p.createdBy, ...p.teamMemberIds];
+  const observers = [...new Set(candidates)].filter(
+    (uid): uid is string => typeof uid === "string" && uid.length > 0 && uid !== p.actorId
   );
-  if (!observers.length) return;
+
+  console.log("[comments push] actorId:", p.actorId);
+  console.log("[comments push] assigned_to:", p.assignedTo);
+  console.log("[comments push] created_by:", p.createdBy);
+  console.log("[comments push] teamMemberIds:", p.teamMemberIds);
+  console.log("[comments push] finalRecipients:", observers);
+
+  if (!observers.length) {
+    console.log("[comments push] no recipients, skipping");
+    return;
+  }
 
   const titlePrefix = p.objectName ? `[${p.objectName}] ` : "";
   const bodySnippet = p.commentBody.length > 100
@@ -132,5 +150,12 @@ async function sendCommentPushes(p: CommentPushParams) {
     url: `/tasks/${p.taskId}`,
   };
 
-  await Promise.allSettled(observers.map((uid) => sendPushToUser(uid, pushPayload)));
+  const results = await Promise.allSettled(observers.map((uid) => sendPushToUser(uid, pushPayload)));
+  results.forEach((r, i) => {
+    if (r.status === "rejected") {
+      console.error(`[comments push] failed for uid=${observers[i]}:`, r.reason);
+    } else {
+      console.log(`[comments push] result for uid=${observers[i]}:`, r.value);
+    }
+  });
 }
