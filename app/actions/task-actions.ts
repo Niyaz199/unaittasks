@@ -87,6 +87,26 @@ async function getObjectEngineerByObjectId(
   return objectRow?.object_engineer_id ?? null;
 }
 
+async function isObjectAccessibleForUser(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  objectId: string,
+  userId: string
+): Promise<boolean> {
+  const { count } = await supabase
+    .from("user_objects")
+    .select("object_id", { count: "exact", head: true })
+    .eq("object_id", objectId)
+    .eq("user_id", userId);
+  if ((count ?? 0) > 0) return true;
+
+  const { data: obj } = await supabase
+    .from("objects")
+    .select("object_engineer_id")
+    .eq("id", objectId)
+    .single();
+  return obj?.object_engineer_id === userId;
+}
+
 export async function takeTaskInWork(taskId: string) {
   const { profile } = await requireProfile();
   const supabase = await createSupabaseServerClient();
@@ -341,6 +361,11 @@ export async function createTaskAction(formData: FormData) {
   const assigneeRole = await getRoleByUserId(supabase, payload.assignedTo);
   if (!assigneeRole) throw new Error("Не найден профиль назначаемого пользователя");
 
+  if (profile.role === "engineer") {
+    const accessible = await isObjectAccessibleForUser(supabase, payload.objectId, profile.id);
+    if (!accessible) throw new Error("Объект недоступен для создания задачи");
+  }
+
   const objectEngineerId = await getObjectEngineerByObjectId(supabase, payload.objectId);
   const canAssign = canCreateOrAssignTask(profile.role, assigneeRole, {
     objectEngineerScoped: objectEngineerId === profile.id
@@ -438,6 +463,11 @@ export async function createTaskActionSafe(
     const supabase = await createSupabaseServerClient();
     const assigneeRole = await getRoleByUserId(supabase, payload.assignedTo);
     if (!assigneeRole) return { ok: false, error: "Не найден профиль исполнителя" };
+
+    if (profile.role === "engineer") {
+      const accessible = await isObjectAccessibleForUser(supabase, payload.objectId, profile.id);
+      if (!accessible) return { ok: false, error: "Объект недоступен для создания задачи" };
+    }
 
     const objectEngineerId = await getObjectEngineerByObjectId(supabase, payload.objectId);
     const canAssign = canCreateOrAssignTask(profile.role, assigneeRole, {

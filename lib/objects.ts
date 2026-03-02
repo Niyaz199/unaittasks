@@ -19,9 +19,11 @@ export async function listObjectsForProfile(supabase: SupabaseClient, profile: P
       .eq("user_id", profile.id);
     if (error) throw error;
 
-    const rows = (data ?? []) as Array<{ objects: ObjectItem[] | null }>;
+    // PostgREST returns the related object as a single record (not an array)
+    // because user_objects.object_id is a ManyToOne FK → objects
+    const rows = (data ?? []) as Array<{ objects: ObjectItem | null }>;
     return rows
-      .map((row) => row.objects?.[0] ?? null)
+      .map((row) => row.objects ?? null)
       .filter(Boolean) as ObjectItem[];
   }
 
