@@ -19,12 +19,13 @@ export async function listObjectsForProfile(supabase: SupabaseClient, profile: P
       .eq("user_id", profile.id);
     if (error) throw error;
 
-    // PostgREST returns the related object as a single record (not an array)
-    // because user_objects.object_id is a ManyToOne FK → objects
-    const rows = (data ?? []) as Array<{ objects: ObjectItem | null }>;
+    // PostgREST returns the related record as a single object (ManyToOne FK),
+    // not an array. Cast through unknown to satisfy TS when no generated types.
+    type UserObjectRow = { objects: ObjectItem | null };
+    const rows = (data as unknown as UserObjectRow[]) ?? [];
     return rows
       .map((row) => row.objects ?? null)
-      .filter(Boolean) as ObjectItem[];
+      .filter((obj): obj is ObjectItem => obj !== null);
   }
 
   const { data, error } = await supabase
