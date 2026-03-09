@@ -9,6 +9,11 @@ export const taskStatusMeta: Record<TaskStatus, { label: string; tone: Tone }> =
   done: { label: "Выполнена", tone: "success" }
 };
 
+/** Переводит raw-статус задачи в читаемый русский текст. Безопасно для неизвестных значений из audit_log. */
+export function humanStatus(raw: string): string {
+  return (taskStatusMeta as Record<string, { label: string }>)[raw]?.label ?? raw;
+}
+
 export const taskPriorityMeta: Record<TaskPriority, { label: string; tone: Tone }> = {
   low: { label: "Низкий", tone: "neutral" },
   medium: { label: "Средний", tone: "info" },

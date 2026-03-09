@@ -8,6 +8,7 @@ type AuditAction =
   | "accept"
   | "status_change"
   | "pause_task"
+  | "task_archived_manual"
   | "comment"
   | "team_add_member"
   | "team_remove_member"

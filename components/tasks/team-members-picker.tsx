@@ -83,12 +83,13 @@ export function TeamMembersPicker({
       {!disabled ? (
         <>
           {quickActions.length ? (
-            <div className="row" style={{ flexWrap: "wrap" }}>
+            <div className="team-quick-actions">
               {quickActions.map((action) => (
                 <button
                   key={`${action.id}-${action.label}`}
                   type="button"
-                  className="btn btn-ghost"
+                  className="btn btn-ghost team-quick-btn"
+                  disabled={selectedIds.includes(action.id)}
                   onClick={() => {
                     if (selectedIds.includes(action.id)) return;
                     onAdd(action.id);
@@ -109,7 +110,7 @@ export function TeamMembersPicker({
             onBlur={() => setTimeout(() => setIsOpen(false), 120)}
           >
             <input
-              className="input"
+              className="input team-search-input"
               value={query}
               placeholder={placeholder}
               onFocus={() => setIsOpen(true)}

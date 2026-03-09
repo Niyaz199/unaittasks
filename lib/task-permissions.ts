@@ -1,10 +1,15 @@
-import type { Role } from "@/lib/types";
+import type { Role, TaskStatus } from "@/lib/types";
 
 type TaskAccess = {
   id: string;
   object_id: string;
   created_by: string;
   assigned_to: string;
+};
+
+type TaskArchiveAccess = {
+  status: TaskStatus;
+  archived_at: string | null;
 };
 
 export function canAssignRole(assignerRole: Role, targetRole: Role) {
@@ -70,4 +75,10 @@ export function canChangeStatus(
   options?: { teamMemberIds?: string[] }
 ) {
   return canChangeTaskStatus(currentUser.role, task, currentUser.id, options?.teamMemberIds ?? []);
+}
+
+export function canArchiveTask(role: Role, task: TaskArchiveAccess) {
+  if (!["admin", "chief"].includes(role)) return false;
+  if (task.status !== "done") return false;
+  return task.archived_at === null;
 }

@@ -10,9 +10,10 @@ type Props = {
   taskId: string;
   currentStatus: TaskStatus;
   canEdit: boolean;
+  canArchive?: boolean;
 };
 
-export function StatusControl({ taskId, currentStatus, canEdit }: Props) {
+export function StatusControl({ taskId, currentStatus, canEdit, canArchive = false }: Props) {
   const [status, setStatus] = useState<TaskStatus>(currentStatus);
   const [pauseOpen, setPauseOpen] = useState(false);
   const [pauseReason, setPauseReason] = useState("");
@@ -95,6 +96,23 @@ export function StatusControl({ taskId, currentStatus, canEdit }: Props) {
     router.refresh();
   }
 
+  async function submitArchive() {
+    setMessage(null);
+    if (!canArchive) return;
+    if (!window.confirm("Перенести задачу в архив? Это действие нельзя отменить.")) return;
+    if (!navigator.onLine) {
+      setMessage("Для архивации нужна сеть.");
+      return;
+    }
+    const response = await fetch(`/api/tasks/${taskId}/archive`, { method: "POST" });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      setMessage(payload.error ?? "Не удалось архивировать задачу");
+      return;
+    }
+    router.refresh();
+  }
+
   return (
     <>
       <div className="grid">
@@ -122,6 +140,23 @@ export function StatusControl({ taskId, currentStatus, canEdit }: Props) {
             </button>
           ))}
         </div>
+        {canArchive ? (
+          <div className="sc-archive-row">
+            <button
+              className="sc-archive-btn"
+              type="button"
+              disabled={pending}
+              onClick={() => startTransition(() => void submitArchive())}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="21 8 21 21 3 21 3 8"/>
+                <rect x="1" y="3" width="22" height="5"/>
+                <line x1="10" y1="12" x2="14" y2="12"/>
+              </svg>
+              Перенести в архив
+            </button>
+          </div>
+        ) : null}
         {message ? <div className="text-soft">{message}</div> : null}
       </div>
       <Modal open={pauseOpen} title="Поставить задачу на паузу" onClose={() => setPauseOpen(false)}>

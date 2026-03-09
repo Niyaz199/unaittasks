@@ -897,6 +897,42 @@ textarea {
   max-width: 360px;
 }
 
+/* ── Team quick action buttons ── */
+.team-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.team-quick-btn {
+  font-size: 0.84rem;
+  padding: 0.44rem 0.84rem;
+  border-radius: 10px;
+}
+
+.team-quick-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ── Team search input ── */
+.team-search-input {
+  background: color-mix(in srgb, #182541 90%, transparent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, #7f95bb 30%, transparent),
+    0 2px 8px rgba(2, 8, 18, 0.12);
+  border-radius: 12px;
+  padding: 0.6rem 0.8rem;
+  transition: box-shadow 0.14s ease;
+}
+
+.team-search-input:focus {
+  outline: none;
+  box-shadow:
+    inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 50%, #8ea8d0 50%),
+    0 4px 14px rgba(2, 8, 18, 0.18);
+}
+
 .comment-input {
   min-height: 96px;
 }
@@ -915,22 +951,27 @@ textarea {
 .task-tab {
   display: inline-flex;
   align-items: center;
-  padding: 0.36rem 0.72rem;
+  padding: 0.42rem 0.9rem;
   border-radius: 999px;
-  font-size: 0.82rem;
+  font-size: 0.84rem;
+  font-weight: 500;
   color: var(--text-soft);
   background: color-mix(in srgb, var(--panel-soft) 72%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, #8ea8d0 24%, transparent);
+  transition: background 0.13s ease, color 0.13s ease;
+}
+
+.task-tab:hover {
+  color: var(--text);
 }
 
 .task-tab.active {
-  color: #fff2f4;
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--brand-grad-start) 38%, transparent),
-    color-mix(in srgb, var(--brand-grad-end) 38%, transparent)
-  );
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, #ffd4da 34%, transparent);
+  color: #fff;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--brand-grad-start), var(--brand-grad-end));
+  box-shadow:
+    0 4px 14px rgba(253, 74, 94, 0.28),
+    inset 0 0 0 1px color-mix(in srgb, #ffd4da 40%, transparent);
 }
 
 .task-details-head .badge {
@@ -949,31 +990,75 @@ textarea {
   background: color-mix(in srgb, var(--panel-soft) 66%, transparent);
   color: var(--text-soft);
   border-radius: 10px;
-  padding: 0.45rem 0.74rem;
-  font-size: 0.85rem;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.88rem;
   cursor: pointer;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, #8ea8d0 24%, transparent);
+  transition: background 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
 }
 
 .status-switch-btn:hover:not(:disabled) {
   color: var(--text);
+  background: color-mix(in srgb, var(--panel-soft) 90%, transparent);
 }
 
 .status-switch-btn.active {
-  color: #fff2f4;
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--brand-grad-start) 40%, transparent),
-    color-mix(in srgb, var(--brand-grad-end) 40%, transparent)
-  );
+  color: #fff;
+  background: linear-gradient(135deg, var(--brand-grad-start), var(--brand-grad-end));
   box-shadow:
-    0 8px 16px rgba(253, 74, 94, 0.2),
-    inset 0 0 0 1px color-mix(in srgb, #ffd4da 34%, transparent);
+    0 6px 18px rgba(253, 74, 94, 0.32),
+    inset 0 0 0 1px color-mix(in srgb, #ffd4da 40%, transparent);
+  font-weight: 600;
 }
 
 .status-switch-btn:disabled {
-  opacity: 0.72;
+  opacity: 0.68;
   cursor: default;
+}
+
+/* ── Archive action block ── */
+.sc-archive-row {
+  padding-top: 0.2rem;
+  border-top: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+  margin-top: 0.1rem;
+}
+
+.sc-archive-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid color-mix(in srgb, #f59e0b 50%, transparent);
+  background: color-mix(in srgb, #3d2a15 80%, transparent);
+  color: #fde68a;
+  border-radius: 10px;
+  padding: 0.6rem 1.1rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.14), inset 0 0 0 1px color-mix(in srgb, #fcd34d 20%, transparent);
+  transition: background 0.14s ease, box-shadow 0.14s ease, color 0.14s ease;
+}
+
+.sc-archive-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, #3d2a15 96%, transparent);
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.24), inset 0 0 0 1px color-mix(in srgb, #fcd34d 34%, transparent);
+  color: #fef3c7;
+}
+
+.sc-archive-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ── Comment submit: subdued, not competing with archive action ── */
+.comment-submit-btn {
+  font-size: 0.88rem;
+  padding: 0.5rem 1rem;
+  color: var(--text-soft);
+  border-color: color-mix(in srgb, var(--line-strong) 60%, transparent);
+}
+.comment-submit-btn:hover {
+  color: var(--text);
 }
 
 .comment-block {

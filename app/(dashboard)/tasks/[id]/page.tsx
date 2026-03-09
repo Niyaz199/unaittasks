@@ -7,8 +7,8 @@ import { StatusControl } from "@/components/tasks/status-control";
 import { CommentForm } from "@/components/tasks/comment-form";
 import { TaskTeamManager } from "@/components/tasks/task-team-manager";
 import { Badge } from "@/components/ui/badge";
-import { canChangeStatus } from "@/lib/task-permissions";
-import { taskPriorityMeta, taskStatusMeta } from "@/lib/task-presentation";
+import { canArchiveTask, canChangeStatus } from "@/lib/task-permissions";
+import { taskPriorityMeta, taskStatusMeta, humanStatus } from "@/lib/task-presentation";
 import type { TaskComment, TaskHistoryEvent } from "@/lib/types";
 
 function resolveAssigneeName(raw: unknown) {
@@ -50,8 +50,8 @@ function describeHistoryEvent(event: TaskHistoryEvent) {
     return "Взял задачу в работу";
   }
   if (event.action === "status_change") {
-    const from = typeof meta.from === "string" ? meta.from : "—";
-    const to = typeof meta.to === "string" ? meta.to : "—";
+    const from = typeof meta.from === "string" ? humanStatus(meta.from) : "—";
+    const to = typeof meta.to === "string" ? humanStatus(meta.to) : "—";
     return `Изменил статус: ${from} → ${to}`;
   }
   if (event.action === "pause_task") {
@@ -77,6 +77,12 @@ function describeHistoryEvent(event: TaskHistoryEvent) {
     const userName =
       typeof meta.user_name === "string" ? meta.user_name : typeof meta.user_id === "string" ? meta.user_id : "—";
     return `Удалил из команды: ${userName}`;
+  }
+  if (event.action === "task_archived_manual") {
+    return "Перенес задачу в архив";
+  }
+  if (event.action === "task_archived_auto") {
+    return "Автоархив задачи";
   }
   return event.action;
 }
@@ -116,6 +122,7 @@ export default async function TaskDetailsPage({
   const objectEngineerScoped =
     profile.role !== "object_engineer" || task.objects?.object_engineer_id === profile.id;
   const canEdit = canChangeStatus(task, { id: profile.id, role: profile.role }, { teamMemberIds });
+  const canArchive = canArchiveTask(profile.role, task);
   const canManageTeam = canManageTaskTeam(profile.role) && objectEngineerScoped;
 
   const teamCandidatesData = canManageTeam
@@ -167,8 +174,8 @@ export default async function TaskDetailsPage({
         {task.status === "paused" && resumeLabel ? (
           <div className="task-paused-inline">Пауза до: {resumeLabel}</div>
         ) : null}
-        {canEdit ? (
-          <StatusControl taskId={task.id} currentStatus={task.status} canEdit={canEdit} />
+        {canEdit || canArchive ? (
+          <StatusControl taskId={task.id} currentStatus={task.status} canEdit={canEdit} canArchive={canArchive} />
         ) : (
           <div className="text-soft">Статус может менять только ответственный или участник команды.</div>
         )}
@@ -185,7 +192,7 @@ export default async function TaskDetailsPage({
                 <span className="text-soft">Ответственный</span>
               </div>
             </div>
-            <Badge tone="info">Owner</Badge>
+            <Badge tone="info">Владелец</Badge>
           </div>
         </div>
 

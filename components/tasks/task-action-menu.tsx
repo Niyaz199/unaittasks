@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { canChangeStatus } from "@/lib/task-permissions";
+import { canArchiveTask, canChangeStatus } from "@/lib/task-permissions";
 import type { Role, TaskItem, TaskStatus } from "@/lib/types";
 import { Modal } from "@/components/ui/modal";
 import { enqueueAction } from "@/lib/offline/queue";
@@ -23,6 +23,7 @@ export function TaskActionMenu({ task, currentUser }: TaskActionMenuProps) {
 
   const teamMemberIds = (task.team_members ?? []).map((m) => m.user_id);
   const canEdit = canChangeStatus(task, currentUser, { teamMemberIds });
+  const canArchive = canArchiveTask(currentUser.role, task);
 
   const allowedActions = useMemo(() => {
     if (!canEdit) return [];
@@ -33,7 +34,7 @@ export function TaskActionMenu({ task, currentUser }: TaskActionMenuProps) {
     return actions;
   }, [canEdit, task.status]);
 
-  if (!allowedActions.length) return null;
+  if (!allowedActions.length && !canArchive) return null;
 
   async function changeStatus(nextStatus: TaskStatus) {
     setMessage(null);
@@ -94,6 +95,22 @@ export function TaskActionMenu({ task, currentUser }: TaskActionMenuProps) {
     router.refresh();
   }
 
+  async function archiveTask() {
+    setMessage(null);
+    if (!navigator.onLine) {
+      setMessage("Для архивации нужна сеть");
+      return;
+    }
+    const res = await fetch(`/api/tasks/${task.id}/archive`, { method: "POST" });
+    setOpen(false);
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      setMessage(data.error ?? "Не удалось архивировать задачу");
+      return;
+    }
+    router.refresh();
+  }
+
   return (
     <>
       <div className="tl-action-menu-wrap">
@@ -120,6 +137,16 @@ export function TaskActionMenu({ task, currentUser }: TaskActionMenuProps) {
                   {action.label}
                 </button>
               ))}
+              {canArchive ? (
+                <button
+                  className="tl-action-item"
+                  type="button"
+                  disabled={pending}
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); startTransition(() => void archiveTask()); }}
+                >
+                  В архив
+                </button>
+              ) : null}
             </div>
           </>
         ) : null}

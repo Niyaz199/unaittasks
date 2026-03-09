@@ -57,7 +57,7 @@ export function CommentForm({ taskId }: { taskId: string }) {
         disabled={pending}
       />
       <div className="row comment-form-actions">
-        <button className="btn btn-accent" type="button" onClick={submit} disabled={pending}>
+        <button className="btn btn-ghost comment-submit-btn" type="button" onClick={submit} disabled={pending}>
           Отправить
         </button>
       </div>
