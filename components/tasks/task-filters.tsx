@@ -130,6 +130,7 @@ export function TaskFilters({
     { key: "overdue",     label: "Просрочено",   href: buildQuickHref({ due: "overdue" }) },
     { key: "today",       label: "Сегодня",      href: buildQuickHref({ due: "today" }) },
     { key: "in_progress", label: "В работе",     href: buildQuickHref({ status: "in_progress" }) },
+    { key: "accepted",    label: "Принятые",     href: buildQuickHref({ status: "accepted" }) },
     { key: "new",         label: "Новые",        href: buildQuickHref({ status: "new" }) },
     { key: "done",        label: "Выполненные",  href: buildQuickHref({ status: "done" }) },
   ];

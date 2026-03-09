@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
+import { getAllowedTaskTransitions } from "@/lib/task-permissions";
+import { taskStatusMeta } from "@/lib/task-presentation";
 import type { TaskStatus } from "@/lib/types";
 import { enqueueAction } from "@/lib/offline/queue";
 
@@ -21,6 +23,7 @@ export function StatusControl({ taskId, currentStatus, canEdit, canArchive = fal
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const router = useRouter();
+  const allowedTransitions = getAllowedTaskTransitions(status);
 
   async function submit(nextStatus: TaskStatus) {
     setMessage(null);
@@ -117,26 +120,21 @@ export function StatusControl({ taskId, currentStatus, canEdit, canArchive = fal
     <>
       <div className="grid">
         <div className="status-switch">
-          {[
-            { value: "new", label: "Новая" },
-            { value: "in_progress", label: "В работе" },
-            { value: "paused", label: "Пауза" },
-            { value: "done", label: "Выполнена" }
-          ].map((option) => (
+          {(["new", "accepted", "in_progress", "paused", "done"] as TaskStatus[]).map((option) => (
             <button
-              key={option.value}
-              className={`status-switch-btn${status === option.value ? " active" : ""}`}
+              key={option}
+              className={`status-switch-btn${status === option ? " active" : ""}`}
               type="button"
-              disabled={!canEdit || pending || status === option.value}
+              disabled={!canEdit || pending || status === option || !allowedTransitions.includes(option)}
               onClick={() => {
-                const nextStatus = option.value as TaskStatus;
+                const nextStatus = option;
                 if (nextStatus !== "paused") {
                   setStatus(nextStatus);
                 }
                 startTransition(() => void submit(nextStatus));
               }}
             >
-              {option.label}
+              {taskStatusMeta[option].label}
             </button>
           ))}
         </div>

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getApiSession } from "@/lib/api-auth";
-import { canChangeStatus } from "@/lib/task-permissions";
+import { canChangeStatus, canTransitionTaskStatus } from "@/lib/task-permissions";
 
 const schema = z.object({
   reason: z.string().trim().min(5),
@@ -30,6 +30,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const teamMemberIds = (task.team_members ?? []).map((member) => member.user_id);
     const canPause = canChangeStatus(task, { id: profile.id, role: profile.role }, { teamMemberIds });
     if (!canPause) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!canTransitionTaskStatus(task.status, "paused")) {
+      return NextResponse.json({ error: "Недопустимый переход статуса" }, { status: 400 });
+    }
 
     const { data, error } = await supabase.rpc("pause_task", {
       p_task_id: id,

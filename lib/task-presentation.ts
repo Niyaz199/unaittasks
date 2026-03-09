@@ -4,6 +4,7 @@ type Tone = "neutral" | "info" | "warning" | "success" | "danger" | "violet";
 
 export const taskStatusMeta: Record<TaskStatus, { label: string; tone: Tone }> = {
   new: { label: "Новая", tone: "info" },
+  accepted: { label: "Принята", tone: "violet" },
   in_progress: { label: "В работе", tone: "warning" },
   paused: { label: "Пауза", tone: "neutral" },
   done: { label: "Выполнена", tone: "success" }

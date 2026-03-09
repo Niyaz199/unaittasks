@@ -2,7 +2,8 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { canArchiveTask, canChangeStatus } from "@/lib/task-permissions";
+import { canArchiveTask, canChangeStatus, getAllowedTaskTransitions } from "@/lib/task-permissions";
+import { taskStatusMeta } from "@/lib/task-presentation";
 import type { Role, TaskItem, TaskStatus } from "@/lib/types";
 import { Modal } from "@/components/ui/modal";
 import { enqueueAction } from "@/lib/offline/queue";
@@ -24,15 +25,18 @@ export function TaskActionMenu({ task, currentUser }: TaskActionMenuProps) {
   const teamMemberIds = (task.team_members ?? []).map((m) => m.user_id);
   const canEdit = canChangeStatus(task, currentUser, { teamMemberIds });
   const canArchive = canArchiveTask(currentUser.role, task);
+  const allowedTransitions = getAllowedTaskTransitions(task.status);
 
   const allowedActions = useMemo(() => {
     if (!canEdit) return [];
-    const actions: Array<{ status: TaskStatus; label: string }> = [];
-    if (task.status !== "in_progress") actions.push({ status: "in_progress", label: "В работу" });
-    if (task.status === "in_progress") actions.push({ status: "paused", label: "Пауза" });
-    if (task.status !== "done") actions.push({ status: "done", label: "Выполнить" });
-    return actions;
-  }, [canEdit, task.status]);
+    return allowedTransitions.map((status) => ({
+      status,
+      label:
+        status === "accepted" ? "Принять"
+        : status === "done" ? "Выполнить"
+        : taskStatusMeta[status].label
+    }));
+  }, [allowedTransitions, canEdit]);
 
   if (!allowedActions.length && !canArchive) return null;
 

@@ -66,9 +66,10 @@ function groupTasks(tasks: TaskItem[], groupBy: GroupBy): Array<{ key: string; l
       groups.get(key)!.tasks.push(task);
     }
   } else if (groupBy === "status") {
-    const statusOrder: TaskStatus[] = ["in_progress", "new", "paused", "done"];
+    const statusOrder: TaskStatus[] = ["in_progress", "accepted", "new", "paused", "done"];
     const statusLabels: Record<TaskStatus, string> = {
       in_progress: "В работе",
+      accepted: "Принятые",
       new: "Новые",
       paused: "На паузе",
       done: "Выполненные"
@@ -168,7 +169,7 @@ function TakeInWorkButton({ taskId }: { taskId: string }) {
         id: crypto.randomUUID(),
         type: "update_status",
         taskId,
-        status: "in_progress",
+        status: "accepted",
         createdAt: new Date().toISOString()
       });
       router.refresh();
@@ -177,7 +178,7 @@ function TakeInWorkButton({ taskId }: { taskId: string }) {
     const res = await fetch(`/api/tasks/${taskId}/status`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "in_progress" })
+      body: JSON.stringify({ status: "accepted" })
     });
     if (res.ok) router.refresh();
   }
@@ -189,7 +190,7 @@ function TakeInWorkButton({ taskId }: { taskId: string }) {
       disabled={pending}
       onClick={() => startTransition(() => void handle())}
     >
-      В работу
+      Принять
     </button>
   );
 }

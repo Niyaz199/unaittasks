@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getApiSession } from "@/lib/api-auth";
 import { writeAudit } from "@/lib/audit";
-import { canChangeStatus } from "@/lib/task-permissions";
+import { canChangeStatus, canTransitionTaskStatus } from "@/lib/task-permissions";
 
 const schema = z.object({
-  status: z.enum(["new", "in_progress", "paused", "done"])
+  status: z.enum(["new", "accepted", "in_progress", "paused", "done"])
 });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -33,9 +33,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!canChange) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    if (!canTransitionTaskStatus(task.status, status)) {
+      return NextResponse.json({ error: "Недопустимый переход статуса" }, { status: 400 });
+    }
 
     const patch: Record<string, unknown> = { status };
-    if (status === "in_progress" && !task.accepted_at) patch.accepted_at = new Date().toISOString();
+    if ((status === "accepted" || status === "in_progress") && !task.accepted_at) {
+      patch.accepted_at = new Date().toISOString();
+    }
     if (status === "done" && !task.completed_at) patch.completed_at = new Date().toISOString();
     patch.resume_at = null;
 

@@ -9,12 +9,13 @@ import { sendPushToUser } from "@/lib/push";
 import {
   canChangeStatus,
   canCreateOrAssignTask,
+  canTransitionTaskStatus,
   canManageTaskTeam as canManageTaskTeamByRole,
   canReadTaskByRole
 } from "@/lib/task-permissions";
 import type { Role, TaskStatus } from "@/lib/types";
 
-const statusSchema = z.enum(["new", "in_progress", "paused", "done"]);
+const statusSchema = z.enum(["new", "accepted", "in_progress", "paused", "done"]);
 const pauseSchema = z.object({
   taskId: z.string().uuid(),
   reason: z.string().trim().min(5),
@@ -118,7 +119,11 @@ export async function takeTaskInWork(taskId: string) {
   const canChange = canChangeStatus(task, { id: profile.id, role: profile.role }, { teamMemberIds: getTeamMemberIds(task) });
   if (!canChange) throw new Error("Нет прав на изменение статуса");
 
-  const patch: Record<string, unknown> = { status: "in_progress" };
+  if (!canTransitionTaskStatus(task.status, "accepted")) {
+    throw new Error("Недопустимый переход статуса");
+  }
+
+  const patch: Record<string, unknown> = { status: "accepted" };
   if (!task.accepted_at) patch.accepted_at = new Date().toISOString();
 
   const { error } = await supabase.from("tasks").update(patch).eq("id", taskId);
@@ -129,7 +134,7 @@ export async function takeTaskInWork(taskId: string) {
     action: "accept",
     entityType: "task",
     entityId: taskId,
-    meta: { from: task.status, to: "in_progress" }
+    meta: { from: task.status, to: "accepted" }
   });
 
   revalidatePath("/new");
@@ -150,9 +155,10 @@ export async function updateTaskStatus(taskId: string, statusInput: string) {
 
   const canChange = canChangeStatus(task, { id: profile.id, role: profile.role }, { teamMemberIds: getTeamMemberIds(task) });
   if (!canChange) throw new Error("Статус может менять только ответственный или участник команды");
+  if (!canTransitionTaskStatus(task.status, status)) throw new Error("Недопустимый переход статуса");
 
   const patch: Record<string, unknown> = { status };
-  if (status === "in_progress" && !task.accepted_at) patch.accepted_at = new Date().toISOString();
+  if ((status === "accepted" || status === "in_progress") && !task.accepted_at) patch.accepted_at = new Date().toISOString();
   if (status === "done" && !task.completed_at) patch.completed_at = new Date().toISOString();
   patch.resume_at = null;
 

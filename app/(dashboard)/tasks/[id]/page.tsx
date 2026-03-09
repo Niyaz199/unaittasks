@@ -47,7 +47,7 @@ function describeHistoryEvent(event: TaskHistoryEvent) {
     return "Создал задачу";
   }
   if (event.action === "accept") {
-    return "Взял задачу в работу";
+    return "Принял задачу";
   }
   if (event.action === "status_change") {
     const from = typeof meta.from === "string" ? humanStatus(meta.from) : "—";

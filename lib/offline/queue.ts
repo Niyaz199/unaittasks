@@ -7,7 +7,7 @@ type PendingAction =
       id: string;
       type: "update_status";
       taskId: string;
-      status: "new" | "in_progress" | "paused" | "done";
+      status: "new" | "accepted" | "in_progress" | "paused" | "done";
       createdAt: string;
     }
   | {

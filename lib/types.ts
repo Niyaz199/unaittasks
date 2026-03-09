@@ -1,5 +1,5 @@
 export type Role = "admin" | "chief" | "lead" | "engineer" | "object_engineer" | "tech";
-export type TaskStatus = "new" | "in_progress" | "paused" | "done";
+export type TaskStatus = "new" | "accepted" | "in_progress" | "paused" | "done";
 export type TaskPriority = "low" | "medium" | "high" | "critical";
 
 export type Profile = {

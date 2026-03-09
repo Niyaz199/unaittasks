@@ -12,6 +12,14 @@ type TaskArchiveAccess = {
   archived_at: string | null;
 };
 
+const taskStatusTransitions: Record<TaskStatus, TaskStatus[]> = {
+  new: ["accepted"],
+  accepted: ["in_progress", "done"],
+  in_progress: ["paused", "done"],
+  paused: ["in_progress"],
+  done: []
+};
+
 export function canAssignRole(assignerRole: Role, targetRole: Role) {
   if (assignerRole === "admin") return true;
   if (assignerRole === "chief") return ["lead", "engineer", "object_engineer", "tech"].includes(targetRole);
@@ -67,6 +75,14 @@ export function canReadTaskByRole(
 export function canChangeTaskStatus(role: Role, task: TaskAccess, userId: string, teamMemberIds: string[]) {
   if (role === "admin") return true;
   return isTaskParticipant(task, userId, teamMemberIds);
+}
+
+export function getAllowedTaskTransitions(status: TaskStatus) {
+  return taskStatusTransitions[status];
+}
+
+export function canTransitionTaskStatus(currentStatus: TaskStatus, nextStatus: TaskStatus) {
+  return taskStatusTransitions[currentStatus].includes(nextStatus);
 }
 
 export function canChangeStatus(
