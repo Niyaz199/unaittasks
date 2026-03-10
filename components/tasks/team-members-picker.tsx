@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AssigneeOption } from "@/components/ui/assignee-combobox";
 
 type Props = {
@@ -26,6 +26,7 @@ export function TeamMembersPicker({
 }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const optionsMap = useMemo(() => {
     return new Map(options.map((option) => [option.id, option]));
@@ -52,6 +53,18 @@ export function TeamMembersPicker({
       return label.includes(q) || subtitle.includes(q);
     });
   }, [options, query, selectedIds, excludedIds]);
+
+  // Закрываем dropdown кликом вне контейнера — безопасно и без гонок
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen]);
 
   function addFromOption(option: AssigneeOption) {
     if (disabled) return;
@@ -102,12 +115,12 @@ export function TeamMembersPicker({
           ) : null}
 
           <div
+            ref={containerRef}
             className="assignee-combobox"
             role="combobox"
             aria-expanded={isOpen}
             aria-haspopup="listbox"
             aria-controls="team-members-listbox"
-            onBlur={() => setTimeout(() => setIsOpen(false), 120)}
           >
             <input
               className="input team-search-input"
@@ -135,6 +148,7 @@ export function TeamMembersPicker({
                       key={option.id}
                       type="button"
                       className="assignee-combobox-item"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => addFromOption(option)}
                     >
                       <span>{option.label ?? option.full_name ?? "—"}</span>

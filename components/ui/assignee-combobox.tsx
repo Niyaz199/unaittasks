@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export type AssigneeOption = {
   id: string;
@@ -28,6 +28,7 @@ export function AssigneeCombobox({
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const filteredOptions = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -39,6 +40,18 @@ export function AssigneeCombobox({
     });
   }, [options, query]);
 
+  // Закрываем dropdown кликом вне контейнера — безопасно и без гонок
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen]);
+
   function selectOption(option: AssigneeOption) {
     setSelectedId(option.id);
     setQuery(option.label ?? option.full_name ?? "");
@@ -48,14 +61,12 @@ export function AssigneeCombobox({
 
   return (
     <div
+      ref={containerRef}
       className="assignee-combobox"
       role="combobox"
       aria-expanded={isOpen}
       aria-haspopup="listbox"
       aria-controls={`${name}-listbox`}
-      onBlur={() => {
-        setTimeout(() => setIsOpen(false), 120);
-      }}
     >
       <input type="hidden" name={name} value={selectedId} />
       <input
@@ -88,6 +99,9 @@ export function AssigneeCombobox({
                 key={option.id}
                 type="button"
                 className="assignee-combobox-item"
+                // onMouseDown + preventDefault гарантирует, что input не теряет
+                // фокус до того, как onClick зафиксирует выбор
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => selectOption(option)}
               >
                 <span>{option.label ?? option.full_name ?? "—"}</span>
