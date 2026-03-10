@@ -6,6 +6,7 @@ import { createTaskActionSafe } from "@/app/actions/task-actions";
 import type { ObjectItem, Profile } from "@/lib/types";
 import { AssigneeCombobox, type AssigneeOption } from "@/components/ui/assignee-combobox";
 import { TeamMembersPicker } from "@/components/tasks/team-members-picker";
+import { PhotoPicker, type PickedFile } from "@/components/tasks/photo-picker";
 
 type FieldErrors = {
   title?: string;
@@ -31,6 +32,7 @@ export function CreateTaskForm({
   const [selectedObjectId, setSelectedObjectId] = useState("");
   const [selectedAssigneeId, setSelectedAssigneeId] = useState("");
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
+  const [photoFiles, setPhotoFiles] = useState<PickedFile[]>([]);
 
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [globalError, setGlobalError] = useState<string | null>(null);
@@ -82,8 +84,33 @@ export function CreateTaskForm({
         setGlobalError(result.error);
         return;
       }
-      setSuccessMsg("Задача создана");
-      // Редирект в карточку задачи через ~800ms, чтобы toast успел отобразиться
+
+      // Загружаем фото после успешного создания задачи
+      if (photoFiles.length > 0) {
+        const fd = new FormData();
+        photoFiles.forEach((pf) => fd.append("files", pf.file));
+        try {
+          const uploadRes = await fetch(`/api/tasks/${result.taskId}/attachments`, {
+            method: "POST",
+            body: fd
+          });
+          if (uploadRes.ok) {
+            const uploadJson = await uploadRes.json();
+            if (uploadJson.errors?.length) {
+              setSuccessMsg(`Задача создана. Часть фото не загрузилась: ${uploadJson.errors.join("; ")}`);
+            } else {
+              setSuccessMsg("Задача создана");
+            }
+          } else {
+            setSuccessMsg("Задача создана, но фото не удалось загрузить.");
+          }
+        } catch {
+          setSuccessMsg("Задача создана, но фото не удалось загрузить.");
+        }
+      } else {
+        setSuccessMsg("Задача создана");
+      }
+
       setTimeout(() => {
         router.push(`/tasks/${result.taskId}`);
       }, 800);
@@ -220,6 +247,16 @@ export function CreateTaskForm({
             setSelectedTeamIds((prev) => prev.filter((value) => value !== id));
           }}
           placeholder="Добавить участника в команду"
+        />
+      </section>
+
+      <section className="form-section">
+        <h3 className="form-section-title">Фото-вложения</h3>
+        <p className="form-section-description">Прикрепите фото к задаче (необязательно). JPEG, PNG, WebP — до 5 MB каждый, максимум 5 шт.</p>
+        <PhotoPicker
+          files={photoFiles}
+          onChange={setPhotoFiles}
+          disabled={pending || !!successMsg}
         />
       </section>
 

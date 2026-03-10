@@ -28,16 +28,18 @@
   - `app/(dashboard)/archive/page.tsx` — `ArchivePage`
   - `lib/tasks.ts` — `listTasksForProfile` (kind: "archive")
 
-- **Карточка задачи** — детали, статус, описание, команда, комментарии, история
+- **Карточка задачи** — детали, статус, описание, команда, комментарии, история, фото-вложения
   - `app/(dashboard)/tasks/[id]/page.tsx` — `TaskDetailsPage`
   - `lib/tasks.ts` — `getTaskByIdForProfile`, `getTaskHistoryForProfile`
   - `components/tasks/status-control.tsx` — `StatusControl`
-  - `components/tasks/comment-form.tsx` — `CommentForm`
+  - `components/tasks/comment-form.tsx` — `CommentForm` (offline-aware, поддержка фото)
   - `components/tasks/task-team-manager.tsx` — `TaskTeamManager`
+  - `components/tasks/attachments-gallery.tsx` — `AttachmentsGallery` (signed URLs, лайтбокс)
 
-- **Создание задачи** — форма с объектом, приоритетом, сроком, исполнителем, командой
+- **Создание задачи** — форма с объектом, приоритетом, сроком, исполнителем, командой; опциональные фото
   - `app/(dashboard)/tasks/create/page.tsx` — `CreateTaskPage`
   - `components/tasks/create-task-form.tsx` — `CreateTaskForm`
+  - `components/tasks/photo-picker.tsx` — `PhotoPicker` (валидация, превью, удаление до отправки)
   - `app/actions/task-actions.ts` — `createTaskAction`
 
 - **Объекты** — справочник объектов эксплуатации
@@ -88,9 +90,18 @@
   - `app/api/tasks/[id]/history/route.ts` — `GET`
   - `lib/tasks.ts` — `getTaskHistoryForProfile`
 
-- **POST** `/api/tasks/[id]/comments` — добавить комментарий (с дедупом по client_msg_id)
+- **POST** `/api/tasks/[id]/comments` — добавить комментарий (с дедупом по client_msg_id); возвращает `commentId` для привязки фото
   - `app/api/tasks/[id]/comments/route.ts` — `POST`
   - `lib/audit.ts` — `writeAudit` (action: comment)
+
+- **POST** `/api/tasks/[id]/attachments` — загрузить фото к задаче или комментарию (до 5 шт., до 5 MB, JPEG/PNG/WebP)
+  - `app/api/tasks/[id]/attachments/route.ts` — `POST`
+  - `lib/attachments.ts` — `uploadAttachmentFile`, `saveAttachmentMeta`
+  - Supabase Storage bucket: `task-attachments` (приватный)
+
+- **GET** `/api/tasks/[id]/attachments` — получить список вложений со signed URLs (1 ч); параметр `?comment_id=` для фильтрации по комментарию
+  - `app/api/tasks/[id]/attachments/route.ts` — `GET`
+  - `lib/attachments.ts` — `getSignedUrls`
 
 - **POST** `/api/tasks/[id]/team` — добавить участника в команду задачи
   - `app/api/tasks/[id]/team/route.ts` — `POST`

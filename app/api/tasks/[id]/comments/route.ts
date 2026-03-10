@@ -6,7 +6,8 @@ import { canReadTaskByRole } from "@/lib/task-permissions";
 import { sendPushToUser } from "@/lib/push";
 
 const schema = z.object({
-  body: z.string().min(1),
+  // body может быть пустым, если комментарий состоит только из фото
+  body: z.string(),
   clientMsgId: z.string().optional()
 });
 
@@ -67,7 +68,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         .eq("author_id", profile.id)
         .eq("client_msg_id", clientMsgId)
         .maybeSingle();
-      if (existing) return NextResponse.json({ ok: true, deduped: true });
+      if (existing) return NextResponse.json({ ok: true, deduped: true, commentId: existing.id });
     }
 
     const { data, error } = await supabase
@@ -103,7 +104,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       commentBody: body.trim(),
     });
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, commentId: data.id });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 400 });

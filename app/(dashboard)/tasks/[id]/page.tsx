@@ -6,6 +6,7 @@ import { getTaskByIdForProfile, getTaskHistoryForProfile } from "@/lib/tasks";
 import { StatusControl } from "@/components/tasks/status-control";
 import { CommentForm } from "@/components/tasks/comment-form";
 import { TaskTeamManager } from "@/components/tasks/task-team-manager";
+import { AttachmentsGallery } from "@/components/tasks/attachments-gallery";
 import { Badge } from "@/components/ui/badge";
 import { canArchiveTask, canChangeStatus } from "@/lib/task-permissions";
 import { taskPriorityMeta, taskStatusMeta, humanStatus } from "@/lib/task-presentation";
@@ -167,6 +168,7 @@ export default async function TaskDetailsPage({
         ) : (
           <p className="task-description-empty">Описание не заполнено.</p>
         )}
+        <AttachmentsGallery taskId={task.id} />
       </div>
 
       <div className="section-card task-status-panel">
@@ -242,6 +244,7 @@ export default async function TaskDetailsPage({
                     <span className="text-soft">{new Date(comment.created_at).toLocaleString("ru-RU")}</span>
                   </div>
                   <div className="comment-body">{comment.body}</div>
+                  <AttachmentsGallery taskId={task.id} commentId={comment.id} />
                 </div>
               ))}
               {!comments.length ? <div className="text-soft">Комментариев пока нет.</div> : null}

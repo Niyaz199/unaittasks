@@ -62,9 +62,10 @@ d:\zadachnik\
 │       ├── tasks/[id]/
 │       │   ├── status/route.ts     # POST: смена статуса
 │       │   ├── pause/route.ts      # POST: пауза задачи (RPC pause_task)
-│       │   ├── comments/route.ts   # POST: добавить комментарий + push наблюдателям
-│       │   ├── history/route.ts    # GET: история из audit_log
-│       │   └── team/route.ts       # POST/DELETE: управление командой
+│       │   ├── comments/route.ts       # POST: добавить комментарий + push; возвращает commentId
+│       │   ├── history/route.ts        # GET: история из audit_log
+│       │   ├── team/route.ts           # POST/DELETE: управление командой
+│       │   └── attachments/route.ts    # POST: загрузить фото; GET: signed URLs вложений
 │       ├── push/
 │       │   ├── subscribe/route.ts  # POST: сохранить push-подписку
 │       │   ├── test/route.ts       # POST: тестовый push
@@ -81,8 +82,10 @@ d:\zadachnik\
 │   │   ├── filters-drawer.tsx      # Мобильная панель фильтров
 │   │   ├── task-action-menu.tsx    # Контекстное меню задачи
 │   │   ├── status-control.tsx      # Переключатель статуса + модалка паузы (offline-aware)
-│   │   ├── create-task-form.tsx    # Форма создания задачи
-│   │   ├── comment-form.tsx        # Форма комментария (offline-aware, clientMsgId)
+│   │   ├── create-task-form.tsx    # Форма создания задачи (+ фото-вложения)
+│   │   ├── comment-form.tsx        # Форма комментария (offline-aware, clientMsgId, + фото)
+│   │   ├── photo-picker.tsx        # Выбор фото до отправки: превью, валидация, удаление
+│   │   ├── attachments-gallery.tsx # Галерея вложений: signed URLs, лайтбокс
 │   │   ├── task-team-manager.tsx   # Управление командой
 │   │   └── team-members-picker.tsx # Пикер участников
 │   ├── dictionaries/
@@ -116,6 +119,7 @@ d:\zadachnik\
 │   ├── push.ts                     # sendPushToUser(userId, payload) — через admin-клиент
 │   ├── task-presentation.ts        # taskStatusMeta, taskPriorityMeta — UI-метки и цвета
 │   ├── task-sort.ts                # smartSortTasks, sortTasks, isOverdue, isDueToday
+│   ├── attachments.ts              # ATTACHMENT_BUCKET, validateAttachmentFile, uploadAttachmentFile, getSignedUrls
 │   ├── offline/
 │   │   └── queue.ts                # enqueueAction, flushQueue — IndexedDB-очередь
 │   └── supabase/
@@ -237,6 +241,24 @@ auth      text  NOT NULL
 UNIQUE (user_id, endpoint)
 ```
 
+#### `task_attachments` — метаданные фото-вложений
+```sql
+id            uuid         PK
+task_id       uuid         REFERENCES tasks(id) ON DELETE CASCADE
+comment_id    uuid         REFERENCES task_comments(id) ON DELETE CASCADE  -- NULL → вложение задачи
+storage_path  text         NOT NULL  -- путь в bucket "task-attachments" ({userId}/{taskId}/{uuid}.ext)
+file_name     text         NOT NULL
+mime_type     text         NOT NULL  -- image/jpeg | image/png | image/webp
+size_bytes    bigint       NOT NULL
+uploaded_by   uuid         REFERENCES profiles(id) ON DELETE SET NULL
+created_at    timestamptz  DEFAULT now()
+cleanup_after timestamptz  DEFAULT now() + interval '30 days'  -- каркас для cron-удаления (не активен)
+deleted_at    timestamptz  -- мягкое удаление (не активно)
+```
+Бинарные файлы хранятся в Supabase Storage (bucket `task-attachments`, приватный).
+При удалении задачи/комментария строки удаляются каскадно; файлы в Storage остаются до запуска cron.
+Доступ к файлам через signed URLs (1 ч), генерируются в `GET /api/tasks/[id]/attachments`.
+
 ### Матрица ролей
 
 | Роль | Создаёт задачи | Видит задачи | Объекты / Пользователи | Аудит |
@@ -276,6 +298,23 @@ UNIQUE (user_id, endpoint)
       → Supabase INSERT task_comments (уникальный client_msg_id → дедупликация)
       → writeAudit('comment', ...)
       → sendPushToUser(каждый участник команды + assigned_to, { title, url })
+      → возвращает { ok, commentId }
+  → (если выбраны фото) POST /api/tasks/[id]/attachments с { comment_id, files[] }
+```
+
+### 5.2а Загрузка фото-вложений
+
+```
+Пользователь выбирает фото в PhotoPicker
+  → клиентская валидация (тип/размер/кол-во)
+  → после создания задачи/комментария:
+     POST /api/tasks/[id]/attachments (FormData: files[], comment_id?)
+  → API route (app/api/tasks/[id]/attachments/route.ts)
+      → серверная валидация (MIME, размер, кол-во)
+      → uploadAttachmentFile → Supabase Storage "task-attachments"
+      → saveAttachmentMeta → INSERT task_attachments
+  → AttachmentsGallery монтируется → GET /api/tasks/[id]/attachments?comment_id=...
+      → createSignedUrls (1 ч) → рендер превью + лайтбокс
 ```
 
 ### 5.3 Смена статуса задачи

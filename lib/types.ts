@@ -62,3 +62,19 @@ export type TaskComment = {
   client_msg_id: string | null;
   author?: { full_name: string } | null;
 };
+
+export type TaskAttachment = {
+  id: string;
+  task_id: string;
+  comment_id: string | null;
+  storage_path: string;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  uploaded_by: string;
+  created_at: string;
+  cleanup_after: string;
+  deleted_at?: string | null;
+  /** Поле добавляется на клиенте после получения signed URL */
+  url?: string | null;
+};
