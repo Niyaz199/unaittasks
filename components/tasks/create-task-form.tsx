@@ -120,7 +120,7 @@ export function CreateTaskForm({
   return (
     <form
       ref={formRef}
-      className="section-card grid"
+      className="ctf-form"
       onSubmit={handleSubmit}
       noValidate
     >
@@ -138,36 +138,36 @@ export function CreateTaskForm({
         </div>
       ) : null}
 
-      <section className="form-section">
-        <h3 className="form-section-title">Основная информация</h3>
-        <p className="form-section-description">Кратко опишите, что нужно сделать и зачем.</p>
-        <div className="field-grid">
-          <div className="ctf-field">
-            <label className="ctf-label" htmlFor="ctf-title">
-              Название задачи <span className="ctf-required" aria-hidden="true">*</span>
-            </label>
-            <input
-              id="ctf-title"
-              ref={titleRef}
-              className={`input${fieldErrors.title ? " ctf-input--error" : ""}`}
-              name="title"
-              placeholder="Название задачи"
-              autoComplete="off"
-              onChange={() => { if (fieldErrors.title) setFieldErrors((p) => ({ ...p, title: undefined })); }}
-            />
-            {fieldErrors.title ? <span className="ctf-field-error">{fieldErrors.title}</span> : null}
-          </div>
-          <div className="ctf-field">
-            <label className="ctf-label" htmlFor="ctf-description">Описание</label>
-            <textarea id="ctf-description" className="input" name="description" rows={4} placeholder="Описание (опционально)" />
-          </div>
+      {/* ── Блок 1: Основное ── */}
+      <section className="ctf-section">
+        <h3 className="ctf-section-title">Основное</h3>
+        <div className="ctf-field">
+          <label className="ctf-label" htmlFor="ctf-title">
+            Название <span className="ctf-required" aria-hidden="true">*</span>
+          </label>
+          <input
+            id="ctf-title"
+            ref={titleRef}
+            className={`input ctf-title-input${fieldErrors.title ? " ctf-input--error" : ""}`}
+            name="title"
+            placeholder="Что нужно сделать?"
+            autoComplete="off"
+            onChange={() => { if (fieldErrors.title) setFieldErrors((p) => ({ ...p, title: undefined })); }}
+          />
+          {fieldErrors.title ? <span className="ctf-field-error">{fieldErrors.title}</span> : null}
+        </div>
+        <div className="ctf-field">
+          <label className="ctf-label" htmlFor="ctf-description">
+            Описание <span className="ctf-optional">необязательно</span>
+          </label>
+          <textarea id="ctf-description" className="input" name="description" rows={3} placeholder="Подробности, ссылки, контекст…" />
         </div>
       </section>
 
-      <section className="form-section">
-        <h3 className="form-section-title">Параметры задачи</h3>
-        <p className="form-section-description">Выберите объект и уровень приоритета.</p>
-        <div className="field-row">
+      {/* ── Блок 2: Назначение ── */}
+      <section className="ctf-section">
+        <h3 className="ctf-section-title">Назначение</h3>
+        <div className="ctf-assign-grid">
           <div className="ctf-field" ref={objectRef}>
             <label className="ctf-label">
               Объект <span className="ctf-required" aria-hidden="true">*</span>
@@ -186,6 +186,7 @@ export function CreateTaskForm({
             </div>
             {fieldErrors.object_id ? <span className="ctf-field-error">{fieldErrors.object_id}</span> : null}
           </div>
+
           <div className="ctf-field">
             <label className="ctf-label" htmlFor="ctf-priority">Приоритет</label>
             <select id="ctf-priority" className="select" name="priority" defaultValue="medium">
@@ -195,17 +196,7 @@ export function CreateTaskForm({
               <option value="critical">Критический</option>
             </select>
           </div>
-        </div>
-      </section>
 
-      <section className="form-section">
-        <h3 className="form-section-title">Назначение и срок</h3>
-        <p className="form-section-description">Укажите исполнителя и дедлайн.</p>
-        <div className="field-row">
-          <div className="ctf-field">
-            <label className="ctf-label" htmlFor="ctf-due">Срок выполнения</label>
-            <input id="ctf-due" className="input" type="datetime-local" name="due_at" />
-          </div>
           <div className="ctf-field" ref={assigneeRef}>
             <label className="ctf-label">
               Исполнитель <span className="ctf-required" aria-hidden="true">*</span>
@@ -226,48 +217,58 @@ export function CreateTaskForm({
             </div>
             {fieldErrors.assigned_to ? <span className="ctf-field-error">{fieldErrors.assigned_to}</span> : null}
           </div>
+
+          <div className="ctf-field">
+            <label className="ctf-label" htmlFor="ctf-due">Срок выполнения</label>
+            <input id="ctf-due" className="input" type="datetime-local" name="due_at" />
+          </div>
         </div>
       </section>
 
-      <section className="form-section">
-        <h3 className="form-section-title">Команда задачи</h3>
-        <p className="form-section-description">Дополнительные участники, которые смогут менять статус и работать с задачей.</p>
-        {selectedTeamIds.map((memberId) => (
-          <input key={memberId} type="hidden" name="team_member_ids" value={memberId} />
-        ))}
-        <TeamMembersPicker
-          options={teamOptions}
-          selectedIds={selectedTeamIds}
-          excludedIds={selectedAssigneeId ? [selectedAssigneeId] : []}
-          onAdd={(id) => {
-            if (selectedTeamIds.includes(id)) return;
-            setSelectedTeamIds((prev) => [...prev, id]);
-          }}
-          onRemove={(id) => {
-            setSelectedTeamIds((prev) => prev.filter((value) => value !== id));
-          }}
-          placeholder="Добавить участника в команду"
-        />
-      </section>
-
-      <section className="form-section">
-        <h3 className="form-section-title">Фото-вложения</h3>
-        <p className="form-section-description">Прикрепите фото к задаче (необязательно). JPEG, PNG, WebP — до 5 MB каждый, максимум 5 шт.</p>
-        <PhotoPicker
-          files={photoFiles}
-          onChange={setPhotoFiles}
-          disabled={pending || !!successMsg}
-        />
-      </section>
-
-      {Object.keys(fieldErrors).length > 0 ? (
-        <div className="ctf-alert ctf-alert--error" role="alert">
-          <span className="ctf-alert-icon" aria-hidden="true">✕</span>
-          <span>Заполните обязательные поля</span>
+      {/* ── Блок 3: Дополнительно ── */}
+      <section className="ctf-section ctf-secondary">
+        <h3 className="ctf-section-title">Дополнительно</h3>
+        <div className="ctf-field">
+          <label className="ctf-label">
+            Команда задачи <span className="ctf-optional">необязательно</span>
+          </label>
+          {selectedTeamIds.map((memberId) => (
+            <input key={memberId} type="hidden" name="team_member_ids" value={memberId} />
+          ))}
+          <TeamMembersPicker
+            options={teamOptions}
+            selectedIds={selectedTeamIds}
+            excludedIds={selectedAssigneeId ? [selectedAssigneeId] : []}
+            onAdd={(id) => {
+              if (selectedTeamIds.includes(id)) return;
+              setSelectedTeamIds((prev) => [...prev, id]);
+            }}
+            onRemove={(id) => {
+              setSelectedTeamIds((prev) => prev.filter((value) => value !== id));
+            }}
+            placeholder="Добавить участника в команду"
+          />
         </div>
-      ) : null}
+        <div className="ctf-field">
+          <label className="ctf-label">
+            Фото <span className="ctf-optional">необязательно · JPEG/PNG/WebP, до 5 MB, макс. 5 шт.</span>
+          </label>
+          <PhotoPicker
+            files={photoFiles}
+            onChange={setPhotoFiles}
+            disabled={pending || !!successMsg}
+          />
+        </div>
+      </section>
 
-      <div className="row">
+      {/* ── CTA ── */}
+      <div className="ctf-actions">
+        {Object.keys(fieldErrors).length > 0 ? (
+          <div className="ctf-alert ctf-alert--error" role="alert">
+            <span className="ctf-alert-icon" aria-hidden="true">✕</span>
+            <span>Заполните обязательные поля</span>
+          </div>
+        ) : null}
         <button className="btn btn-accent ctf-submit-btn" type="submit" disabled={pending || !!successMsg}>
           {pending ? (
             <>

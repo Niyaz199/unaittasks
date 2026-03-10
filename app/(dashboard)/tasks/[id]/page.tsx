@@ -137,87 +137,78 @@ export default async function TaskDetailsPage({
   const assigneeName = resolveAssigneeName(task.assignee);
 
   return (
-    <section className="grid">
-      <div className="section-card task-details-hero">
-        <div className="task-details-hero-main">
+    <section className="td-page grid">
+      {/* ── Шапка задачи ── */}
+      <div className="section-card td-hero">
+        <div className="td-hero-top">
           <h1 className="task-details-title">{task.title}</h1>
-          <div className="task-details-meta">
-            <span>Объект: {task.objects?.name ?? "—"}</span>
-            <span className="task-row-dot">•</span>
-            <span>Ответственный: {assigneeName}</span>
-            <span className="task-row-dot">•</span>
-            <span>Срок: {dueLabel}</span>
-            {task.status === "paused" && resumeLabel ? (
-              <>
-                <span className="task-row-dot">•</span>
-                <span>Пауза до: {resumeLabel}</span>
-              </>
-            ) : null}
+          <div className="td-hero-badges">
+            <Badge tone={status.tone}>{status.label}</Badge>
+            <Badge tone={priority.tone}>{priority.label}</Badge>
           </div>
         </div>
-        <div className="task-details-hero-badges">
-          <Badge tone={status.tone}>Статус: {status.label}</Badge>
-          <Badge tone={priority.tone}>Приоритет: {priority.label}</Badge>
+        <div className="td-meta-grid">
+          <span className="td-meta-item">
+            <span className="td-meta-label">Объект</span>
+            <span className="td-meta-value">{task.objects?.name ?? "—"}</span>
+          </span>
+          <span className="td-meta-item">
+            <span className="td-meta-label">Ответственный</span>
+            <span className="td-meta-value td-meta-assignee">
+              <span className="task-assignee-avatar td-avatar-sm" aria-hidden="true">{getInitials(assigneeName)}</span>
+              {assigneeName}
+            </span>
+          </span>
+          <span className="td-meta-item">
+            <span className="td-meta-label">Срок</span>
+            <span className="td-meta-value">{dueLabel}</span>
+          </span>
+          {task.status === "paused" && resumeLabel ? (
+            <span className="td-meta-item">
+              <span className="td-meta-label">Пауза до</span>
+              <span className="td-meta-value td-meta-paused">{resumeLabel}</span>
+            </span>
+          ) : null}
         </div>
       </div>
 
-      <div className="section-card task-description-panel">
-        <h2 className="task-panel-title">Описание</h2>
-        {task.description ? (
-          <p className="task-description-text">{task.description}</p>
-        ) : (
-          <p className="task-description-empty">Описание не заполнено.</p>
-        )}
-        <AttachmentsGallery taskId={task.id} />
-      </div>
+      {/* ── Описание ── */}
+      {(task.description || true) ? (
+        <div className="section-card task-description-panel">
+          <h2 className="task-panel-title">Описание</h2>
+          {task.description ? (
+            <p className="task-description-text">{task.description}</p>
+          ) : (
+            <p className="task-description-empty">Описание не заполнено.</p>
+          )}
+          <AttachmentsGallery taskId={task.id} />
+        </div>
+      ) : null}
 
-      <div className="section-card task-status-panel">
-        <h2 className="task-panel-title">Статус и действия</h2>
-        {task.status === "paused" && resumeLabel ? (
-          <div className="task-paused-inline">Пауза до: {resumeLabel}</div>
-        ) : null}
+      {/* ── Статус и действия ── */}
+      <div className="section-card td-status-panel">
+        <h2 className="task-panel-title">Действия</h2>
         {canEdit || canArchive ? (
           <StatusControl taskId={task.id} currentStatus={task.status} canEdit={canEdit} canArchive={canArchive} />
         ) : (
-          <div className="text-soft">Статус может менять только ответственный или участник команды.</div>
+          <div className="text-soft td-no-edit">Статус может менять только ответственный или участник команды.</div>
         )}
       </div>
 
-      <div className="section-card task-team-panel">
-        <h2 className="task-panel-title">Команда задачи</h2>
-        <div className="task-team-list">
-          <div className="task-team-item">
-            <div className="task-team-person">
-              <span className="task-assignee-avatar">{getInitials(assigneeName)}</span>
-              <div className="task-team-person-info">
-                <span>{assigneeName}</span>
-                <span className="text-soft">Ответственный</span>
-              </div>
-            </div>
-            <Badge tone="info">Владелец</Badge>
-          </div>
-        </div>
-
-        <TaskTeamManager
-          taskId={task.id}
-          canManage={canManageTeam}
-          currentUserId={profile.id}
-          assigneeId={task.assigned_to}
-          initialMembers={teamMembers}
-          allCandidates={(teamCandidatesData.data ?? []).map((item) => ({ id: item.id, full_name: item.full_name }))}
-        />
-      </div>
-
+      {/* ── Комментарии / История ── */}
       <div className="section-card grid comment-block">
-        <div className="task-tabs">
-          <Link className={`task-tab${activeTab === "comments" ? " active" : ""}`} href={`/tasks/${task.id}?tab=comments`}>
-            Комментарии
-          </Link>
-          {canViewHistory ? (
-            <Link className={`task-tab${activeTab === "history" ? " active" : ""}`} href={`/tasks/${task.id}?tab=history`}>
-              История
+        <div className="td-tabs-row">
+          <div className="task-tabs">
+            <Link className={`task-tab${activeTab === "comments" ? " active" : ""}`} href={`/tasks/${task.id}?tab=comments`}>
+              Комментарии
+              {comments.length > 0 ? <span className="td-tab-count">{comments.length}</span> : null}
             </Link>
-          ) : null}
+            {canViewHistory ? (
+              <Link className={`task-tab${activeTab === "history" ? " active" : ""}`} href={`/tasks/${task.id}?tab=history`}>
+                История
+              </Link>
+            ) : null}
+          </div>
         </div>
 
         {activeTab === "history" && canViewHistory ? (
@@ -231,7 +222,7 @@ export default async function TaskDetailsPage({
                 <div className="comment-body">{describeHistoryEvent(event)}</div>
               </div>
             ))}
-            {!history.length ? <div className="text-soft">История по задаче пока отсутствует.</div> : null}
+            {!history.length ? <div className="text-soft td-feed-empty">История по задаче пока отсутствует.</div> : null}
           </div>
         ) : (
           <>
@@ -247,10 +238,46 @@ export default async function TaskDetailsPage({
                   <AttachmentsGallery taskId={task.id} commentId={comment.id} />
                 </div>
               ))}
-              {!comments.length ? <div className="text-soft">Комментариев пока нет.</div> : null}
+              {!comments.length ? <div className="text-soft td-feed-empty">Комментариев пока нет.</div> : null}
             </div>
           </>
         )}
+      </div>
+
+      {/* ── Команда задачи — после комментариев ── */}
+      <div className="section-card td-team-panel">
+        <h2 className="task-panel-title">Команда</h2>
+        <div className="td-team-list">
+          <div className="td-team-item">
+            <div className="task-team-person">
+              <span className="task-assignee-avatar" aria-hidden="true">{getInitials(assigneeName)}</span>
+              <div className="task-team-person-info">
+                <span>{assigneeName}</span>
+                <span className="text-soft">Ответственный</span>
+              </div>
+            </div>
+            <Badge tone="info">Владелец</Badge>
+          </div>
+          {teamMembers.map((member) => (
+            <div key={member.user_id} className="td-team-item td-team-item--member">
+              <div className="task-team-person">
+                <span className="task-team-avatar" aria-hidden="true">{getInitials(member.full_name)}</span>
+                <span>{member.full_name}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {canManageTeam ? (
+          <TaskTeamManager
+            taskId={task.id}
+            canManage={canManageTeam}
+            currentUserId={profile.id}
+            assigneeId={task.assigned_to}
+            initialMembers={teamMembers}
+            allCandidates={(teamCandidatesData.data ?? []).map((item) => ({ id: item.id, full_name: item.full_name }))}
+          />
+        ) : null}
       </div>
     </section>
   );

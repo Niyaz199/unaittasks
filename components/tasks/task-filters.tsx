@@ -127,25 +127,7 @@ export function TaskFilters({
 
   return (
     <>
-      <div className="tl-kpi-section">
-        <div className={`tl-kpi-bar${kpiExpanded ? " tl-kpi-bar--expanded" : ""}`}>
-          {kpiItems.map((item) => (
-            <Link key={item.label} href={item.href} className={`tl-kpi-card tl-kpi-${item.accent}`}>
-              <span className="tl-kpi-value">{item.value}</span>
-              <span className="tl-kpi-label">{item.label}</span>
-            </Link>
-          ))}
-        </div>
-        <button
-          className="tl-kpi-toggle"
-          type="button"
-          onClick={() => setKpiExpanded((v) => !v)}
-          aria-expanded={kpiExpanded}
-        >
-          {kpiExpanded ? "Свернуть" : "Аналитика"}
-        </button>
-      </div>
-
+      {/* Sticky-бар: поиск + фильтры + чипсы — всегда вверху */}
       <div className="tl-sticky-bar">
         <div className="tl-search-row">
           <form className="tl-search-form" action="">
@@ -164,8 +146,9 @@ export function TaskFilters({
             </button>
           </form>
           <div className="tl-toolbar-actions">
+            {/* На десктопе кнопка "+ Задача" в toolbar, на мобиле — FAB */}
             {showCreateButton ? (
-              <Link className="btn btn-accent tl-btn-new" href={createHref}>
+              <Link className="btn btn-accent tl-btn-new tl-btn-new--toolbar" href={createHref}>
                 + Задача
               </Link>
             ) : null}
@@ -189,6 +172,33 @@ export function TaskFilters({
           ))}
         </div>
       </div>
+
+      {/* KPI-аналитика — после sticky-бара, компактная на мобиле */}
+      <div className="tl-kpi-section">
+        <div className={`tl-kpi-bar${kpiExpanded ? " tl-kpi-bar--expanded" : ""}`}>
+          {kpiItems.map((item) => (
+            <Link key={item.label} href={item.href} className={`tl-kpi-card tl-kpi-${item.accent}`}>
+              <span className="tl-kpi-value">{item.value}</span>
+              <span className="tl-kpi-label">{item.label}</span>
+            </Link>
+          ))}
+        </div>
+        <button
+          className="tl-kpi-toggle"
+          type="button"
+          onClick={() => setKpiExpanded((v) => !v)}
+          aria-expanded={kpiExpanded}
+        >
+          {kpiExpanded ? "Свернуть" : "Аналитика"}
+        </button>
+      </div>
+
+      {/* FAB: кнопка создания задачи на мобиле */}
+      {showCreateButton ? (
+        <Link className="tl-fab" href={createHref} aria-label="Создать задачу">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </Link>
+      ) : null}
 
       {isFiltersOpen ? (
         <FiltersDrawer

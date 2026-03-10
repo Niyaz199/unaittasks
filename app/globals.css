@@ -1106,6 +1106,314 @@ textarea {
   line-height: 1.42;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   TASK DETAIL PAGE — mobile-first (td-*)
+   ───────────────────────────────────────────────────────────── */
+
+/* Страница — чуть плотнее на мобиле */
+.td-page {
+  gap: 0.6rem;
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 1024px) {
+  .td-page {
+    padding-bottom: 1rem;
+  }
+}
+
+/* ── Шапка задачи ── */
+.td-hero {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.td-hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.td-hero-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  justify-content: flex-end;
+}
+
+/* На мобиле заголовок чуть компактнее */
+@media (max-width: 639px) {
+  .task-details-title {
+    font-size: 1.15rem;
+  }
+  .td-hero-badges .badge {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.55rem;
+  }
+}
+
+/* Мета-информация сеткой: 2 колонки на мобиле */
+.td-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem 0.7rem;
+}
+
+@media (min-width: 640px) {
+  .td-meta-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.td-meta-item {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.td-meta-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.055em;
+  color: color-mix(in srgb, var(--text-soft) 70%, transparent);
+}
+
+.td-meta-value {
+  font-size: 0.88rem;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.td-meta-assignee {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.td-meta-paused {
+  color: #fde68a;
+}
+
+/* Маленький аватар в шапке */
+.td-avatar-sm {
+  width: 1.15rem !important;
+  height: 1.15rem !important;
+  font-size: 0.52rem !important;
+  flex-shrink: 0;
+}
+
+/* ── Статус-панель ── */
+.td-status-panel {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.sc-grid {
+  gap: 0.55rem;
+}
+
+/* Кнопки статуса — компактнее на мобиле */
+@media (max-width: 639px) {
+  .status-switch {
+    gap: 0.35rem;
+  }
+  .status-switch-btn {
+    padding: 0.38rem 0.65rem;
+    font-size: 0.82rem;
+    border-radius: 8px;
+  }
+  .sc-archive-btn {
+    padding: 0.48rem 0.85rem;
+    font-size: 0.85rem;
+  }
+}
+
+/* Недоступные (не разрешённые переходы) — ещё прозрачнее */
+.sc-btn--unavailable {
+  opacity: 0.35 !important;
+}
+
+.sc-message {
+  font-size: 0.82rem;
+}
+
+.td-no-edit {
+  font-size: 0.88rem;
+}
+
+/* ── Вкладки комментариев ── */
+.td-tabs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* Счётчик комментариев в табе */
+.td-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--brand-grad-start) 30%, transparent);
+  color: #ffd4da;
+  padding: 0 0.28rem;
+  margin-left: 0.3rem;
+}
+
+.task-tab.active .td-tab-count {
+  background: rgba(255,255,255,0.25);
+  color: #fff;
+}
+
+/* Пустое состояние в ленте */
+.td-feed-empty {
+  font-size: 0.88rem;
+  padding: 0.3rem 0;
+}
+
+/* ── Форма комментария (cf-*) ── */
+.cf-wrap {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.cf-textarea {
+  min-height: 76px;
+  resize: none;
+  font-size: 0.92rem;
+}
+
+.cf-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+/* Кнопка "Прикрепить фото" в cf-footer — сделать её компактной */
+.cf-footer .photo-picker {
+  flex: 1;
+  min-width: 0;
+}
+
+.cf-footer .photo-picker-btn {
+  font-size: 0.8rem;
+  padding: 0.38rem 0.65rem;
+  min-height: 38px;
+}
+
+.cf-footer .photo-picker-hint {
+  display: none;
+}
+
+/* Кнопка отправки */
+.cf-send-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  min-height: 38px;
+  padding: 0.38rem 0.85rem;
+  font-size: 0.88rem;
+  color: var(--text-soft);
+  transition: background 0.14s, color 0.14s, box-shadow 0.14s;
+}
+
+.cf-send-btn--active {
+  background: linear-gradient(135deg, var(--brand-grad-start), var(--brand-grad-end));
+  color: #fff !important;
+  box-shadow: 0 6px 18px rgba(253, 35, 138, 0.28);
+}
+
+.cf-send-btn--active:hover {
+  box-shadow: 0 8px 22px rgba(253, 35, 138, 0.38);
+}
+
+@keyframes cf-spin {
+  to { transform: rotate(360deg); }
+}
+.cf-send-spinner {
+  animation: cf-spin 0.8s linear infinite;
+}
+
+/* На узких экранах текст кнопки можно скрыть */
+@media (max-width: 420px) {
+  .cf-send-label {
+    display: none;
+  }
+  .cf-send-btn {
+    padding: 0.38rem 0.65rem;
+  }
+}
+
+/* ── Команда задачи ── */
+.td-team-panel {
+  display: grid;
+  gap: 0.6rem;
+}
+
+/* Компактный список команды */
+.td-team-list {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.td-team-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel-soft) 55%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #8ea8d0 14%, transparent);
+}
+
+/* Рядовой участник — ещё компактнее */
+.td-team-item--member {
+  padding: 0.32rem 0.65rem;
+  background: color-mix(in srgb, var(--panel-soft) 38%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #8ea8d0 10%, transparent);
+}
+
+/* На мобиле поле добавления участника чуть меньше */
+@media (max-width: 639px) {
+  .team-quick-btn {
+    font-size: 0.78rem;
+    padding: 0.36rem 0.68rem;
+  }
+  .team-search-input {
+    padding: 0.48rem 0.7rem;
+    font-size: 0.88rem;
+  }
+}
+
+/* ── Описание ── */
+@media (max-width: 639px) {
+  .task-description-text {
+    font-size: 0.95rem;
+  }
+}
+
+/* ── comment-block gap ── */
+@media (max-width: 639px) {
+  .comment-block {
+    gap: 0.6rem !important;
+  }
+  .comment-item {
+    padding: 0.6rem 0.7rem;
+  }
+  .comment-item-head {
+    margin-bottom: 0.28rem;
+  }
+}
+
 .form-section {
   display: grid;
   gap: 0.75rem;
@@ -1852,6 +2160,128 @@ textarea {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   TASK LIST – mobile-first v2
+   ───────────────────────────────────────────────────────────── */
+
+/* FAB (Floating Action Button) — только на мобиле */
+.tl-fab {
+  display: none;
+}
+
+@media (max-width: 639px) {
+  .tl-fab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    /* Над нижним nav: nav ~56px + safe-area + отступ */
+    bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px) + 0.75rem);
+    right: 1rem;
+    width: 52px;
+    height: 52px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, var(--brand-grad-start), var(--brand-grad-end));
+    color: #fff;
+    box-shadow:
+      0 8px 24px rgba(253, 35, 138, 0.4),
+      0 2px 8px rgba(0,0,0,0.3);
+    z-index: 50;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    text-decoration: none;
+  }
+  .tl-fab:active {
+    transform: scale(0.93);
+    box-shadow: 0 4px 14px rgba(253, 35, 138, 0.35);
+  }
+
+  /* Кнопку "+ Задача" в toolbar скрываем на мобиле — есть FAB */
+  .tl-btn-new--toolbar {
+    display: none;
+  }
+}
+
+/* На десктопе FAB скрыт, toolbar-кнопка видна */
+@media (min-width: 640px) {
+  .tl-btn-new--toolbar {
+    display: inline-flex;
+  }
+}
+
+/* KPI: на мобиле компактнее по умолчанию (без expanded) */
+@media (max-width: 639px) {
+  .tl-kpi-section {
+    /* Уменьшаем gap чтобы toggle был ближе */
+    gap: 0.25rem;
+  }
+
+  /* Горизонтальный скролл всегда — даже без отдельного expanded-состояния */
+  .tl-kpi-bar:not(.tl-kpi-bar--expanded) .tl-kpi-card {
+    min-height: 46px;
+    padding: 0.38rem 0.55rem;
+  }
+  .tl-kpi-bar:not(.tl-kpi-bar--expanded) .tl-kpi-value {
+    font-size: 1.15rem;
+  }
+  .tl-kpi-bar:not(.tl-kpi-bar--expanded) .tl-kpi-label {
+    font-size: 0.6rem;
+  }
+}
+
+/* Карточка задачи — компактнее на мобиле */
+@media (max-width: 639px) {
+  .tl-card-inner {
+    padding: 0.65rem 0.75rem 0.65rem calc(0.75rem + 4px);
+    gap: 0.35rem;
+  }
+  .tl-card--overdue .tl-card-inner {
+    padding-left: calc(0.75rem + 10px);
+  }
+  .tl-card-main {
+    gap: 0.28rem;
+  }
+  .tl-card-title {
+    font-size: 0.93rem;
+  }
+  .tl-card-sub {
+    font-size: 0.78rem;
+    gap: 0.28rem;
+  }
+  .tl-card-footer {
+    gap: 0.28rem;
+    margin-top: 0.05rem;
+  }
+  /* Aside (меню ⋯) — чуть меньше отступ сверху */
+  .tl-card-aside {
+    padding-top: 0;
+  }
+  /* Кнопка-меню минимальный размер для touch */
+  .tl-action-btn {
+    width: 38px;
+    height: 38px;
+  }
+}
+
+/* Карточка на десктопе — убираем лишний "воздух" справа */
+@media (min-width: 760px) {
+  .tl-card-inner {
+    padding: 0.75rem 0.85rem 0.75rem calc(0.85rem + 4px);
+  }
+  .tl-card--overdue .tl-card-inner {
+    padding-left: calc(0.85rem + 10px);
+  }
+  .tl-card-main {
+    gap: 0.32rem;
+  }
+}
+
+/* Список задач на мобиле — меньше gap */
+@media (max-width: 639px) {
+  .tl-list {
+    gap: 0.4rem;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
    CREATE TASK FORM (ctf-*)
    ───────────────────────────────────────────────────────────── */
 
@@ -1889,10 +2319,11 @@ textarea {
 }
 
 .ctf-label {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
+  font-weight: 500;
   color: var(--text-soft);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.045em;
 }
 
 .ctf-required {
@@ -1932,6 +2363,86 @@ textarea {
 
 @keyframes ctf-spin {
   to { transform: rotate(360deg); }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   CREATE TASK FORM — LAYOUT (ctf-form, ctf-section, etc.)
+   ───────────────────────────────────────────────────────────── */
+
+.ctf-form {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 760px;
+}
+
+.ctf-section {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1.1rem 1.2rem;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--panel-soft) 56%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #8ea8d0 14%, transparent);
+}
+
+.ctf-section-title {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: color-mix(in srgb, var(--text-soft) 70%, var(--text) 30%);
+}
+
+/* Обязательный путь: 2×2 сетка для полей назначения */
+.ctf-assign-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+@media (min-width: 600px) {
+  .ctf-assign-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Пометка "необязательно" рядом с лейблом */
+.ctf-optional {
+  font-size: 0.75rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: color-mix(in srgb, var(--text-soft) 60%, transparent);
+  margin-left: 0.3rem;
+}
+
+/* Большой инпут для названия */
+.ctf-title-input {
+  font-size: 1rem;
+  padding: 0.62rem 0.8rem;
+}
+
+/* Блок "Дополнительно" — приглушён чуть сильнее */
+.ctf-secondary {
+  background: color-mix(in srgb, var(--panel-soft) 36%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #8ea8d0 9%, transparent);
+}
+
+.ctf-secondary .ctf-section-title {
+  color: color-mix(in srgb, var(--text-soft) 55%, transparent);
+}
+
+/* CTA-полоса внизу формы */
+.ctf-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding-top: 0.25rem;
+}
+
+.ctf-actions .ctf-alert {
+  flex: 1;
+  min-width: 0;
 }
 
 /* ─────────────────────────────────────────────────────────────

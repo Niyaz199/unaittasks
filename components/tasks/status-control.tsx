@@ -118,25 +118,27 @@ export function StatusControl({ taskId, currentStatus, canEdit, canArchive = fal
 
   return (
     <>
-      <div className="grid">
+      <div className="grid sc-grid">
         <div className="status-switch">
-          {(["new", "accepted", "in_progress", "paused", "done"] as TaskStatus[]).map((option) => (
-            <button
-              key={option}
-              className={`status-switch-btn${status === option ? " active" : ""}`}
-              type="button"
-              disabled={!canEdit || pending || status === option || !allowedTransitions.includes(option)}
-              onClick={() => {
-                const nextStatus = option;
-                if (nextStatus !== "paused") {
-                  setStatus(nextStatus);
-                }
-                startTransition(() => void submit(nextStatus));
-              }}
-            >
-              {taskStatusMeta[option].label}
-            </button>
-          ))}
+          {(["new", "accepted", "in_progress", "paused", "done"] as TaskStatus[]).map((option) => {
+            const isActive = status === option;
+            const isAllowed = allowedTransitions.includes(option);
+            return (
+              <button
+                key={option}
+                className={`status-switch-btn${isActive ? " active" : ""}${!isActive && !isAllowed ? " sc-btn--unavailable" : ""}`}
+                type="button"
+                disabled={!canEdit || pending || isActive || !isAllowed}
+                onClick={() => {
+                  if (option !== "paused") setStatus(option);
+                  startTransition(() => void submit(option));
+                }}
+                title={isActive ? "Текущий статус" : undefined}
+              >
+                {taskStatusMeta[option].label}
+              </button>
+            );
+          })}
         </div>
         {canArchive ? (
           <div className="sc-archive-row">
@@ -146,16 +148,16 @@ export function StatusControl({ taskId, currentStatus, canEdit, canArchive = fal
               disabled={pending}
               onClick={() => startTransition(() => void submitArchive())}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <polyline points="21 8 21 21 3 21 3 8"/>
                 <rect x="1" y="3" width="22" height="5"/>
                 <line x1="10" y1="12" x2="14" y2="12"/>
               </svg>
-              Перенести в архив
+              В архив
             </button>
           </div>
         ) : null}
-        {message ? <div className="text-soft">{message}</div> : null}
+        {message ? <div className="text-soft sc-message">{message}</div> : null}
       </div>
       <Modal open={pauseOpen} title="Поставить задачу на паузу" onClose={() => setPauseOpen(false)}>
         <div className="grid">

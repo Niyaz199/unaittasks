@@ -106,35 +106,41 @@ export function CommentForm({ taskId }: { taskId: string }) {
   const canSubmit = body.trim().length > 0 || photoFiles.length > 0;
 
   return (
-    <div className="grid">
+    <div className="cf-wrap">
       <textarea
-        className="input comment-input"
+        className="input comment-input cf-textarea"
         value={body}
         onChange={(e) => {
           setBody(e.target.value);
           if (isError) clearMessage();
         }}
-        rows={4}
-        placeholder="Комментарий..."
+        rows={3}
+        placeholder="Написать комментарий…"
         disabled={pending}
       />
-      <PhotoPicker
-        files={photoFiles}
-        onChange={(files) => {
-          setPhotoFiles(files);
-          if (isError) clearMessage();
-        }}
-        disabled={pending}
-        label="Прикрепить фото к комментарию"
-      />
-      <div className="row comment-form-actions">
+      <div className="cf-footer">
+        <PhotoPicker
+          files={photoFiles}
+          onChange={(files) => {
+            setPhotoFiles(files);
+            if (isError) clearMessage();
+          }}
+          disabled={pending}
+          label="Фото"
+        />
         <button
-          className="btn btn-ghost comment-submit-btn"
+          className={`btn cf-send-btn${canSubmit ? " cf-send-btn--active" : ""}`}
           type="button"
           onClick={submit}
           disabled={pending || !canSubmit}
+          aria-label="Отправить комментарий"
         >
-          Отправить
+          {pending ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="cf-send-spinner"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          )}
+          <span className="cf-send-label">Отправить</span>
         </button>
       </div>
       {message ? (
