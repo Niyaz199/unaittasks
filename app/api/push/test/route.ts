@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getApiSession } from "@/lib/api-auth";
 import { sendPushToUser } from "@/lib/push";
 
-export async function POST(request: Request) {
+export async function POST() {
   const { user } = await getApiSession();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

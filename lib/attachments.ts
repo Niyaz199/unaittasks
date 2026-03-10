@@ -88,7 +88,7 @@ export async function getSignedUrls(
   if (error || !data) return {};
   const result: Record<string, string> = {};
   for (const item of data) {
-    if (item.signedUrl) result[item.path] = item.signedUrl;
+    if (item.path != null && item.signedUrl) result[item.path] = item.signedUrl;
   }
   return result;
 }

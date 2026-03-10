@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useCallback, useEffect } from "react";
-import { ALLOWED_MIME_TYPES, MAX_FILE_SIZE_BYTES, MAX_FILES_PER_UPLOAD, validateAttachmentFile } from "@/lib/attachments";
+import { ALLOWED_MIME_TYPES, MAX_FILES_PER_UPLOAD, validateAttachmentFile } from "@/lib/attachments";
 
 export type PickedFile = {
   file: File;

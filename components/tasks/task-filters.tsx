@@ -78,24 +78,6 @@ export function TaskFilters({
     [initial]
   );
 
-  // Строит href, сохраняя ВСЕ текущие параметры и перезаписывая нужные.
-  // Используется только для формы поиска.
-  function buildHref(overrides: Record<string, string>): Route {
-    const params = new URLSearchParams();
-    params.set("q", initial.q ?? "");
-    params.set("status", initial.status ?? "all");
-    params.set("priority", initial.priority ?? "all");
-    params.set("object", initial.object ?? "all");
-    params.set("assignee", initial.assignee ?? "all");
-    params.set("team_member", initial.teamMember ?? "all");
-    params.set("due", initial.due ?? "all");
-    params.set("sort", initial.sort ?? "due_asc");
-    params.set("client_sort", initial.clientSort ?? "smart");
-    params.set("group_by", initial.groupBy ?? "none");
-    Object.entries(overrides).forEach(([key, value]) => params.set(key, value));
-    return `${listHref}?${params.toString()}` as Route;
-  }
-
   // Строит href для чипов и KPI-плиток: сбрасывает ВСЕ quick-параметры
   // (status/priority/due), сохраняет только "медленные" (object/assignee/team/sort/etc.)
   // и применяет только то, что явно передано.
