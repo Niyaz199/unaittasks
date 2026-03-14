@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { listObjectsForProfile } from "@/lib/objects";
 import { CreateTaskForm } from "@/components/tasks/create-task-form";
 import { PageHeader } from "@/components/ui/page-header";
+import { BackButton } from "@/components/ui/back-button";
 
 export default async function CreateTaskPage() {
   const { profile } = await requireProfile();
@@ -35,7 +36,11 @@ export default async function CreateTaskPage() {
 
   return (
     <section className="grid">
-      <PageHeader title="Создать задачу" description="Постановка задачи инженеру с приоритетом и сроком." />
+      <PageHeader
+        title="Создать задачу"
+        description="Постановка задачи инженеру с приоритетом и сроком."
+        actions={<BackButton fallback="/my" />}
+      />
       <CreateTaskForm
         objects={objects}
         assignees={assigneeRows}

@@ -1787,6 +1787,7 @@ textarea {
   line-height: 1.3;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -2046,9 +2047,6 @@ textarea {
 }
 
 /* На мобиле KPI по умолчанию свёрнут: одна строка, горизонтальный скролл */
-.tl-kpi-bar {
-  /* уже grid 2-col на мобиле, переключаем на flex-scroll в свёрнутом виде */
-}
 
 /* Свёрнутое состояние (по умолчанию mobile) */
 @media (max-width: 639px) {
@@ -2697,4 +2695,383 @@ textarea {
 
 .att-lightbox-close:hover {
   background: rgba(255, 255, 255, 0.22);
+}
+
+/* =========================================================
+   PPR Dashboard Home
+   ========================================================= */
+
+.ppr-intro-card {
+  border-color: color-mix(in srgb, var(--brand-grad-start) 28%, transparent);
+  background:
+    linear-gradient(
+      130deg,
+      color-mix(in srgb, var(--brand-grad-start) 8%, transparent),
+      color-mix(in srgb, var(--brand-grad-end) 5%, transparent)
+    ),
+    color-mix(in srgb, var(--panel) 94%, transparent);
+}
+
+.ppr-intro-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.ppr-intro-icon {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff7f8;
+  background: linear-gradient(135deg, var(--brand-grad-start), var(--brand-grad-end));
+  box-shadow: 0 10px 24px rgba(253, 74, 94, 0.28);
+}
+
+.ppr-intro-title {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.ppr-role-badge {
+  margin: 0.85rem 0 0;
+  font-size: 0.84rem;
+  color: var(--text-soft);
+}
+
+.ppr-role-badge strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.ppr-group-label {
+  margin: 0;
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+
+.ppr-nav-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.65rem;
+}
+
+.ppr-nav-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  box-shadow:
+    0 8px 20px rgba(4, 12, 24, 0.22),
+    inset 0 0 0 1px color-mix(in srgb, var(--line) 32%, transparent);
+  text-decoration: none;
+  color: var(--text);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+}
+
+.ppr-nav-card:hover {
+  transform: translateY(-2px);
+  background: color-mix(in srgb, var(--panel-soft) 60%, var(--panel) 40%);
+  box-shadow:
+    0 14px 28px rgba(4, 12, 24, 0.28),
+    inset 0 0 0 1px color-mix(in srgb, var(--brand-grad-start) 36%, var(--line) 40%);
+  color: var(--text);
+}
+
+.ppr-nav-card-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-size: 1rem;
+  color: #ffdfe4;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--brand-grad-start) 30%, transparent),
+    color-mix(in srgb, var(--brand-grad-end) 30%, transparent)
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-grad-start) 24%, transparent);
+}
+
+.ppr-nav-card-body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 0.18rem;
+}
+
+.ppr-nav-card-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.ppr-nav-card-desc {
+  font-size: 0.8rem;
+  color: var(--text-soft);
+  line-height: 1.35;
+}
+
+.ppr-nav-card-arrow {
+  flex-shrink: 0;
+  font-size: 0.95rem;
+  color: var(--text-soft);
+  opacity: 0.5;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.ppr-nav-card:hover .ppr-nav-card-arrow {
+  opacity: 1;
+  transform: translateX(3px);
+  color: color-mix(in srgb, var(--brand-grad-end) 80%, var(--text) 20%);
+}
+
+/* =========================================================
+   Back Button
+   ========================================================= */
+
+.back-btn {
+  font-size: 0.88rem;
+  color: var(--text-soft);
+  letter-spacing: 0.01em;
+}
+
+.back-btn:hover {
+  color: var(--text);
+}
+
+/* =========================================================
+   PPR Table Actions
+   ========================================================= */
+
+.ppr-table-actions {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ppr-action-btn {
+  padding: 0.35rem 0.75rem !important;
+  font-size: 0.85rem !important;
+  border-radius: 6px !important;
+  height: auto !important;
+}
+
+/* =========================================================
+   PPR Dashboard
+   ========================================================= */
+
+.ppr-intro-card {
+  padding: 1.5rem !important;
+  border: 1px solid var(--line-strong) !important;
+  background: color-mix(in srgb, var(--panel-soft) 40%, transparent) !important;
+  border-radius: 16px !important;
+}
+
+.ppr-intro-inner {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.ppr-intro-icon {
+  width: 48px;
+  height: 48px;
+  background: var(--line-strong);
+  color: var(--text-soft);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.ppr-intro-title {
+  font-size: 1.5rem !important;
+  font-weight: 700 !important;
+  margin: 0 !important;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.ppr-role-badge {
+  font-size: 0.8rem;
+  color: var(--text-soft);
+  margin-top: 0.5rem !important;
+  display: block;
+}
+
+.ppr-group-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-soft);
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.ppr-group-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.ppr-nav-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.ppr-nav-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+  padding: 1.25rem;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel-soft) 40%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line-strong) 40%, transparent);
+  text-decoration: none !important;
+  color: inherit !important;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  position: relative;
+}
+
+.ppr-nav-card:hover {
+  background: color-mix(in srgb, var(--panel-soft) 80%, transparent);
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
+
+.ppr-nav-card-icon {
+  width: 44px;
+  height: 44px;
+  background: color-mix(in srgb, var(--panel) 100%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line-strong) 40%, transparent);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.ppr-nav-card:hover .ppr-nav-card-icon {
+  background: var(--line-strong);
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+.ppr-nav-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.ppr-nav-card-label {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.ppr-nav-card-desc {
+  font-size: 0.9rem;
+  color: var(--text-soft);
+  line-height: 1.4;
+}
+
+.ppr-nav-card-arrow {
+  font-size: 1.2rem;
+  opacity: 0.3;
+  transition: all 0.2s ease;
+  transform: translateX(-5px);
+}
+
+.ppr-nav-card:hover .ppr-nav-card-arrow {
+  opacity: 1;
+  transform: translateX(0);
+  color: var(--text-soft);
+}
+
+@media (max-width: 639px) {
+  .ppr-intro-card {
+    padding: 1.5rem !important;
+  }
+  .ppr-intro-inner {
+    gap: 1.25rem;
+  }
+  .ppr-intro-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 1.1rem;
+    border-radius: 12px;
+  }
+  .ppr-intro-title {
+    font-size: 1.4rem !important;
+  }
+  .ppr-nav-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =========================================================
+   PPR Modal UX
+   ========================================================= */
+
+.ppr-modal-content {
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  max-height: calc(100vh - 4rem) !important;
+}
+
+.ppr-modal-header {
+  padding: 1.25rem;
+  margin: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line-strong) 60%, transparent);
+  flex-shrink: 0;
+}
+
+.ppr-modal-body {
+  padding: 1.25rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.ppr-modal-footer {
+  padding: 1rem 1.25rem;
+  border-top: 1px solid color-mix(in srgb, var(--line-strong) 40%, transparent);
+  background: color-mix(in srgb, #081121 80%, transparent);
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.75rem;
 }

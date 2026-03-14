@@ -8,6 +8,7 @@ import { CommentForm } from "@/components/tasks/comment-form";
 import { TaskTeamManager } from "@/components/tasks/task-team-manager";
 import { AttachmentsGallery } from "@/components/tasks/attachments-gallery";
 import { Badge } from "@/components/ui/badge";
+import { BackButton } from "@/components/ui/back-button";
 import { canArchiveTask, canChangeStatus } from "@/lib/task-permissions";
 import { taskPriorityMeta, taskStatusMeta, humanStatus } from "@/lib/task-presentation";
 import type { TaskComment, TaskHistoryEvent } from "@/lib/types";
@@ -141,6 +142,9 @@ export default async function TaskDetailsPage({
       {/* ── Шапка задачи ── */}
       <div className="section-card td-hero">
         <div className="td-hero-top">
+          <div className="row" style={{ marginBottom: "0.5rem" }}>
+            <BackButton fallback="/tasks" />
+          </div>
           <h1 className="task-details-title">{task.title}</h1>
           <div className="td-hero-badges">
             <Badge tone={status.tone}>{status.label}</Badge>

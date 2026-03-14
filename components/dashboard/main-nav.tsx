@@ -7,16 +7,16 @@ type Props = {
   currentPath: string;
 };
 
-function isActive(currentPath: string, href: Route) {
+function isActive(currentPath: string, href: string) {
   if (currentPath === href || currentPath.startsWith(`${href}/`)) return true;
   if (href === "/my") return currentPath === "/my" || currentPath.startsWith("/tasks/");
   return false;
 }
 
-function Item({ href, label, currentPath }: { href: Route; label: string; currentPath: string }) {
+function Item({ href, label, currentPath }: { href: string; label: string; currentPath: string }) {
   const active = isActive(currentPath, href);
   return (
-    <Link href={href} className={`side-nav-link${active ? " active" : ""}`}>
+    <Link href={href as Route} className={`side-nav-link${active ? " active" : ""}`}>
       {label}
     </Link>
   );
@@ -24,6 +24,7 @@ function Item({ href, label, currentPath }: { href: Route; label: string; curren
 
 export function MainNav({ role, currentPath }: Props) {
   const canManageDirectories = role === "admin" || role === "chief";
+  const canManagePprSystemGroups = role === "admin" || role === "chief" || role === "lead";
 
   return (
     <nav className="side-nav">
@@ -32,6 +33,14 @@ export function MainNav({ role, currentPath }: Props) {
         <Item href="/my" label="Мои задачи" currentPath={currentPath} />
         <Item href="/new" label="Новые" currentPath={currentPath} />
         <Item href="/archive" label="Архив" currentPath={currentPath} />
+      </section>
+
+      <section className="side-nav-section">
+        <p className="side-nav-title">ППР</p>
+        <Item href="/ppr" label="Модуль ППР" currentPath={currentPath} />
+        {canManagePprSystemGroups ? (
+          <Item href="/ppr/system-groups" label="Группы систем ППР" currentPath={currentPath} />
+        ) : null}
       </section>
 
       {canManageDirectories ? (
