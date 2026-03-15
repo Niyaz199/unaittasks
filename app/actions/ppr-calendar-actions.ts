@@ -5,11 +5,36 @@ import { requireProfile } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { writeAudit } from "@/lib/audit";
 import { canManagePprCalendar } from "@/lib/ppr/permissions";
-import { listPprCalendarSystemsForProfile } from "@/lib/ppr/queries";
+import { getPprTaskByIdForProfile, listPprCalendarSystemsForProfile } from "@/lib/ppr/queries";
 import { defaultPlannedFor, generateMonthPlanForSystem, normalizePlanMonth } from "@/lib/ppr/scheduler";
+import {
+  buildPprTaskActor,
+  calculatePprTaskOverdueAfterReschedule,
+  canReschedulePprTaskLifecycle,
+  syncPprTaskPlanItemsPlannedFor,
+} from "@/lib/ppr/task-lifecycle";
 import { pprMonthPlanGenerateFormSchema, pprMonthPlanItemScheduleFormSchema } from "@/lib/ppr/validators";
 
 type SupabaseServer = Awaited<ReturnType<typeof createSupabaseServerClient>>;
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function assertSamePlanMonth(nextPlannedFor: string, planMonth: string) {
+  if (nextPlannedFor.slice(0, 7) !== planMonth.slice(0, 7)) {
+    throw new Error("Перенос из календаря ППР допускается только внутри выбранного месяца");
+  }
+}
+
+function revalidateCalendarTaskPaths(taskId?: string | null) {
+  revalidatePath("/ppr/calendar");
+  if (taskId) {
+    revalidatePath("/ppr/tasks");
+    revalidatePath("/ppr/my");
+    revalidatePath(`/ppr/tasks/${taskId}`);
+  }
+}
 
 async function requireCalendarManager() {
   const { profile } = await requireProfile();
@@ -91,6 +116,7 @@ export async function reschedulePprMonthPlanItemAction(formData: FormData) {
   const payload = pprMonthPlanItemScheduleFormSchema.parse({
     itemId: String(formData.get("item_id") ?? ""),
     plannedFor: String(formData.get("planned_for") ?? "") || undefined,
+    reason: String(formData.get("reason") ?? "") || undefined,
   });
 
   const { data: item, error: itemError } = await supabase
@@ -100,38 +126,91 @@ export async function reschedulePprMonthPlanItemAction(formData: FormData) {
     .single();
   if (itemError) throw itemError;
 
-  const system = await assertCalendarSystemManageable(supabase, profile, systems, item.system_id);
-  if (item.status !== "pending" && item.status !== "carried_over") {
-    throw new Error("Перенос даты доступен только для pending или carried_over позиций");
-  }
-  if (item.task_id) {
-    throw new Error("Нельзя менять дату после materialization");
-  }
-
   const monthPlan = Array.isArray(item.month_plan) ? item.month_plan[0] : item.month_plan;
-  const plannedFor = payload.plannedFor?.trim() ? payload.plannedFor : defaultPlannedFor(monthPlan?.plan_month ?? item.planned_for);
+  const planMonth = monthPlan?.plan_month ?? item.planned_for;
+  const plannedFor = payload.plannedFor?.trim() ? payload.plannedFor : defaultPlannedFor(planMonth);
+  const system = await assertCalendarSystemManageable(supabase, profile, systems, item.system_id);
+  assertSamePlanMonth(plannedFor, planMonth);
 
-  const { error } = await supabase
-    .from("ppr_month_plan_items")
+  if (!item.task_id) {
+    if (item.status !== "pending" && item.status !== "carried_over") {
+      throw new Error("Перенос даты доступен только для pending или carried_over позиций");
+    }
+
+    const { error } = await supabase
+      .from("ppr_month_plan_items")
+      .update({
+        planned_for: plannedFor,
+        is_overdue: plannedFor < todayIso(),
+      })
+      .eq("id", payload.itemId);
+    if (error) throw error;
+
+    await writeAudit({
+      actorId: profile.id,
+      action: "reschedule_ppr_month_plan_item",
+      entityType: "ppr_month_plan_item",
+      entityId: payload.itemId,
+      meta: {
+        object_id: system.object_id,
+        system_id: item.system_id,
+        planned_for: plannedFor,
+        source_due_date: item.source_due_date,
+        mode: "plan_item",
+      },
+    });
+
+    revalidateCalendarTaskPaths();
+    return;
+  }
+
+  const task = await getPprTaskByIdForProfile(supabase, profile, item.task_id);
+  if (!task) {
+    throw new Error("Связанная ППР-заявка не найдена");
+  }
+
+  const actor = await buildPprTaskActor(supabase, profile);
+  if (!canReschedulePprTaskLifecycle(actor, task)) {
+    throw new Error("Нет прав на перенос materialized ППР-заявки");
+  }
+
+  const reason = payload.reason?.trim();
+  if (!reason || reason.length < 3) {
+    throw new Error("Укажите причину переноса materialized ППР-заявки");
+  }
+
+  const { data: updatedTask, error: updateTaskError } = await supabase
+    .from("ppr_tasks")
     .update({
       planned_for: plannedFor,
-      is_overdue: plannedFor < new Date().toISOString().slice(0, 10),
+      is_rescheduled: true,
+      is_overdue: calculatePprTaskOverdueAfterReschedule(task.planned_for, plannedFor),
     })
-    .eq("id", payload.itemId);
-  if (error) throw error;
+    .eq("id", task.id)
+    .select("id")
+    .maybeSingle();
+  if (updateTaskError) throw updateTaskError;
+  if (!updatedTask) {
+    throw new Error("Не удалось перенести materialized ППР-заявку");
+  }
+
+  await syncPprTaskPlanItemsPlannedFor(supabase, task, plannedFor);
 
   await writeAudit({
     actorId: profile.id,
-    action: "reschedule_ppr_month_plan_item",
-    entityType: "ppr_month_plan_item",
-    entityId: payload.itemId,
+    action: "reschedule_ppr_task",
+    entityType: "ppr_task",
+    entityId: task.id,
     meta: {
-      object_id: system.object_id,
-      system_id: item.system_id,
+      object_id: task.object_id,
+      system_id: task.system_id,
+      previous_planned_for: task.planned_for,
       planned_for: plannedFor,
+      reason,
       source_due_date: item.source_due_date,
+      mode: "calendar_materialized_task",
     },
   });
 
-  revalidatePath("/ppr/calendar");
+  revalidateCalendarTaskPaths(task.id);
 }

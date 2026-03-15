@@ -8,8 +8,8 @@ type AssignmentForPlan = {
   template_id: string;
   start_date: string;
   period_months: number;
-  equipment: { id: string; system_id: string; subsystem_id: string } | Array<{ id: string; system_id: string; subsystem_id: string }> | null;
-  template: { id: string; subsystem_id: string } | Array<{ id: string; subsystem_id: string }> | null;
+  equipment: { id: string; system_id: string } | Array<{ id: string; system_id: string }> | null;
+  template: { id: string; system_id: string } | Array<{ id: string; system_id: string }> | null;
 };
 
 function toDateOnly(value: Date) {
@@ -100,7 +100,7 @@ export async function generateMonthPlanForSystem(
 
   const { data: assignments, error: assignmentsError } = await supabase
     .from("ppr_equipment_work_assignments")
-    .select("id,object_id,equipment_id,template_id,start_date,period_months,equipment:ppr_equipment(id,system_id,subsystem_id),template:ppr_work_templates(id,subsystem_id)")
+    .select("id,object_id,equipment_id,template_id,start_date,period_months,equipment:ppr_equipment(id,system_id),template:ppr_work_templates(id,system_id)")
     .eq("object_id", system.object_id)
     .eq("is_active", true);
   if (assignmentsError) throw assignmentsError;
@@ -135,7 +135,6 @@ export async function generateMonthPlanForSystem(
         object_id: system.object_id,
         month_plan_id: monthPlan.id,
         system_id: input.systemId,
-        subsystem_id: equipment.subsystem_id,
         equipment_id: assignment.equipment_id,
         assignment_id: assignment.id,
         template_id: assignment.template_id,
@@ -246,7 +245,6 @@ export async function materializePlanItemsInRange(supabase: SupabaseClient, inpu
         .insert({
           object_id: first.object_id,
           system_id: first.system_id,
-          subsystem_id: first.subsystem_id,
           equipment_id: first.equipment_id,
           responsible_user_id: system.responsible_user_id,
           planned_for: first.planned_for,
@@ -255,7 +253,7 @@ export async function materializePlanItemsInRange(supabase: SupabaseClient, inpu
           is_rescheduled: group.some((item) => item.is_carried_over),
         })
         .select(
-          "id,object_id,system_id,subsystem_id,equipment_id,responsible_user_id,assignee_id,planned_for,completed_at,closed_at,cancelled_at,cancelled_by,status,is_overdue,is_rescheduled,general_comment,cancel_reason,created_at"
+          "id,object_id,system_id,equipment_id,responsible_user_id,assignee_id,planned_for,completed_at,closed_at,cancelled_at,cancelled_by,status,is_overdue,is_rescheduled,general_comment,cancel_reason,created_at"
         )
         .single();
       if (taskError) throw taskError;

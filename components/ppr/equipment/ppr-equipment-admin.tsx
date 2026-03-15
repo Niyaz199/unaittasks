@@ -15,7 +15,6 @@ type EquipmentRow = {
   id: string;
   object_id: string;
   system_id: string;
-  subsystem_id: string;
   room_id: string;
   inventory_no: string;
   name: string;
@@ -30,13 +29,11 @@ type EquipmentRow = {
   created_at: string;
   object: { name: string } | Array<{ name: string }> | null;
   system: { name: string } | Array<{ name: string }> | null;
-  subsystem: { name: string } | Array<{ name: string }> | null;
   room: { name: string } | Array<{ name: string }> | null;
 };
 
 type ObjectOption = { id: string; name: string };
 type SystemOption = { id: string; object_id: string; name: string };
-type SubsystemOption = { id: string; object_id: string; system_id: string; name: string };
 type RoomOption = { id: string; object_id: string; name: string };
 
 function resolveName(raw: { name: string } | Array<{ name: string }> | null | undefined) {
@@ -48,13 +45,11 @@ export function PprEquipmentAdmin({
   equipment,
   objects,
   systems,
-  subsystems,
   rooms,
 }: {
   equipment: EquipmentRow[];
   objects: ObjectOption[];
   systems: SystemOption[];
-  subsystems: SubsystemOption[];
   rooms: RoomOption[];
 }) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -62,13 +57,13 @@ export function PprEquipmentAdmin({
   const [isDirty, setIsDirty] = useState(false);
 
   const editingEquipment = editingId ? equipment.find((item) => item.id === editingId) ?? null : null;
-  const hasPrerequisites = objects.length > 0 && systems.length > 0 && subsystems.length > 0 && rooms.length > 0;
+  const hasPrerequisites = objects.length > 0 && systems.length > 0 && rooms.length > 0;
 
   return (
     <>
       <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
         <div className="text-soft">
-          Equipment-level структура ППР: объект, система, подсистема и помещение фиксируются сразу.
+          Equipment-level структура ППР: объект, система и помещение фиксируются сразу.
         </div>
         <button className="btn btn-accent" type="button" onClick={() => setIsCreateOpen(true)} disabled={!hasPrerequisites}>
           + Добавить оборудование
@@ -78,7 +73,7 @@ export function PprEquipmentAdmin({
       {!hasPrerequisites ? (
         <EmptyState
           message="Недостаточно структуры для создания оборудования"
-          hint="Для создания оборудования нужны объект, система, подсистема и помещение в рамках Batch 1-3."
+          hint="Для создания оборудования нужны объект, система и помещение."
         />
       ) : !equipment.length ? (
         <EmptyState message="Оборудование ППР пока не создано" hint="Добавьте первую единицу оборудования для доступного объекта." />
@@ -162,7 +157,6 @@ export function PprEquipmentAdmin({
           action={createPprEquipmentAction}
           objects={objects}
           systems={systems}
-          subsystems={subsystems}
           rooms={rooms}
           onSubmitted={() => { setIsCreateOpen(false); setIsDirty(false); }}
           onChange={() => setIsDirty(true)}
@@ -177,7 +171,6 @@ export function PprEquipmentAdmin({
             equipmentId={editingEquipment.id}
             objects={objects}
             systems={systems}
-            subsystems={subsystems}
             rooms={rooms}
             onSubmitted={() => { setEditingId(null); setIsDirty(false); }}
             onChange={() => setIsDirty(true)}
@@ -185,7 +178,6 @@ export function PprEquipmentAdmin({
             initialValues={{
               object_id: editingEquipment.object_id,
               system_id: editingEquipment.system_id,
-              subsystem_id: editingEquipment.subsystem_id,
               room_id: editingEquipment.room_id,
               inventory_no: editingEquipment.inventory_no,
               name: editingEquipment.name,

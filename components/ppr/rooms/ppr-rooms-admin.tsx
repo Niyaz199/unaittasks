@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createPprRoomAction, updatePprRoomAction } from "@/app/actions/ppr-directory-actions";
+import { createObjectRoomAction, updateObjectRoomAction } from "@/app/actions/object-room-actions";
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PprModal, PprFormGroup } from "@/components/ppr/ui/ppr-modal";
@@ -34,7 +34,7 @@ export function PprRoomsAdmin({ rooms, objects }: { rooms: RoomRow[]; objects: O
   return (
     <>
       <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-        <div className="text-soft">Помещения привязываются к объекту и будут использоваться дальше для оборудования.</div>
+        <div className="text-soft">Общий справочник помещений уровня объекта. Его используют ППР и будущие обходы.</div>
         <button className="btn btn-accent" type="button" onClick={() => setIsCreateOpen(true)} disabled={!objects.length}>
           + Добавить помещение
         </button>
@@ -43,7 +43,7 @@ export function PprRoomsAdmin({ rooms, objects }: { rooms: RoomRow[]; objects: O
       {!objects.length ? (
         <EmptyState message="Нет доступных объектов" hint="Чтобы добавить помещение, сначала нужен доступ хотя бы к одному объекту." />
       ) : !rooms.length ? (
-        <EmptyState message="Помещения ППР пока не созданы" hint="Создайте первое помещение для доступного объекта." />
+        <EmptyState message="Помещения пока не созданы" hint="Создайте первое помещение для доступного объекта." />
       ) : (
         <>
           <div className="desktop-only">
@@ -94,8 +94,8 @@ export function PprRoomsAdmin({ rooms, objects }: { rooms: RoomRow[]; objects: O
         </>
       )}
 
-      <PprModal open={isCreateOpen} onClose={() => { setIsCreateOpen(false); setIsDirty(false); }} title="Новое помещение ППР" isDirty={isDirty}>
-        <form action={createPprRoomAction} onSubmit={() => { setIsCreateOpen(false); setIsDirty(false); }} onChange={() => setIsDirty(true)} className="ppr-modal-content">
+      <PprModal open={isCreateOpen} onClose={() => { setIsCreateOpen(false); setIsDirty(false); }} title="Новое помещение" isDirty={isDirty}>
+        <form action={createObjectRoomAction} onSubmit={() => { setIsCreateOpen(false); setIsDirty(false); }} onChange={() => setIsDirty(true)} className="ppr-modal-content">
           <div className="ppr-modal-body grid">
             <PprFormGroup label="Объект">
               <select className="select" name="object_id" required defaultValue="">
@@ -130,9 +130,9 @@ export function PprRoomsAdmin({ rooms, objects }: { rooms: RoomRow[]; objects: O
         </form>
       </PprModal>
 
-      <PprModal open={Boolean(editingRoom)} onClose={() => { setEditingId(null); setIsDirty(false); }} title="Редактирование помещения ППР" isDirty={isDirty}>
+      <PprModal open={Boolean(editingRoom)} onClose={() => { setEditingId(null); setIsDirty(false); }} title="Редактирование помещения" isDirty={isDirty}>
         {editingRoom ? (
-          <form action={updatePprRoomAction} onSubmit={() => { setEditingId(null); setIsDirty(false); }} onChange={() => setIsDirty(true)} className="ppr-modal-content">
+          <form action={updateObjectRoomAction} onSubmit={() => { setEditingId(null); setIsDirty(false); }} onChange={() => setIsDirty(true)} className="ppr-modal-content">
             <div className="ppr-modal-body grid">
               <input type="hidden" name="room_id" value={editingRoom.id} />
 

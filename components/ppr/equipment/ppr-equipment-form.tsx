@@ -6,13 +6,11 @@ import { PprFormGroup, PprFormSection } from "@/components/ppr/ui/ppr-modal";
 
 type ObjectOption = { id: string; name: string };
 type SystemOption = { id: string; object_id: string; name: string };
-type SubsystemOption = { id: string; object_id: string; system_id: string; name: string };
 type RoomOption = { id: string; object_id: string; name: string };
 
 type EquipmentFormValues = {
   object_id: string;
   system_id: string;
-  subsystem_id: string;
   room_id: string;
   inventory_no: string;
   name: string;
@@ -30,7 +28,6 @@ type Props = {
   action: (formData: FormData) => void | Promise<void>;
   objects: ObjectOption[];
   systems: SystemOption[];
-  subsystems: SubsystemOption[];
   rooms: RoomOption[];
   initialValues?: Partial<EquipmentFormValues>;
   equipmentId?: string;
@@ -42,7 +39,6 @@ type Props = {
 const defaultValues: EquipmentFormValues = {
   object_id: "",
   system_id: "",
-  subsystem_id: "",
   room_id: "",
   inventory_no: "",
   name: "",
@@ -60,7 +56,6 @@ export function PprEquipmentForm({
   action,
   objects,
   systems,
-  subsystems,
   rooms,
   initialValues,
   equipmentId,
@@ -71,21 +66,11 @@ export function PprEquipmentForm({
   const values = { ...defaultValues, ...initialValues };
   const [selectedObjectId, setSelectedObjectId] = useState(values.object_id);
   const [selectedSystemId, setSelectedSystemId] = useState(values.system_id);
-  const [selectedSubsystemId, setSelectedSubsystemId] = useState(values.subsystem_id);
   const [selectedRoomId, setSelectedRoomId] = useState(values.room_id);
 
   const filteredSystems = useMemo(
     () => systems.filter((system) => !selectedObjectId || system.object_id === selectedObjectId),
     [selectedObjectId, systems]
-  );
-  const filteredSubsystems = useMemo(
-    () =>
-      subsystems.filter(
-        (subsystem) =>
-          (!selectedObjectId || subsystem.object_id === selectedObjectId) &&
-          (!selectedSystemId || subsystem.system_id === selectedSystemId)
-      ),
-    [selectedObjectId, selectedSystemId, subsystems]
   );
   const filteredRooms = useMemo(
     () => rooms.filter((room) => !selectedObjectId || room.object_id === selectedObjectId),
@@ -99,12 +84,6 @@ export function PprEquipmentForm({
   }, [filteredSystems, selectedSystemId]);
 
   useEffect(() => {
-    if (selectedSubsystemId && !filteredSubsystems.some((subsystem) => subsystem.id === selectedSubsystemId)) {
-      setSelectedSubsystemId("");
-    }
-  }, [filteredSubsystems, selectedSubsystemId]);
-
-  useEffect(() => {
     if (selectedRoomId && !filteredRooms.some((room) => room.id === selectedRoomId)) {
       setSelectedRoomId("");
     }
@@ -115,7 +94,7 @@ export function PprEquipmentForm({
       <div className="ppr-modal-body grid">
         {equipmentId ? <input type="hidden" name="equipment_id" value={equipmentId} /> : null}
 
-        <PprFormSection title="Расположение" desc="Привязка к инженерной структуре объекта">
+        <PprFormSection title="Расположение" desc="Привязка к инженерной системе объекта и общему помещению">
           <PprFormGroup label="Объект">
             <select
               className="select"
@@ -142,21 +121,6 @@ export function PprEquipmentForm({
               <option value="" disabled>Выберите систему</option>
               {filteredSystems.map((system) => (
                 <option key={system.id} value={system.id}>{system.name}</option>
-              ))}
-            </select>
-          </PprFormGroup>
-
-          <PprFormGroup label="Подсистема">
-            <select
-              className="select"
-              name="subsystem_id"
-              required
-              value={selectedSubsystemId}
-              onChange={(event) => setSelectedSubsystemId(event.target.value)}
-            >
-              <option value="" disabled>Выберите подсистему</option>
-              {filteredSubsystems.map((subsystem) => (
-                <option key={subsystem.id} value={subsystem.id}>{subsystem.name}</option>
               ))}
             </select>
           </PprFormGroup>

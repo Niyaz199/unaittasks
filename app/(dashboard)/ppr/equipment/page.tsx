@@ -1,11 +1,10 @@
 import { requireProfile } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { listObjectRoomsForProfile } from "@/lib/object-rooms";
 import {
   canAccessPprStructureScreens,
   listPprEquipmentForProfile,
   listPprManageableObjectsForProfile,
-  listPprRoomsForProfile,
-  listPprSubsystemsForProfile,
   listPprSystemsForProfile,
 } from "@/lib/ppr/queries";
 import { PageHeader } from "@/components/ui/page-header";
@@ -19,11 +18,10 @@ export default async function PprEquipmentPage() {
   }
 
   const supabase = await createSupabaseServerClient();
-  const [objects, systems, subsystems, rooms, equipment] = await Promise.all([
+  const [objects, systems, rooms, equipment] = await Promise.all([
     listPprManageableObjectsForProfile(supabase, profile),
     listPprSystemsForProfile(supabase, profile),
-    listPprSubsystemsForProfile(supabase, profile),
-    listPprRoomsForProfile(supabase, profile),
+    listObjectRoomsForProfile(supabase, profile),
     listPprEquipmentForProfile(supabase, profile),
   ]);
 
@@ -31,7 +29,7 @@ export default async function PprEquipmentPage() {
     <section className="grid">
       <PageHeader
         title="Оборудование ППР"
-        description="Справочник оборудования с привязкой к объекту, системе, подсистеме и помещению."
+        description="Справочник оборудования с привязкой к объекту, системе и общему справочнику помещений."
         actions={<BackButton fallback="/ppr" label="← Назад к ППР" />}
       />
 
@@ -39,7 +37,6 @@ export default async function PprEquipmentPage() {
         equipment={equipment}
         objects={objects}
         systems={systems.map((item) => ({ id: item.id, object_id: item.object_id, name: item.name }))}
-        subsystems={subsystems.map((item) => ({ id: item.id, object_id: item.object_id, system_id: item.system_id, name: item.name }))}
         rooms={rooms.map((item) => ({ id: item.id, object_id: item.object_id, name: item.name }))}
       />
     </section>

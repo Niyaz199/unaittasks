@@ -18,16 +18,16 @@ type AssignmentRow = {
   is_active: boolean;
   created_at: string;
   equipment:
-    | { name: string; inventory_no: string; subsystem_id: string }
-    | Array<{ name: string; inventory_no: string; subsystem_id: string }>
+    | { name: string; inventory_no: string; system_id: string }
+    | Array<{ name: string; inventory_no: string; system_id: string }>
     | null;
-  template: { name: string; subsystem_id: string } | Array<{ name: string; subsystem_id: string }> | null;
+  template: { name: string; system_id: string } | Array<{ name: string; system_id: string }> | null;
   object: { name: string } | Array<{ name: string }> | null;
 };
 
 type ObjectOption = { id: string; name: string };
-type EquipmentOption = { id: string; object_id: string; system_id: string; subsystem_id: string; name: string; inventory_no: string };
-type TemplateOption = { id: string; object_id: string; subsystem_id: string; name: string; period_months: number; base_start_date: string; is_active: boolean };
+type EquipmentOption = { id: string; object_id: string; system_id: string; name: string; inventory_no: string };
+type TemplateOption = { id: string; object_id: string; system_id: string; name: string; period_months: number; base_start_date: string; is_active: boolean };
 
 function resolveObjectName(raw: { name: string } | Array<{ name: string }> | null | undefined) {
   if (Array.isArray(raw)) return raw[0]?.name ?? "—";
@@ -35,7 +35,7 @@ function resolveObjectName(raw: { name: string } | Array<{ name: string }> | nul
 }
 
 function resolveEquipmentLabel(
-  raw: { name: string; inventory_no: string; subsystem_id: string } | Array<{ name: string; inventory_no: string; subsystem_id: string }> | null | undefined
+  raw: { name: string; inventory_no: string; system_id: string } | Array<{ name: string; inventory_no: string; system_id: string }> | null | undefined
 ) {
   const item = Array.isArray(raw) ? raw[0] : raw;
   if (!item) return "—";
@@ -43,7 +43,7 @@ function resolveEquipmentLabel(
 }
 
 function resolveTemplateLabel(
-  raw: { name: string; subsystem_id: string } | Array<{ name: string; subsystem_id: string }> | null | undefined
+  raw: { name: string; system_id: string } | Array<{ name: string; system_id: string }> | null | undefined
 ) {
   const item = Array.isArray(raw) ? raw[0] : raw;
   return item?.name ?? "—";

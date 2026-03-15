@@ -17,7 +17,6 @@ type EquipmentDetails = {
   created_at: string;
   object: { name: string } | Array<{ name: string }> | null;
   system: { name: string } | Array<{ name: string }> | null;
-  subsystem: { name: string } | Array<{ name: string }> | null;
   room: { name: string } | Array<{ name: string }> | null;
 };
 
@@ -60,10 +59,6 @@ export function PprEquipmentDetails({ equipment, qrCode }: { equipment: Equipmen
           <div className="td-meta-item">
             <span className="td-meta-label">Система</span>
             <span className="td-meta-value">{resolveName(equipment.system)}</span>
-          </div>
-          <div className="td-meta-item">
-            <span className="td-meta-label">Подсистема</span>
-            <span className="td-meta-value">{resolveName(equipment.subsystem)}</span>
           </div>
           <div className="td-meta-item">
             <span className="td-meta-label">Помещение</span>

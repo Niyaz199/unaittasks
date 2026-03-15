@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { PprFormGroup, PprFormSection } from "@/components/ppr/ui/ppr-modal";
 
 type ObjectOption = { id: string; name: string };
-type EquipmentOption = { id: string; object_id: string; system_id: string; subsystem_id: string; name: string; inventory_no: string };
-type TemplateOption = { id: string; object_id: string; subsystem_id: string; name: string; period_months: number; base_start_date: string; is_active: boolean };
+type EquipmentOption = { id: string; object_id: string; system_id: string; name: string; inventory_no: string };
+type TemplateOption = { id: string; object_id: string; system_id: string; name: string; period_months: number; base_start_date: string; is_active: boolean };
 
 type AssignmentFormValues = {
   object_id: string;
@@ -66,7 +66,7 @@ export function PprAssignmentForm({
       templateOptions.filter(
         (item) =>
           (!selectedObjectId || item.object_id === selectedObjectId) &&
-          (!selectedEquipment || item.subsystem_id === selectedEquipment.subsystem_id)
+          (!selectedEquipment || item.system_id === selectedEquipment.system_id)
       ),
     [templateOptions, selectedObjectId, selectedEquipment]
   );
@@ -129,7 +129,7 @@ export function PprAssignmentForm({
         </PprFormSection>
 
         <PprFormSection title="Назначение шаблона">
-          <PprFormGroup label="Шаблон ППР" description="Совместимость проверяется по объекту и подсистеме.">
+          <PprFormGroup label="Шаблон ППР" description="Совместимость проверяется по объекту и системе.">
             <select
               className="select"
               name="template_id"

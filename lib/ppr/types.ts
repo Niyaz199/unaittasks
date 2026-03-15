@@ -22,30 +22,10 @@ export type PprSystem = {
   is_active: boolean;
 };
 
-export type PprSubsystem = {
-  id: string;
-  object_id: string;
-  system_id: string;
-  parent_id: string | null;
-  name: string;
-  sort_order: number;
-  is_active: boolean;
-};
-
-export type PprRoom = {
-  id: string;
-  object_id: string;
-  name: string;
-  floor: string | null;
-  description: string | null;
-  is_active: boolean;
-};
-
 export type PprEquipment = {
   id: string;
   object_id: string;
   system_id: string;
-  subsystem_id: string;
   room_id: string;
   inventory_no: string;
   name: string;
@@ -83,7 +63,7 @@ export type PprEquipmentAttachment = {
 export type PprWorkTemplate = {
   id: string;
   object_id: string;
-  subsystem_id: string;
+  system_id: string;
   name: string;
   description: string | null;
   period_months: number;
@@ -137,7 +117,6 @@ export type PprMonthPlanItem = {
   object_id: string;
   month_plan_id: string;
   system_id: string;
-  subsystem_id: string;
   equipment_id: string;
   assignment_id: string;
   template_id: string;
@@ -153,7 +132,6 @@ export type PprTask = {
   id: string;
   object_id: string;
   system_id: string;
-  subsystem_id: string;
   equipment_id: string;
   responsible_user_id: string;
   assignee_id: string | null;

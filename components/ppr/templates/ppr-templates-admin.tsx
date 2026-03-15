@@ -13,7 +13,7 @@ import { PprTemplateEditor } from "@/components/ppr/templates/ppr-template-edito
 type TemplateRow = {
   id: string;
   object_id: string;
-  subsystem_id: string;
+  system_id: string;
   name: string;
   description: string | null;
   period_months: number;
@@ -23,11 +23,11 @@ type TemplateRow = {
   is_active: boolean;
   created_at: string;
   object: { name: string } | Array<{ name: string }> | null;
-  subsystem: { name: string } | Array<{ name: string }> | null;
+  system: { name: string } | Array<{ name: string }> | null;
 };
 
 type ObjectOption = { id: string; name: string };
-type SubsystemOption = { id: string; object_id: string; system_id: string; name: string };
+type SystemOption = { id: string; object_id: string; name: string };
 
 function resolveName(raw: { name: string } | Array<{ name: string }> | null | undefined) {
   if (Array.isArray(raw)) return raw[0]?.name ?? "—";
@@ -37,20 +37,20 @@ function resolveName(raw: { name: string } | Array<{ name: string }> | null | un
 export function PprTemplatesAdmin({
   templates,
   objects,
-  subsystems,
+  systems,
 }: {
   templates: TemplateRow[];
   objects: ObjectOption[];
-  subsystems: SubsystemOption[];
+  systems: SystemOption[];
 }) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
-  const hasPrerequisites = objects.length > 0 && subsystems.length > 0;
+  const hasPrerequisites = objects.length > 0 && systems.length > 0;
 
   return (
     <>
       <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-        <div className="text-soft">Шаблоны ППР создаются на уровне подсистем и содержат базовую периодичность с чек-листом.</div>
+        <div className="text-soft">Шаблоны ППР создаются на уровне систем и содержат базовую периодичность с чек-листом.</div>
         <button className="btn btn-accent" type="button" onClick={() => setIsCreateOpen(true)} disabled={!hasPrerequisites}>
           + Добавить шаблон
         </button>
@@ -59,7 +59,7 @@ export function PprTemplatesAdmin({
       {!hasPrerequisites ? (
         <EmptyState
           message="Недостаточно структуры для создания шаблонов"
-          hint="Для шаблона ППР нужны доступные объекты и хотя бы одна подсистема из предыдущих батчей."
+          hint="Для шаблона ППР нужны доступные объекты и хотя бы одна система."
         />
       ) : !templates.length ? (
         <EmptyState message="Шаблоны ППР пока не созданы" hint="Создайте первый шаблон и заполните его чек-лист." />
@@ -70,7 +70,7 @@ export function PprTemplatesAdmin({
               columns={[
                 { key: "name", label: "Шаблон" },
                 { key: "object", label: "Объект" },
-                { key: "subsystem", label: "Подсистема" },
+                { key: "system", label: "Система" },
                 { key: "period", label: "Период" },
                 { key: "status", label: "Статус" },
                 { key: "actions", label: "Действия" },
@@ -80,7 +80,7 @@ export function PprTemplatesAdmin({
                 <tr key={template.id}>
                   <td>{template.name}</td>
                   <td>{resolveName(template.object)}</td>
-                  <td>{resolveName(template.subsystem)}</td>
+                  <td>{resolveName(template.system)}</td>
                   <td>{template.period_months} мес.</td>
                   <td>
                     <Badge tone={template.is_active ? "success" : "neutral"}>
@@ -105,7 +105,7 @@ export function PprTemplatesAdmin({
                 <div className="grid" style={{ gap: "0.45rem" }}>
                   <div>{template.name}</div>
                   <div className="text-soft">Объект: {resolveName(template.object)}</div>
-                  <div className="text-soft">Подсистема: {resolveName(template.subsystem)}</div>
+                  <div className="text-soft">Система: {resolveName(template.system)}</div>
                   <div className="text-soft">Период: {template.period_months} мес.</div>
                   <div>
                     <Badge tone={template.is_active ? "success" : "neutral"}>
@@ -128,7 +128,7 @@ export function PprTemplatesAdmin({
         <PprTemplateEditor
           action={createPprWorkTemplateAction}
           objects={objects}
-          subsystems={subsystems}
+          systems={systems}
           submitLabel="Создать"
           onChange={() => setIsDirty(true)}
           onSubmitted={() => { setIsCreateOpen(false); setIsDirty(false); }}

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { PprFormGroup, PprFormSection } from "@/components/ppr/ui/ppr-modal";
 
 type ObjectOption = { id: string; name: string };
-type SubsystemOption = { id: string; object_id: string; system_id: string; name: string };
+type SystemOption = { id: string; object_id: string; name: string };
 
 type ChecklistItemFormValue = {
   title: string;
@@ -13,7 +13,7 @@ type ChecklistItemFormValue = {
 
 type TemplateFormValues = {
   object_id: string;
-  subsystem_id: string;
+  system_id: string;
   name: string;
   description: string;
   period_months: number;
@@ -27,7 +27,7 @@ type TemplateFormValues = {
 type Props = {
   action: (formData: FormData) => void | Promise<void>;
   objects: ObjectOption[];
-  subsystems: SubsystemOption[];
+  systems: SystemOption[];
   initialValues?: Partial<TemplateFormValues>;
   templateId?: string;
   submitLabel: string;
@@ -38,7 +38,7 @@ type Props = {
 
 const defaultValues: TemplateFormValues = {
   object_id: "",
-  subsystem_id: "",
+  system_id: "",
   name: "",
   description: "",
   period_months: 12,
@@ -52,7 +52,7 @@ const defaultValues: TemplateFormValues = {
 export function PprTemplateEditor({
   action,
   objects,
-  subsystems,
+  systems,
   initialValues,
   templateId,
   submitLabel,
@@ -62,21 +62,21 @@ export function PprTemplateEditor({
 }: Props) {
   const values = { ...defaultValues, ...initialValues };
   const [selectedObjectId, setSelectedObjectId] = useState(values.object_id);
-  const [selectedSubsystemId, setSelectedSubsystemId] = useState(values.subsystem_id);
+  const [selectedSystemId, setSelectedSystemId] = useState(values.system_id);
   const [checklistItems, setChecklistItems] = useState<ChecklistItemFormValue[]>(
     values.checklist_items.length ? values.checklist_items : defaultValues.checklist_items
   );
 
-  const filteredSubsystems = useMemo(
-    () => subsystems.filter((item) => !selectedObjectId || item.object_id === selectedObjectId),
-    [selectedObjectId, subsystems]
+  const filteredSystems = useMemo(
+    () => systems.filter((item) => !selectedObjectId || item.object_id === selectedObjectId),
+    [selectedObjectId, systems]
   );
 
   useEffect(() => {
-    if (selectedSubsystemId && !filteredSubsystems.some((item) => item.id === selectedSubsystemId)) {
-      setSelectedSubsystemId("");
+    if (selectedSystemId && !filteredSystems.some((item) => item.id === selectedSystemId)) {
+      setSelectedSystemId("");
     }
-  }, [filteredSubsystems, selectedSubsystemId]);
+  }, [filteredSystems, selectedSystemId]);
 
   function updateChecklistItem(index: number, patch: Partial<ChecklistItemFormValue>) {
     setChecklistItems((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
@@ -115,16 +115,16 @@ export function PprTemplateEditor({
               </select>
             </PprFormGroup>
 
-            <PprFormGroup label="Подсистема">
+            <PprFormGroup label="Система">
               <select
                 className="select"
-                name="subsystem_id"
+                name="system_id"
                 required
-                value={selectedSubsystemId}
-                onChange={(event) => setSelectedSubsystemId(event.target.value)}
+                value={selectedSystemId}
+                onChange={(event) => setSelectedSystemId(event.target.value)}
               >
-                <option value="" disabled>Выберите подсистему</option>
-                {filteredSubsystems.map((item) => (
+                <option value="" disabled>Выберите систему</option>
+                {filteredSystems.map((item) => (
                   <option key={item.id} value={item.id}>{item.name}</option>
                 ))}
               </select>

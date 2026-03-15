@@ -177,6 +177,9 @@ export function PprTaskLifecycleControls({
       {canReschedule ? (
         <div className="grid" style={{ gap: "0.5rem" }}>
           <strong>Перенос</strong>
+          <div className="text-soft" style={{ fontSize: "0.85rem" }}>
+            Перенос ППР-заявки допускается только внутри текущего месяца.
+          </div>
           <input
             className="input"
             type="date"

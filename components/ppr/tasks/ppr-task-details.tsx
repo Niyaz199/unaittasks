@@ -53,7 +53,6 @@ export function PprTaskDetails({
   const meta = pprTaskStatusMeta[task.status];
   const object = unwrapRelation(task.object);
   const system = unwrapRelation(task.system);
-  const subsystem = unwrapRelation(task.subsystem);
   const equipment = unwrapRelation(task.equipment);
   const responsible = unwrapRelation(task.responsible);
   const assignee = unwrapRelation(task.assignee);
@@ -72,7 +71,7 @@ export function PprTaskDetails({
         </div>
 
         <div className="text-soft" style={{ fontSize: "0.9rem", marginBottom: "0.25rem", opacity: 0.8 }}>
-          {object?.name ?? "Без объекта"} • {system?.name ?? "Без системы"} • {subsystem?.name ?? "Без подсистемы"}
+          {object?.name ?? "Без объекта"} • {system?.name ?? "Без системы"}
         </div>
 
         <div className="td-meta-grid">

@@ -22,27 +22,9 @@ export const pprSystemFormSchema = z.object({
   isActive: z.boolean().default(true),
 });
 
-export const pprSubsystemFormSchema = z.object({
-  objectId: uuidSchema,
-  systemId: uuidSchema,
-  parentId: uuidSchema.nullable().optional(),
-  name: z.string().trim().min(2),
-  sortOrder: z.number().int().min(0).default(0),
-  isActive: z.boolean().default(true),
-});
-
-export const pprRoomFormSchema = z.object({
-  objectId: uuidSchema,
-  name: z.string().trim().min(2),
-  floor: z.string().trim().max(100).optional().nullable(),
-  description: z.string().trim().max(2000).optional().nullable(),
-  isActive: z.boolean().default(true),
-});
-
 export const pprEquipmentFormSchema = z.object({
   objectId: uuidSchema,
   systemId: uuidSchema,
-  subsystemId: uuidSchema,
   roomId: uuidSchema,
   inventoryNo: z.string().trim().max(255).optional().nullable(),
   name: z.string().trim().min(2),
@@ -64,7 +46,7 @@ export const pprChecklistItemFormSchema = z.object({
 
 export const pprWorkTemplateFormSchema = z.object({
   objectId: uuidSchema,
-  subsystemId: uuidSchema,
+  systemId: uuidSchema,
   name: z.string().trim().min(2),
   description: z.string().trim().max(4000).optional().nullable(),
   periodMonths: z.number().int().min(1),
@@ -91,5 +73,6 @@ export const pprMonthPlanGenerateFormSchema = z.object({
 
 export const pprMonthPlanItemScheduleFormSchema = z.object({
   itemId: uuidSchema,
-  plannedFor: z.string().optional(),
+  plannedFor: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  reason: z.string().trim().max(2000).optional(),
 });

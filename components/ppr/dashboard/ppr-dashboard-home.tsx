@@ -36,16 +36,9 @@ const NAV_CARDS: NavCard[] = [
     group: "structure",
   },
   {
-    href: "/ppr/subsystems",
-    label: "Подсистемы",
-    description: "Состав инженерных систем",
-    icon: "🔧",
-    group: "structure",
-  },
-  {
     href: "/ppr/rooms",
     label: "Помещения",
-    description: "Привязка к структуре объекта",
+    description: "Общий справочник помещений объектов",
     icon: "🏠",
     group: "structure",
   },
@@ -136,7 +129,7 @@ export function PprDashboardHome({ role }: { role: Role }) {
             </h1>
             <p className="text-soft" style={{ margin: "0.5rem 0 0", fontSize: "0.95rem", maxWidth: "800px" }}>
               Модуль регламентного обслуживания объектов, управления системами и оборудованием.
-              Планируйте работы по шаблонам и отслеживайте выполнение заявок.
+              Планируйте работы по шаблонам, используя общий справочник помещений, и отслеживайте выполнение заявок.
             </p>
             <div className="ppr-role-badge">
               Ваша роль: <strong>{roleLabelMap[role]}</strong>

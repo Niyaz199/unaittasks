@@ -1,6 +1,7 @@
 import { requireProfile } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { canAccessPprStructureScreens, listPprManageableObjectsForProfile, listPprRoomsForProfile } from "@/lib/ppr/queries";
+import { listObjectRoomManageableObjectsForProfile, listObjectRoomsForProfile } from "@/lib/object-rooms";
+import { canAccessPprStructureScreens } from "@/lib/ppr/queries";
 import { PageHeader } from "@/components/ui/page-header";
 import { BackButton } from "@/components/ui/back-button";
 import { PprRoomsAdmin } from "@/components/ppr/rooms/ppr-rooms-admin";
@@ -13,15 +14,15 @@ export default async function PprRoomsPage() {
 
   const supabase = await createSupabaseServerClient();
   const [objects, rooms] = await Promise.all([
-    listPprManageableObjectsForProfile(supabase, profile),
-    listPprRoomsForProfile(supabase, profile),
+    listObjectRoomManageableObjectsForProfile(supabase, profile),
+    listObjectRoomsForProfile(supabase, profile),
   ]);
 
   return (
     <section className="grid">
       <PageHeader
-        title="Помещения ППР"
-        description="Справочник помещений в рамках доступных объектов. Используется дальше для привязки оборудования."
+        title="Помещения объектов"
+        description="Общий справочник помещений, используемый в ППР и подготовленный для будущего модуля обходов."
         actions={<BackButton fallback="/ppr" label="← Назад к ППР" />}
       />
 

@@ -4,13 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { writeAudit } from "@/lib/audit";
-import {
-  pprEquipmentFormSchema,
-  pprRoomFormSchema,
-  pprSubsystemFormSchema,
-  pprSystemFormSchema,
-  pprSystemGroupFormSchema,
-} from "@/lib/ppr/validators";
+import { pprEquipmentFormSchema, pprSystemFormSchema, pprSystemGroupFormSchema } from "@/lib/ppr/validators";
 import {
   canAccessPprStructureScreens,
   canAccessPprSystemGroupScreens,
@@ -23,6 +17,7 @@ async function requireSystemGroupManager() {
   if (!canAccessPprSystemGroupScreens(profile.role)) {
     throw new Error("Нет доступа к справочнику групп систем ППР");
   }
+
   const supabase = await createSupabaseServerClient();
   return { profile, supabase };
 }
@@ -32,6 +27,7 @@ async function requireStructureManager() {
   if (!canAccessPprStructureScreens(profile.role)) {
     throw new Error("Нет доступа к структуре ППР");
   }
+
   const supabase = await createSupabaseServerClient();
   const objects = await listPprManageableObjectsForProfile(supabase, profile);
   return { profile, supabase, managedObjectIds: objects.map((item) => item.id) };
@@ -85,42 +81,12 @@ async function assertSystemBelongsToObject(
   }
 }
 
-async function assertParentBelongsToSystem(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  parentId: string | null | undefined,
-  systemId: string
-) {
-  if (!parentId) return;
-  const { data: parent, error } = await supabase.from("ppr_subsystems").select("system_id").eq("id", parentId).single();
-  if (error) throw error;
-  if (!parent || parent.system_id !== systemId) {
-    throw new Error("Родительская подсистема не принадлежит выбранной системе");
-  }
-}
-
-async function assertSubsystemBelongsToSystemAndObject(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  subsystemId: string,
-  systemId: string,
-  objectId: string
-) {
-  const { data: subsystem, error } = await supabase
-    .from("ppr_subsystems")
-    .select("object_id,system_id")
-    .eq("id", subsystemId)
-    .single();
-  if (error) throw error;
-  if (!subsystem || subsystem.object_id !== objectId || subsystem.system_id !== systemId) {
-    throw new Error("Подсистема должна принадлежать выбранной системе и объекту");
-  }
-}
-
 async function assertRoomBelongsToObject(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   roomId: string,
   objectId: string
 ) {
-  const { data: room, error } = await supabase.from("ppr_rooms").select("object_id").eq("id", roomId).single();
+  const { data: room, error } = await supabase.from("object_rooms").select("object_id").eq("id", roomId).single();
   if (error) throw error;
   if (!room || room.object_id !== objectId) {
     throw new Error("Помещение должно принадлежать выбранному объекту");
@@ -289,195 +255,11 @@ export async function updatePprSystemAction(formData: FormData) {
   revalidatePath("/ppr/systems");
 }
 
-export async function createPprSubsystemAction(formData: FormData) {
-  const { profile, supabase, managedObjectIds } = await requireStructureManager();
-  const payload = pprSubsystemFormSchema.parse({
-    objectId: String(formData.get("object_id") ?? ""),
-    systemId: String(formData.get("system_id") ?? ""),
-    parentId: String(formData.get("parent_id") ?? "") || null,
-    name: String(formData.get("name") ?? ""),
-    sortOrder: Number(formData.get("sort_order") ?? 0),
-    isActive: formData.get("is_active") === "on",
-  });
-
-  assertObjectAllowed(profile.role, managedObjectIds, payload.objectId);
-  if (!canManagePprStructure({ id: profile.id, role: profile.role, accessibleObjectIds: managedObjectIds }, payload.objectId)) {
-    throw new Error("Нет прав на создание подсистемы ППР");
-  }
-
-  await assertSystemBelongsToObject(supabase, payload.systemId, payload.objectId);
-  await assertParentBelongsToSystem(supabase, payload.parentId, payload.systemId);
-
-  const { data, error } = await supabase
-    .from("ppr_subsystems")
-    .insert({
-      object_id: payload.objectId,
-      system_id: payload.systemId,
-      parent_id: payload.parentId ?? null,
-      name: payload.name.trim(),
-      sort_order: payload.sortOrder,
-      is_active: payload.isActive,
-    })
-    .select("id")
-    .single();
-  if (error) throw error;
-
-  await writeAudit({
-    actorId: profile.id,
-    action: "create_ppr_subsystem",
-    entityType: "ppr_subsystem",
-    entityId: data.id,
-    meta: {
-      object_id: payload.objectId,
-      system_id: payload.systemId,
-      parent_id: payload.parentId ?? null,
-      sort_order: payload.sortOrder,
-    },
-  });
-
-  revalidatePath("/ppr/subsystems");
-}
-
-export async function updatePprSubsystemAction(formData: FormData) {
-  const { profile, supabase, managedObjectIds } = await requireStructureManager();
-  const subsystemId = String(formData.get("subsystem_id") ?? "");
-  const payload = pprSubsystemFormSchema.parse({
-    objectId: String(formData.get("object_id") ?? ""),
-    systemId: String(formData.get("system_id") ?? ""),
-    parentId: String(formData.get("parent_id") ?? "") || null,
-    name: String(formData.get("name") ?? ""),
-    sortOrder: Number(formData.get("sort_order") ?? 0),
-    isActive: formData.get("is_active") === "on",
-  });
-
-  assertObjectAllowed(profile.role, managedObjectIds, payload.objectId);
-  if (!canManagePprStructure({ id: profile.id, role: profile.role, accessibleObjectIds: managedObjectIds }, payload.objectId)) {
-    throw new Error("Нет прав на изменение подсистемы ППР");
-  }
-
-  await assertSystemBelongsToObject(supabase, payload.systemId, payload.objectId);
-  await assertParentBelongsToSystem(supabase, payload.parentId, payload.systemId);
-  if (payload.parentId === subsystemId) throw new Error("Подсистема не может быть родителем самой себе");
-
-  const { error } = await supabase
-    .from("ppr_subsystems")
-    .update({
-      object_id: payload.objectId,
-      system_id: payload.systemId,
-      parent_id: payload.parentId ?? null,
-      name: payload.name.trim(),
-      sort_order: payload.sortOrder,
-      is_active: payload.isActive,
-    })
-    .eq("id", subsystemId);
-  if (error) throw error;
-
-  await writeAudit({
-    actorId: profile.id,
-    action: "update_ppr_subsystem",
-    entityType: "ppr_subsystem",
-    entityId: subsystemId,
-    meta: {
-      object_id: payload.objectId,
-      system_id: payload.systemId,
-      parent_id: payload.parentId ?? null,
-      sort_order: payload.sortOrder,
-    },
-  });
-
-  revalidatePath("/ppr/subsystems");
-}
-
-export async function createPprRoomAction(formData: FormData) {
-  const { profile, supabase, managedObjectIds } = await requireStructureManager();
-  const payload = pprRoomFormSchema.parse({
-    objectId: String(formData.get("object_id") ?? ""),
-    name: String(formData.get("name") ?? ""),
-    floor: String(formData.get("floor") ?? "") || null,
-    description: String(formData.get("description") ?? "") || null,
-    isActive: formData.get("is_active") === "on",
-  });
-
-  assertObjectAllowed(profile.role, managedObjectIds, payload.objectId);
-  if (!canManagePprStructure({ id: profile.id, role: profile.role, accessibleObjectIds: managedObjectIds }, payload.objectId)) {
-    throw new Error("Нет прав на создание помещения ППР");
-  }
-
-  const { data, error } = await supabase
-    .from("ppr_rooms")
-    .insert({
-      object_id: payload.objectId,
-      name: payload.name.trim(),
-      floor: payload.floor?.trim() || null,
-      description: payload.description?.trim() || null,
-      is_active: payload.isActive,
-    })
-    .select("id")
-    .single();
-  if (error) throw error;
-
-  await writeAudit({
-    actorId: profile.id,
-    action: "create_ppr_room",
-    entityType: "ppr_room",
-    entityId: data.id,
-    meta: {
-      object_id: payload.objectId,
-      floor: payload.floor?.trim() || null,
-    },
-  });
-
-  revalidatePath("/ppr/rooms");
-}
-
-export async function updatePprRoomAction(formData: FormData) {
-  const { profile, supabase, managedObjectIds } = await requireStructureManager();
-  const roomId = String(formData.get("room_id") ?? "");
-  const payload = pprRoomFormSchema.parse({
-    objectId: String(formData.get("object_id") ?? ""),
-    name: String(formData.get("name") ?? ""),
-    floor: String(formData.get("floor") ?? "") || null,
-    description: String(formData.get("description") ?? "") || null,
-    isActive: formData.get("is_active") === "on",
-  });
-
-  assertObjectAllowed(profile.role, managedObjectIds, payload.objectId);
-  if (!canManagePprStructure({ id: profile.id, role: profile.role, accessibleObjectIds: managedObjectIds }, payload.objectId)) {
-    throw new Error("Нет прав на изменение помещения ППР");
-  }
-
-  const { error } = await supabase
-    .from("ppr_rooms")
-    .update({
-      object_id: payload.objectId,
-      name: payload.name.trim(),
-      floor: payload.floor?.trim() || null,
-      description: payload.description?.trim() || null,
-      is_active: payload.isActive,
-    })
-    .eq("id", roomId);
-  if (error) throw error;
-
-  await writeAudit({
-    actorId: profile.id,
-    action: "update_ppr_room",
-    entityType: "ppr_room",
-    entityId: roomId,
-    meta: {
-      object_id: payload.objectId,
-      floor: payload.floor?.trim() || null,
-    },
-  });
-
-  revalidatePath("/ppr/rooms");
-}
-
 export async function createPprEquipmentAction(formData: FormData) {
   const { profile, supabase, managedObjectIds } = await requireStructureManager();
   const payload = pprEquipmentFormSchema.parse({
     objectId: String(formData.get("object_id") ?? ""),
     systemId: String(formData.get("system_id") ?? ""),
-    subsystemId: String(formData.get("subsystem_id") ?? ""),
     roomId: String(formData.get("room_id") ?? ""),
     inventoryNo: String(formData.get("inventory_no") ?? "") || null,
     name: String(formData.get("name") ?? ""),
@@ -497,7 +279,6 @@ export async function createPprEquipmentAction(formData: FormData) {
   }
 
   await assertSystemBelongsToObject(supabase, payload.systemId, payload.objectId);
-  await assertSubsystemBelongsToSystemAndObject(supabase, payload.subsystemId, payload.systemId, payload.objectId);
   await assertRoomBelongsToObject(supabase, payload.roomId, payload.objectId);
 
   const { data, error } = await supabase
@@ -505,7 +286,6 @@ export async function createPprEquipmentAction(formData: FormData) {
     .insert({
       object_id: payload.objectId,
       system_id: payload.systemId,
-      subsystem_id: payload.subsystemId,
       room_id: payload.roomId,
       inventory_no: payload.inventoryNo?.trim() || null,
       name: payload.name.trim(),
@@ -530,7 +310,6 @@ export async function createPprEquipmentAction(formData: FormData) {
     meta: {
       object_id: payload.objectId,
       system_id: payload.systemId,
-      subsystem_id: payload.subsystemId,
       room_id: payload.roomId,
       inventory_no: data.inventory_no,
       status: payload.status,
@@ -546,7 +325,6 @@ export async function updatePprEquipmentAction(formData: FormData) {
   const payload = pprEquipmentFormSchema.parse({
     objectId: String(formData.get("object_id") ?? ""),
     systemId: String(formData.get("system_id") ?? ""),
-    subsystemId: String(formData.get("subsystem_id") ?? ""),
     roomId: String(formData.get("room_id") ?? ""),
     inventoryNo: String(formData.get("inventory_no") ?? "") || null,
     name: String(formData.get("name") ?? ""),
@@ -569,7 +347,6 @@ export async function updatePprEquipmentAction(formData: FormData) {
   }
 
   await assertSystemBelongsToObject(supabase, payload.systemId, payload.objectId);
-  await assertSubsystemBelongsToSystemAndObject(supabase, payload.subsystemId, payload.systemId, payload.objectId);
   await assertRoomBelongsToObject(supabase, payload.roomId, payload.objectId);
 
   const { error } = await supabase
@@ -577,7 +354,6 @@ export async function updatePprEquipmentAction(formData: FormData) {
     .update({
       object_id: payload.objectId,
       system_id: payload.systemId,
-      subsystem_id: payload.subsystemId,
       room_id: payload.roomId,
       inventory_no: payload.inventoryNo.trim(),
       name: payload.name.trim(),
@@ -601,7 +377,6 @@ export async function updatePprEquipmentAction(formData: FormData) {
     meta: {
       object_id: payload.objectId,
       system_id: payload.systemId,
-      subsystem_id: payload.subsystemId,
       room_id: payload.roomId,
       inventory_no: payload.inventoryNo.trim(),
       status: payload.status,

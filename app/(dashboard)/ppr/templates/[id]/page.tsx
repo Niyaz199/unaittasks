@@ -7,7 +7,7 @@ import {
   canAccessPprTemplateScreens,
   getPprWorkTemplateByIdForProfile,
   listPprManageableObjectsForProfile,
-  listPprSubsystemsForProfile,
+  listPprSystemsForProfile,
 } from "@/lib/ppr/queries";
 import { PageHeader } from "@/components/ui/page-header";
 import { BackButton } from "@/components/ui/back-button";
@@ -21,9 +21,9 @@ export default async function PprTemplateDetailsPage({ params }: { params: Promi
   }
 
   const supabase = await createSupabaseServerClient();
-  const [objects, subsystems, details] = await Promise.all([
+  const [objects, systems, details] = await Promise.all([
     listPprManageableObjectsForProfile(supabase, profile),
-    listPprSubsystemsForProfile(supabase, profile),
+    listPprSystemsForProfile(supabase, profile),
     getPprWorkTemplateByIdForProfile(supabase, profile, id).catch(() => null),
   ]);
   if (!details) notFound();
@@ -40,7 +40,7 @@ export default async function PprTemplateDetailsPage({ params }: { params: Promi
         template={details.template}
         checklistItems={details.checklistItems}
         objects={objects}
-        subsystems={subsystems.map((item) => ({ id: item.id, object_id: item.object_id, system_id: item.system_id, name: item.name }))}
+        systems={systems.map((item) => ({ id: item.id, object_id: item.object_id, name: item.name }))}
         onSave={updatePprWorkTemplateAction}
       />
     </section>

@@ -16,6 +16,12 @@ const schema = z.object({
   reason: z.string().trim().min(3),
 });
 
+function assertSamePlanMonth(currentPlannedFor: string, nextPlannedFor: string) {
+  if (currentPlannedFor.slice(0, 7) !== nextPlannedFor.slice(0, 7)) {
+    throw new Error("Перенос ППР-заявки допускается только внутри текущего месяца");
+  }
+}
+
 function revalidateTaskPaths(taskId: string) {
   revalidatePath("/ppr/my");
   revalidatePath("/ppr/tasks");
@@ -41,6 +47,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (plannedFor === task.planned_for) {
       return NextResponse.json({ error: "Новая плановая дата совпадает с текущей" }, { status: 400 });
     }
+    assertSamePlanMonth(task.planned_for, plannedFor);
 
     const { data, error } = await supabase
       .from("ppr_tasks")

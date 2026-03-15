@@ -16,13 +16,6 @@ function formatDate(value: string | null | undefined) {
   return parsed.toLocaleDateString("ru-RU");
 }
 
-function formatDateTime(value: string | null | undefined) {
-  if (!value) return "—";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "—";
-  return parsed.toLocaleString("ru-RU");
-}
-
 function describeTask(task: PprTaskSummaryRow) {
   const object = unwrapRelation(task.object);
   const system = unwrapRelation(task.system);

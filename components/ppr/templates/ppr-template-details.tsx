@@ -6,7 +6,7 @@ import { PprTemplateEditor } from "@/components/ppr/templates/ppr-template-edito
 type TemplateDetails = {
   id: string;
   object_id: string;
-  subsystem_id: string;
+  system_id: string;
   name: string;
   description: string | null;
   period_months: number;
@@ -16,7 +16,7 @@ type TemplateDetails = {
   is_active: boolean;
   created_at: string;
   object: { name: string } | Array<{ name: string }> | null;
-  subsystem: { name: string } | Array<{ name: string }> | null;
+  system: { name: string } | Array<{ name: string }> | null;
 };
 
 type ChecklistItem = {
@@ -27,7 +27,7 @@ type ChecklistItem = {
 };
 
 type ObjectOption = { id: string; name: string };
-type SubsystemOption = { id: string; object_id: string; system_id: string; name: string };
+type SystemOption = { id: string; object_id: string; name: string };
 
 function resolveName(raw: { name: string } | Array<{ name: string }> | null | undefined) {
   if (Array.isArray(raw)) return raw[0]?.name ?? "—";
@@ -38,13 +38,13 @@ export function PprTemplateDetails({
   template,
   checklistItems,
   objects,
-  subsystems,
+  systems,
   onSave,
 }: {
   template: TemplateDetails;
   checklistItems: ChecklistItem[];
   objects: ObjectOption[];
-  subsystems: SubsystemOption[];
+  systems: SystemOption[];
   onSave: (formData: FormData) => void | Promise<void>;
 }) {
   return (
@@ -53,7 +53,7 @@ export function PprTemplateDetails({
         <div className="grid" style={{ gap: "0.5rem" }}>
           <h2 style={{ margin: 0 }}>{template.name}</h2>
           <div className="text-soft">Объект: {resolveName(template.object)}</div>
-          <div className="text-soft">Подсистема: {resolveName(template.subsystem)}</div>
+          <div className="text-soft">Система: {resolveName(template.system)}</div>
           <div className="text-soft">Создан: {new Date(template.created_at).toLocaleString("ru-RU")}</div>
         </div>
       </SectionCard>
@@ -63,11 +63,11 @@ export function PprTemplateDetails({
           action={onSave}
           templateId={template.id}
           objects={objects}
-          subsystems={subsystems}
+          systems={systems}
           submitLabel="Сохранить"
           initialValues={{
             object_id: template.object_id,
-            subsystem_id: template.subsystem_id,
+            system_id: template.system_id,
             name: template.name,
             description: template.description ?? "",
             period_months: template.period_months,

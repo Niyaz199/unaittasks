@@ -52,15 +52,11 @@ function assertAssignmentObjectAllowed(role: string, managedObjectIds: string[],
   }
 }
 
-async function assertTemplateSubsystemBelongsToObject(supabase: SupabaseServer, subsystemId: string, objectId: string) {
-  const { data: subsystem, error } = await supabase
-    .from("ppr_subsystems")
-    .select("object_id")
-    .eq("id", subsystemId)
-    .single();
+async function assertTemplateSystemBelongsToObject(supabase: SupabaseServer, systemId: string, objectId: string) {
+  const { data: system, error } = await supabase.from("ppr_systems").select("object_id").eq("id", systemId).single();
   if (error) throw error;
-  if (!subsystem || subsystem.object_id !== objectId) {
-    throw new Error("Подсистема шаблона должна принадлежать выбранному объекту");
+  if (!system || system.object_id !== objectId) {
+    throw new Error("Система шаблона должна принадлежать выбранному объекту");
   }
 }
 
@@ -71,10 +67,10 @@ async function assertAssignmentCompatibility(
   objectId: string
 ) {
   const [{ data: equipment, error: equipmentError }, { data: template, error: templateError }] = await Promise.all([
-    supabase.from("ppr_equipment").select("object_id,system_id,subsystem_id,status").eq("id", equipmentId).single(),
+    supabase.from("ppr_equipment").select("object_id,system_id,status").eq("id", equipmentId).single(),
     supabase
       .from("ppr_work_templates")
-      .select("object_id,subsystem_id,is_active")
+      .select("object_id,system_id,is_active")
       .eq("id", templateId)
       .single(),
   ]);
@@ -90,8 +86,8 @@ async function assertAssignmentCompatibility(
     throw new Error("Шаблон должен принадлежать выбранному объекту");
   }
 
-  if (equipment.subsystem_id !== template.subsystem_id) {
-    throw new Error("Шаблон можно назначать только на оборудование той же подсистемы");
+  if (equipment.system_id !== template.system_id) {
+    throw new Error("Шаблон можно назначать только на оборудование той же системы");
   }
 }
 
@@ -158,7 +154,7 @@ export async function createPprWorkTemplateAction(formData: FormData) {
   const checklistItems = parseChecklistItems(formData);
   const payload = pprWorkTemplateFormSchema.parse({
     objectId: String(formData.get("object_id") ?? ""),
-    subsystemId: String(formData.get("subsystem_id") ?? ""),
+    systemId: String(formData.get("system_id") ?? ""),
     name: String(formData.get("name") ?? ""),
     description: String(formData.get("description") ?? "") || null,
     periodMonths: Number(formData.get("period_months") ?? 0),
@@ -174,13 +170,13 @@ export async function createPprWorkTemplateAction(formData: FormData) {
     throw new Error("Нет прав на создание шаблона ППР");
   }
 
-  await assertTemplateSubsystemBelongsToObject(supabase, payload.subsystemId, payload.objectId);
+  await assertTemplateSystemBelongsToObject(supabase, payload.systemId, payload.objectId);
 
   const { data, error } = await supabase
     .from("ppr_work_templates")
     .insert({
       object_id: payload.objectId,
-      subsystem_id: payload.subsystemId,
+      system_id: payload.systemId,
       name: payload.name.trim(),
       description: payload.description?.trim() || null,
       period_months: payload.periodMonths,
@@ -202,7 +198,7 @@ export async function createPprWorkTemplateAction(formData: FormData) {
     entityId: data.id,
     meta: {
       object_id: payload.objectId,
-      subsystem_id: payload.subsystemId,
+      system_id: payload.systemId,
       period_months: payload.periodMonths,
       checklist_count: payload.checklistItems.length,
     },
@@ -217,7 +213,7 @@ export async function updatePprWorkTemplateAction(formData: FormData) {
   const checklistItems = parseChecklistItems(formData);
   const payload = pprWorkTemplateFormSchema.parse({
     objectId: String(formData.get("object_id") ?? ""),
-    subsystemId: String(formData.get("subsystem_id") ?? ""),
+    systemId: String(formData.get("system_id") ?? ""),
     name: String(formData.get("name") ?? ""),
     description: String(formData.get("description") ?? "") || null,
     periodMonths: Number(formData.get("period_months") ?? 0),
@@ -233,13 +229,13 @@ export async function updatePprWorkTemplateAction(formData: FormData) {
     throw new Error("Нет прав на изменение шаблона ППР");
   }
 
-  await assertTemplateSubsystemBelongsToObject(supabase, payload.subsystemId, payload.objectId);
+  await assertTemplateSystemBelongsToObject(supabase, payload.systemId, payload.objectId);
 
   const { error } = await supabase
     .from("ppr_work_templates")
     .update({
       object_id: payload.objectId,
-      subsystem_id: payload.subsystemId,
+      system_id: payload.systemId,
       name: payload.name.trim(),
       description: payload.description?.trim() || null,
       period_months: payload.periodMonths,
@@ -260,7 +256,7 @@ export async function updatePprWorkTemplateAction(formData: FormData) {
     entityId: templateId,
     meta: {
       object_id: payload.objectId,
-      subsystem_id: payload.subsystemId,
+      system_id: payload.systemId,
       period_months: payload.periodMonths,
       checklist_count: payload.checklistItems.length,
     },
