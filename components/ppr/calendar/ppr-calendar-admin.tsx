@@ -183,9 +183,10 @@ function countMonthHours(items: MonthPlanItemRow[]) {
   return items.reduce((accumulator, item) => accumulator + (resolveTemplate(item.template)?.norm_hours ?? 0), 0);
 }
 
-function MetricCell({
+function AnnualMetricCell({
   href,
   metrics,
+  maxHours = 100,
 }: {
   href: string;
   metrics: {
@@ -195,21 +196,143 @@ function MetricCell({
     carried_over_count: number;
     materialized_count: number;
   };
+  maxHours?: number;
 }) {
-  if (!metrics.items_count) {
-    return <span className="text-soft">—</span>;
-  }
+  const tone = monthMetricTone(metrics);
+  const isEmpty = !metrics.items_count;
+  
+  // Calculate opacity based on load intensity relative to maxHours
+  // Base opacity 5%, max additional 25% based on load
+  const intensity = Math.min(Math.max(metrics.norm_hours_total / Math.max(maxHours, 1), 0), 1);
+  const opacityPercent = Math.round(5 + (intensity * 25));
 
   return (
-    <a href={href} className="grid" style={{ gap: "0.25rem", color: "inherit", textDecoration: "none" }}>
-      <div className="row" style={{ gap: "0.35rem", alignItems: "center", flexWrap: "wrap" }}>
-        <strong>{metrics.items_count}</strong>
-        <Badge tone={monthMetricTone(metrics)}>{formatHours(metrics.norm_hours_total)} ч</Badge>
-      </div>
-      <div className="text-soft" style={{ fontSize: "0.75rem" }}>
-        {metrics.materialized_count ? `В задачах: ${metrics.materialized_count}` : "Плановые позиции"}
-      </div>
+    <a
+      href={href}
+      className={`annual-metric-cell ${isEmpty ? "empty" : ""}`}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        alignItems: "center",
+        padding: "0.5rem",
+        height: "100%",
+        minHeight: "60px",
+        background: isEmpty ? "transparent" : `color-mix(in srgb, var(--${tone}) ${opacityPercent}%, transparent)`,
+        border: `1px solid ${isEmpty ? "var(--line)" : `color-mix(in srgb, var(--${tone}) 20%, transparent)`}`,
+        borderRadius: "6px",
+        textDecoration: "none",
+        color: "inherit",
+        transition: "all 0.2s ease",
+        position: "relative",
+      }}
+    >
+      {isEmpty ? (
+        <span className="text-soft" style={{ fontSize: "0.8rem", opacity: 0.5 }}>—</span>
+      ) : (
+        <>
+          <div className="row" style={{ alignItems: "baseline", gap: "0.2rem" }}>
+            <span style={{ fontSize: "1.1rem", fontWeight: 600 }}>{metrics.items_count}</span>
+            <span className="text-soft" style={{ fontSize: "0.75rem" }}>шт</span>
+          </div>
+          <div className="text-soft" style={{ fontSize: "0.75rem", marginTop: "0.1rem" }}>
+            {formatHours(metrics.norm_hours_total)} ч
+          </div>
+          {metrics.overdue_count > 0 && (
+            <div
+              style={{
+                position: "absolute",
+                top: "4px",
+                right: "4px",
+                width: "6px",
+                height: "6px",
+                borderRadius: "50%",
+                background: "var(--danger)",
+              }}
+            />
+          )}
+          {metrics.carried_over_count > 0 && !metrics.overdue_count && (
+            <div
+              style={{
+                position: "absolute",
+                top: "4px",
+                right: "4px",
+                width: "6px",
+                height: "6px",
+                borderRadius: "50%",
+                background: "var(--warning)",
+              }}
+            />
+          )}
+        </>
+      )}
     </a>
+  );
+}
+
+function CompactWorkItemCard({
+  item,
+  onEdit,
+}: {
+  item: MonthPlanItemRow;
+  onEdit: (id: string) => void;
+}) {
+  const statusMeta = pprMonthPlanItemStatusMeta[item.status];
+  const task = resolveTask(item.task);
+  const template = resolveTemplate(item.template);
+  const equipmentName = resolveRelation(item.equipment)?.name ?? "—";
+  const canReschedule = canRescheduleFromCalendar(item);
+
+  // Determine status color/indicator
+  const statusTone = task ? pprTaskStatusMeta[task.status].tone : statusMeta.tone;
+
+  return (
+    <div
+      onClick={() => canReschedule && onEdit(item.id)}
+      style={{
+        display: "grid",
+        gap: "0.2rem",
+        padding: "0.4rem 0.4rem 0.4rem 0.6rem",
+        borderRadius: "6px",
+        border: "1px solid var(--line)",
+        background: "var(--panel)",
+        cursor: canReschedule ? "pointer" : "default",
+        position: "relative",
+        overflow: "hidden",
+        transition: "all 0.2s ease",
+        opacity: item.status === "cancelled" ? 0.6 : 1,
+      }}
+      className="compact-work-card"
+    >
+      {/* Status Strip */}
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: "4px",
+          background: `var(--${statusTone})`,
+        }}
+      />
+
+      <div style={{ display: "grid", gap: "0.1rem" }}>
+        <div style={{ fontWeight: 600, fontSize: "0.75rem", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={equipmentName}>
+          {equipmentName}
+        </div>
+        
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
+             <div className="text-soft" style={{ fontSize: "0.7rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "120px" }} title={template?.name}>
+              {template?.name ?? "—"}
+            </div>
+            {template?.norm_hours ? (
+                 <span className="text-soft" style={{ fontSize: "0.7rem", marginLeft: "auto", flexShrink: 0 }}>
+                    {formatHours(template.norm_hours)} ч
+                 </span>
+            ) : null}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -265,6 +388,17 @@ export function PprCalendarAdmin({
     [monthPlanItems]
   );
 
+  // Calculate global max hours for heatmap normalization
+  const maxGroupHours = useMemo(() => 
+    Math.max(...yearGroupOverview.flatMap(r => r.months.map(m => m.norm_hours_total)), 1),
+    [yearGroupOverview]
+  );
+  const maxSystemHours = useMemo(() => 
+    Math.max(...yearSystemOverview.flatMap(r => r.months.map(m => m.norm_hours_total)), 1),
+    [yearSystemOverview]
+  );
+  const globalMaxHours = Math.max(maxGroupHours, maxSystemHours);
+
   if (!systems.length) {
     return (
       <EmptyState
@@ -276,44 +410,68 @@ export function PprCalendarAdmin({
 
   return (
     <>
-      <div className="section-card">
-        <form method="get" className="row" style={{ gap: "0.75rem", flexWrap: "wrap", alignItems: "end" }}>
-          <label className="grid" style={{ gap: "0.3rem" }}>
-            <span className="text-soft">Год обзора</span>
-            <input className="input" type="number" min={2024} max={2100} name="year" defaultValue={currentYear} />
-          </label>
-          <label className="grid" style={{ gap: "0.3rem" }}>
-            <span className="text-soft">Месяц детализации</span>
-            <input className="input" type="month" name="month" defaultValue={currentMonthInput} />
-          </label>
-          <label className="grid" style={{ gap: "0.3rem" }}>
-            <span className="text-soft">Группа систем</span>
-            <select className="select" name="group" defaultValue={selectedGroupId ?? ""}>
-              <option value="">Все группы</option>
-              {systemGroups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid" style={{ gap: "0.3rem" }}>
-            <span className="text-soft">Система</span>
-            <select className="select" name="system" defaultValue={selectedSystemId ?? ""}>
-              <option value="">Все доступные системы</option>
-              {filteredSystems.map((system) => (
-                <option key={system.id} value={system.id}>
-                  {resolveName(system.object)} / {system.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button className="btn btn-ghost" type="submit">
-            Показать
-          </button>
-          <Link href="/ppr/calendar" className="btn btn-ghost">
-            Сбросить
-          </Link>
+      <div className="section-card" style={{ padding: "0.75rem" }}>
+        <form method="get" className="row" style={{ gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+          <div className="row" style={{ gap: "0.5rem", alignItems: "center" }}>
+            <input 
+              className="input" 
+              type="number" 
+              min={2024} 
+              max={2100} 
+              name="year" 
+              defaultValue={currentYear} 
+              style={{ width: "80px" }}
+              aria-label="Год"
+            />
+            <input 
+              className="input" 
+              type="month" 
+              name="month" 
+              defaultValue={currentMonthInput} 
+              aria-label="Месяц"
+            />
+          </div>
+          
+          <div style={{ height: "24px", width: "1px", background: "var(--line)" }} />
+
+          <select 
+            className="select" 
+            name="group" 
+            defaultValue={selectedGroupId ?? ""} 
+            style={{ maxWidth: "200px" }}
+            aria-label="Группа систем"
+          >
+            <option value="">Все группы</option>
+            {systemGroups.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.name}
+              </option>
+            ))}
+          </select>
+
+          <select 
+            className="select" 
+            name="system" 
+            defaultValue={selectedSystemId ?? ""} 
+            style={{ maxWidth: "250px" }}
+            aria-label="Система"
+          >
+            <option value="">Все системы</option>
+            {filteredSystems.map((system) => (
+              <option key={system.id} value={system.id}>
+                {resolveName(system.object)} / {system.name}
+              </option>
+            ))}
+          </select>
+
+          <div style={{ marginLeft: "auto", display: "flex", gap: "0.5rem" }}>
+            <button className="btn btn-secondary" type="submit">
+              Обновить
+            </button>
+            <Link href="/ppr/calendar" className="btn btn-ghost">
+              Сбросить
+            </Link>
+          </div>
         </form>
       </div>
 
@@ -321,20 +479,19 @@ export function PprCalendarAdmin({
         <div className="grid" style={{ gap: "0.35rem" }}>
           <strong>Уровень 1. Годовой обзор по группам систем</strong>
           <span className="text-soft">
-            Метрика ячейки: количество позиций month plan и суммарные нормо-часы за месяц. Красный акцент означает просрочку,
-            желтый - carryover.
+            Обзор нагрузки по месяцам. Ячейки показывают количество работ и часы. Красная точка — есть просроченные работы.
           </span>
         </div>
 
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1050px" }}>
+          <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: "0 0.5rem", minWidth: "1050px" }}>
             <thead>
               <tr>
-                <th style={{ textAlign: "left", padding: "0.75rem", borderBottom: "1px solid var(--line)" }}>Группа систем</th>
+                <th style={{ textAlign: "left", padding: "0 0.75rem 0.5rem", fontSize: "0.85rem", color: "var(--text-soft)" }}>Группа систем</th>
                 {Array.from({ length: 12 }, (_, index) => {
                   const month = `${currentYear}-${String(index + 1).padStart(2, "0")}`;
                   return (
-                    <th key={month} style={{ textAlign: "left", padding: "0.75rem", borderBottom: "1px solid var(--line)" }}>
+                    <th key={month} style={{ textAlign: "center", padding: "0 0.25rem 0.5rem", fontSize: "0.85rem", color: "var(--text-soft)" }}>
                       {formatMonthLabel(month, "short")}
                     </th>
                   );
@@ -344,22 +501,26 @@ export function PprCalendarAdmin({
             <tbody>
               {yearGroupOverview.map((row) => (
                 <tr key={row.system_group_id}>
-                  <td style={{ padding: "0.75rem", borderBottom: "1px solid var(--line)" }}>
+                  <td style={{ padding: "0.5rem 0.75rem", verticalAlign: "middle" }}>
                     <div className="grid" style={{ gap: "0.35rem" }}>
                       <a
                         href={buildCalendarHref(filters, { groupId: row.system_group_id, systemId: null })}
-                        style={{ color: "inherit", textDecoration: "none", fontWeight: 600 }}
+                        style={{ color: "inherit", textDecoration: "none", fontWeight: 600, fontSize: "0.95rem" }}
                       >
                         {row.name}
                       </a>
-                      <span className="text-soft">
-                        {row.code} • систем: {row.systems_count} • позиций: {row.totals.items_count} • {formatHours(row.totals.norm_hours_total)} ч
+                      <span className="text-soft" style={{ fontSize: "0.8rem" }}>
+                        {row.code} • {row.systems_count} систем
                       </span>
                     </div>
                   </td>
                   {row.months.map((metrics) => (
-                    <td key={`${row.system_group_id}-${metrics.month}`} style={{ padding: "0.75rem", borderBottom: "1px solid var(--line)" }}>
-                      <MetricCell href={buildCalendarHref(filters, { groupId: row.system_group_id, month: metrics.month, systemId: null })} metrics={metrics} />
+                    <td key={`${row.system_group_id}-${metrics.month}`} style={{ padding: "0 0.25rem", height: "1px" }}>
+                      <AnnualMetricCell 
+                        href={buildCalendarHref(filters, { groupId: row.system_group_id, month: metrics.month, systemId: null })} 
+                        metrics={metrics} 
+                        maxHours={globalMaxHours}
+                      />
                     </td>
                   ))}
                 </tr>
@@ -379,14 +540,14 @@ export function PprCalendarAdmin({
           </div>
 
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1100px" }}>
+            <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: "0 0.5rem", minWidth: "1100px" }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: "left", padding: "0.75rem", borderBottom: "1px solid var(--line)" }}>Система</th>
+                  <th style={{ textAlign: "left", padding: "0 0.75rem 0.5rem", fontSize: "0.85rem", color: "var(--text-soft)" }}>Система</th>
                   {Array.from({ length: 12 }, (_, index) => {
                     const month = `${currentYear}-${String(index + 1).padStart(2, "0")}`;
                     return (
-                      <th key={month} style={{ textAlign: "left", padding: "0.75rem", borderBottom: "1px solid var(--line)" }}>
+                      <th key={month} style={{ textAlign: "center", padding: "0 0.25rem 0.5rem", fontSize: "0.85rem", color: "var(--text-soft)" }}>
                         {formatMonthLabel(month, "short")}
                       </th>
                     );
@@ -396,31 +557,32 @@ export function PprCalendarAdmin({
               <tbody>
                 {yearSystemOverview.map((row) => (
                   <tr key={row.system_id}>
-                    <td style={{ padding: "0.75rem", borderBottom: "1px solid var(--line)" }}>
+                    <td style={{ padding: "0.5rem 0.75rem", verticalAlign: "middle" }}>
                       <div className="grid" style={{ gap: "0.35rem" }}>
                         <a
                           href={buildCalendarHref(filters, {
                             groupId: row.system_group_id,
                             systemId: row.system_id,
                           })}
-                          style={{ color: "inherit", textDecoration: "none", fontWeight: 600 }}
+                          style={{ color: "inherit", textDecoration: "none", fontWeight: 600, fontSize: "0.95rem" }}
                         >
                           {row.name}
                         </a>
-                        <span className="text-soft">
-                          {row.object_name} • позиций: {row.totals.items_count} • {formatHours(row.totals.norm_hours_total)} ч
+                        <span className="text-soft" style={{ fontSize: "0.8rem" }}>
+                          {row.object_name}
                         </span>
                       </div>
                     </td>
                     {row.months.map((metrics) => (
-                      <td key={`${row.system_id}-${metrics.month}`} style={{ padding: "0.75rem", borderBottom: "1px solid var(--line)" }}>
-                        <MetricCell
+                      <td key={`${row.system_id}-${metrics.month}`} style={{ padding: "0 0.25rem", height: "1px" }}>
+                        <AnnualMetricCell
                           href={buildCalendarHref(filters, {
                             groupId: row.system_group_id,
                             systemId: row.system_id,
                             month: metrics.month,
                           })}
                           metrics={metrics}
+                          maxHours={globalMaxHours}
                         />
                       </td>
                     ))}
@@ -523,76 +685,39 @@ export function PprCalendarAdmin({
                   <div
                     key={cell.isoDate}
                     style={{
-                      minHeight: "180px",
+                      minHeight: "120px",
                       display: "grid",
                       alignContent: "start",
-                      gap: "0.45rem",
-                      padding: "0.7rem",
-                      borderRadius: "12px",
+                      gap: "0.35rem",
+                      padding: "0.5rem",
+                      borderRadius: "8px",
                       border: "1px solid var(--line)",
                       background: cell.items.length
                         ? "color-mix(in srgb, var(--panel-soft) 42%, transparent)"
-                        : "color-mix(in srgb, var(--panel-soft) 20%, transparent)",
+                        : "transparent",
                     }}
                   >
-                    <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-                      <strong>{cell.dayNumber}</strong>
-                      {cell.items.length ? (
-                        <Badge tone={cell.items.some((item) => item.is_overdue) ? "danger" : "info"}>{cell.items.length}</Badge>
-                      ) : null}
+                    <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.2rem" }}>
+                      <span style={{ fontWeight: 600, fontSize: "0.9rem", color: countMonthHours(cell.items) > 8 ? "var(--danger)" : "inherit" }}>
+                        {cell.dayNumber}
+                      </span>
+                      {cell.items.length > 0 && (
+                        <div className="row" style={{ gap: "0.3rem", alignItems: "center" }}>
+                          <span className="text-soft" style={{ fontSize: "0.7rem", color: countMonthHours(cell.items) > 8 ? "var(--danger)" : "inherit" }}>
+                            {formatHours(countMonthHours(cell.items))} ч
+                          </span>
+                          <Badge tone={cell.items.some((item) => item.is_overdue) ? "danger" : "neutral"}>
+                            {cell.items.length}
+                          </Badge>
+                        </div>
+                      )}
                     </div>
 
-                    {cell.items.length ? (
-                      <div className="text-soft" style={{ fontSize: "0.75rem" }}>
-                        {formatHours(countMonthHours(cell.items))} ч
-                      </div>
-                    ) : (
-                      <div className="text-soft" style={{ fontSize: "0.78rem" }}>
-                        Нет работ
-                      </div>
-                    )}
-
-                    {cell.items.map((item) => {
-                      const statusMeta = pprMonthPlanItemStatusMeta[item.status];
-                      const task = resolveTask(item.task);
-                      const template = resolveTemplate(item.template);
-                      return (
-                        <div
-                          key={item.id}
-                          style={{
-                            display: "grid",
-                            gap: "0.35rem",
-                            padding: "0.55rem",
-                            borderRadius: "10px",
-                            border: "1px solid color-mix(in srgb, var(--line-strong) 35%, transparent)",
-                            background: "var(--panel)",
-                          }}
-                        >
-                          <div style={{ fontWeight: 600, fontSize: "0.82rem" }}>{resolveEquipment(item.equipment)}</div>
-                          {!selectedSystemId ? (
-                            <div className="text-soft" style={{ fontSize: "0.75rem" }}>
-                              {resolveName(item.system)}
-                            </div>
-                          ) : null}
-                          <div className="text-soft" style={{ fontSize: "0.75rem" }}>
-                            {template?.name ?? "—"}
-                            {template?.norm_hours !== null && template?.norm_hours !== undefined ? ` • ${formatHours(template.norm_hours)} ч` : ""}
-                          </div>
-                          <div className="row" style={{ gap: "0.35rem", flexWrap: "wrap" }}>
-                            <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>
-                            {task ? <Badge tone={pprTaskStatusMeta[task.status].tone}>{pprTaskStatusMeta[task.status].label}</Badge> : null}
-                          </div>
-                          <button
-                            className="btn btn-ghost ppr-action-btn"
-                            type="button"
-                            disabled={!canRescheduleFromCalendar(item)}
-                            onClick={() => setEditingItemId(item.id)}
-                          >
-                            Перенести
-                          </button>
-                        </div>
-                      );
-                    })}
+                    <div className="grid" style={{ gap: "0.3rem" }}>
+                      {cell.items.map((item) => (
+                        <CompactWorkItemCard key={item.id} item={item} onEdit={setEditingItemId} />
+                      ))}
+                    </div>
                   </div>
                 ) : (
                   <div key={`empty-${index}`} style={{ minHeight: "120px" }} />
