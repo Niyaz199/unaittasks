@@ -714,10 +714,12 @@ async function listPprCalendarYearRowsForSystems(
 export async function listPprCalendarYearOverviewByGroupForProfile(
   supabase: SupabaseClient,
   profile: Pick<Profile, "id" | "role">,
-  options: { year: number }
+  options: { year: number; objectId?: string }
 ) {
   assertPprCalendarQueryAccess(profile.role);
-  const systems = await listPprCalendarSystemsForProfile(supabase, profile);
+  const systems = (await listPprCalendarSystemsForProfile(supabase, profile)).filter(
+    (system) => !options.objectId || system.object_id === options.objectId
+  );
   const months = buildCalendarMonthKeys(options.year);
   if (!systems.length) return [] as PprCalendarYearGroupOverviewRow[];
 
@@ -774,11 +776,11 @@ export async function listPprCalendarYearOverviewByGroupForProfile(
 export async function listPprCalendarYearOverviewBySystemForProfile(
   supabase: SupabaseClient,
   profile: Pick<Profile, "id" | "role">,
-  options: { year: number; systemGroupId: string }
+  options: { year: number; systemGroupId: string; objectId?: string }
 ) {
   assertPprCalendarQueryAccess(profile.role);
   const systems = (await listPprCalendarSystemsForProfile(supabase, profile)).filter(
-    (system) => system.system_group_id === options.systemGroupId
+    (system) => system.system_group_id === options.systemGroupId && (!options.objectId || system.object_id === options.objectId)
   );
   const months = buildCalendarMonthKeys(options.year);
   if (!systems.length) return [] as PprCalendarYearSystemOverviewRow[];
@@ -831,7 +833,7 @@ export async function listPprCalendarYearOverviewBySystemForProfile(
 export async function listPprMonthPlansForProfile(
   supabase: SupabaseClient,
   profile: Pick<Profile, "id" | "role">,
-  options: { planMonth: string; systemId?: string }
+  options: { planMonth: string; systemId?: string; objectId?: string }
 ) {
   assertPprCalendarQueryAccess(profile.role);
   const systems = await listPprCalendarSystemsForProfile(supabase, profile);
@@ -845,7 +847,8 @@ export async function listPprMonthPlansForProfile(
     .order("generated_at", { ascending: false });
 
   const scopedQuery = options.systemId ? query.eq("system_id", options.systemId) : query.in("system_id", allowedSystemIds);
-  const { data, error } = await scopedQuery;
+  const objectScopedQuery = options.objectId ? scopedQuery.eq("object_id", options.objectId) : scopedQuery;
+  const { data, error } = await objectScopedQuery;
   if (error) throw error;
   return (data ?? []) as Array<{
     id: string;
@@ -861,7 +864,7 @@ export async function listPprMonthPlansForProfile(
 export async function listPprMonthPlanItemsForProfile(
   supabase: SupabaseClient,
   profile: Pick<Profile, "id" | "role">,
-  options: { planMonth: string; systemId?: string }
+  options: { planMonth: string; systemId?: string; objectId?: string }
 ) {
   assertPprCalendarQueryAccess(profile.role);
   const systems = await listPprCalendarSystemsForProfile(supabase, profile);
@@ -871,13 +874,14 @@ export async function listPprMonthPlanItemsForProfile(
   const query = supabase
     .from("ppr_month_plan_items")
     .select(
-      "id,object_id,month_plan_id,system_id,equipment_id,assignment_id,template_id,planned_for,source_due_date,is_overdue,is_carried_over,task_id,status,month_plan:ppr_month_plans(plan_month),equipment:ppr_equipment(name,inventory_no),template:ppr_work_templates(name,norm_hours),system:ppr_systems(name),object:objects(name),task:ppr_tasks(id,status,planned_for)"
+      "id,object_id,month_plan_id,system_id,equipment_id,assignment_id,template_id,planned_for,source_due_date,is_overdue,is_carried_over,task_id,status,month_plan:ppr_month_plans(plan_month),equipment:ppr_equipment(name,inventory_no,room:object_rooms(name,floor)),template:ppr_work_templates(name,norm_hours),system:ppr_systems(name),object:objects(name),task:ppr_tasks(id,status,planned_for)"
     )
     .order("planned_for", { ascending: true })
     .order("source_due_date", { ascending: true });
 
   const scopedQuery = options.systemId ? query.eq("system_id", options.systemId) : query.in("system_id", allowedSystemIds);
-  const { data, error } = await scopedQuery;
+  const objectScopedQuery = options.objectId ? scopedQuery.eq("object_id", options.objectId) : scopedQuery;
+  const { data, error } = await objectScopedQuery;
   if (error) throw error;
 
   return ((data ?? []) as Array<{
@@ -895,7 +899,10 @@ export async function listPprMonthPlanItemsForProfile(
     task_id: string | null;
     status: "pending" | "materialized" | "carried_over" | "closed" | "cancelled";
     month_plan: { plan_month: string } | Array<{ plan_month: string }> | null;
-    equipment: { name: string; inventory_no: string } | Array<{ name: string; inventory_no: string }> | null;
+    equipment:
+      | { name: string; inventory_no: string; room: { name: string; floor: string | null } | Array<{ name: string; floor: string | null }> | null }
+      | Array<{ name: string; inventory_no: string; room: { name: string; floor: string | null } | Array<{ name: string; floor: string | null }> | null }>
+      | null;
     template: { name: string; norm_hours: number | null } | Array<{ name: string; norm_hours: number | null }> | null;
     system: { name: string } | Array<{ name: string }> | null;
     object: { name: string } | Array<{ name: string }> | null;

@@ -6,6 +6,9 @@ import { createPprSystemAction, updatePprSystemAction } from "@/app/actions/ppr-
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PprModal, PprFormGroup } from "@/components/ppr/ui/ppr-modal";
+import { DirectoryToolbar } from "@/components/ppr/ui/directory-toolbar";
+import { DirectorySummary } from "@/components/ppr/ui/directory-summary";
+import { StatusBadge } from "@/components/ppr/ui/status-badge";
 
 type SystemRow = {
   id: string;
@@ -65,6 +68,13 @@ export function PprSystemsAdmin({
   const [editObjectId, setEditObjectId] = useState("");
   const [editResponsibleUserId, setEditResponsibleUserId] = useState("");
 
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterObjectId, setFilterObjectId] = useState("");
+  const [filterGroupId, setFilterGroupId] = useState("");
+  const [filterResponsibleId, setFilterResponsibleId] = useState("");
+  const [filterStatus, setFilterStatus] = useState<"all" | "active" | "inactive">("all");
+
   const editingSystem = editingId ? systems.find((item) => item.id === editingId) ?? null : null;
   const hasPrerequisites = objects.length > 0 && systemGroups.length > 0;
 
@@ -83,6 +93,52 @@ export function PprSystemsAdmin({
         : [],
     [editObjectId, responsibleCandidates]
   );
+
+  // Filter logic
+  const filteredSystems = useMemo(() => {
+    return systems.filter((system) => {
+      const matchesSearch =
+        searchTerm === "" ||
+        system.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        resolveName(system.system_group).toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesObject = filterObjectId === "" || system.object_id === filterObjectId;
+      const matchesGroup = filterGroupId === "" || system.system_group_id === filterGroupId;
+      const matchesResponsible = filterResponsibleId === "" || system.responsible_user_id === filterResponsibleId;
+      const matchesStatus =
+        filterStatus === "all" ||
+        (filterStatus === "active" && system.is_active) ||
+        (filterStatus === "inactive" && !system.is_active);
+
+      return matchesSearch && matchesObject && matchesGroup && matchesResponsible && matchesStatus;
+    });
+  }, [systems, searchTerm, filterObjectId, filterGroupId, filterResponsibleId, filterStatus]);
+
+  // Summary metrics
+  const metrics = useMemo(() => {
+    const total = systems.length;
+    const active = systems.filter((s) => s.is_active).length;
+    
+    // Top groups by count
+    const groupCounts = systems.reduce((acc, system) => {
+      const groupName = resolveName(system.system_group);
+      acc[groupName] = (acc[groupName] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    const topGroup = Object.entries(groupCounts)
+      .sort(([, a], [, b]) => b - a)[0];
+
+    return [
+      { label: "Всего систем", value: total, tone: "neutral" as const },
+      { label: "Активных", value: active, tone: "success" as const },
+      { 
+        label: "Самая крупная группа", 
+        value: topGroup ? `${topGroup[0]} (${topGroup[1]})` : "—", 
+        tone: "info" as const 
+      },
+    ];
+  }, [systems]);
 
   useEffect(() => {
     if (!isCreateOpen) {
@@ -116,50 +172,109 @@ export function PprSystemsAdmin({
     }
   }, [editObjectId, editResponsibleCandidates, editResponsibleUserId]);
 
-  return (
-    <>
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-        <div className="text-soft">
-          Системы ППР внутри объектов. Ответственный выбирается только из `lead`, `engineer`, `object_engineer`.
-        </div>
-        <button className="btn btn-accent" type="button" onClick={() => setIsCreateOpen(true)} disabled={!hasPrerequisites}>
-          + Добавить систему
-        </button>
-      </div>
+  if (!hasPrerequisites) {
+    return (
+      <EmptyState
+        message="Недостаточно данных для создания системы"
+        hint={
+          !objects.length
+            ? "Для начала нужен хотя бы один доступный объект."
+            : "Для начала нужна хотя бы одна группа систем ППР."
+        }
+        actionLabel={!systemGroups.length && canManageSystemGroups ? "Открыть справочник групп" : undefined}
+        actionHref={!systemGroups.length && canManageSystemGroups ? ("/ppr/system-groups" as Route) : undefined}
+      />
+    );
+  }
 
-      {!hasPrerequisites ? (
-        <EmptyState
-          message="Недостаточно данных для создания системы"
-          hint={
-            !objects.length
-              ? "Для начала нужен хотя бы один доступный объект."
-              : "Для начала нужна хотя бы одна группа систем ППР."
-          }
-          actionLabel={!systemGroups.length && canManageSystemGroups ? "Открыть справочник групп" : undefined}
-          actionHref={!systemGroups.length && canManageSystemGroups ? ("/ppr/system-groups" as Route) : undefined}
+  return (
+    <div className="grid" style={{ gap: "1.5rem" }}>
+      <DirectorySummary metrics={metrics} />
+
+      <DirectoryToolbar onSearch={setSearchTerm} searchPlaceholder="Поиск по названию или группе...">
+        <select
+          className="select"
+          value={filterObjectId}
+          onChange={(e) => setFilterObjectId(e.target.value)}
+          style={{ maxWidth: "200px" }}
+        >
+          <option value="">Все объекты</option>
+          {objects.map((obj) => (
+            <option key={obj.id} value={obj.id}>
+              {obj.name}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className="select"
+          value={filterGroupId}
+          onChange={(e) => setFilterGroupId(e.target.value)}
+          style={{ maxWidth: "200px" }}
+        >
+          <option value="">Все группы</option>
+          {systemGroups.map((group) => (
+            <option key={group.id} value={group.id}>
+              {group.name}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className="select"
+          value={filterResponsibleId}
+          onChange={(e) => setFilterResponsibleId(e.target.value)}
+          style={{ maxWidth: "200px" }}
+        >
+          <option value="">Все ответственные</option>
+          {responsibleCandidates.map((resp) => (
+            <option key={resp.id} value={resp.id}>
+              {resp.full_name}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className="select"
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value as any)}
+          style={{ maxWidth: "150px" }}
+        >
+          <option value="all">Все статусы</option>
+          <option value="active">Активные</option>
+          <option value="inactive">Неактивные</option>
+        </select>
+
+        <button className="btn btn-accent" type="button" onClick={() => setIsCreateOpen(true)}>
+          + Добавить
+        </button>
+      </DirectoryToolbar>
+
+      {!filteredSystems.length ? (
+        <EmptyState 
+          message="Системы не найдены" 
+          hint={systems.length ? "Попробуйте изменить параметры фильтрации." : "Создайте первую систему ППР для доступного объекта."} 
         />
-      ) : !systems.length ? (
-        <EmptyState message="Список систем ППР пуст" hint="Создайте первую систему ППР для доступного объекта." />
       ) : (
         <>
           <div className="desktop-only">
             <DataTable
               columns={[
+                { key: "name", label: "Система" },
                 { key: "object", label: "Объект" },
                 { key: "group", label: "Группа" },
-                { key: "name", label: "Система" },
                 { key: "responsible", label: "Ответственный" },
                 { key: "status", label: "Статус" },
                 { key: "actions", label: "Действия" },
               ]}
             >
-              {systems.map((system) => (
+              {filteredSystems.map((system) => (
                 <tr key={system.id}>
+                  <td style={{ fontWeight: 600 }}>{system.name}</td>
                   <td>{resolveName(system.object)}</td>
                   <td>{resolveName(system.system_group)}</td>
-                  <td>{system.name}</td>
                   <td>{resolveResponsible(system.responsible)}</td>
-                  <td>{system.is_active ? "Активна" : "Отключена"}</td>
+                  <td><StatusBadge isActive={system.is_active} /></td>
                   <td>
                     <div className="ppr-table-actions">
                       <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(system.id)}>
@@ -173,14 +288,14 @@ export function PprSystemsAdmin({
           </div>
 
           <div className="mobile-cards mobile-only">
-            {systems.map((system) => (
+            {filteredSystems.map((system) => (
               <div key={system.id} className="section-card mobile-card">
                 <div className="grid" style={{ gap: "0.45rem" }}>
-                  <div>{system.name}</div>
+                  <div style={{ fontWeight: 600 }}>{system.name}</div>
                   <div className="text-soft">Объект: {resolveName(system.object)}</div>
                   <div className="text-soft">Группа: {resolveName(system.system_group)}</div>
                   <div className="text-soft">Ответственный: {resolveResponsible(system.responsible)}</div>
-                  <div className="text-soft">{system.is_active ? "Активна" : "Отключена"}</div>
+                  <div><StatusBadge isActive={system.is_active} /></div>
                   <div className="ppr-table-actions">
                     <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(system.id)}>
                       Изменить
@@ -321,6 +436,6 @@ export function PprSystemsAdmin({
           </form>
         ) : null}
       </PprModal>
-    </>
+    </div>
   );
 }

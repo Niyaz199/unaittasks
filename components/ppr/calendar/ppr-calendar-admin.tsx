@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useMemo, useState, useEffect } from "react";
 import { generatePprMonthPlanAction, reschedulePprMonthPlanItemAction } from "@/app/actions/ppr-calendar-actions";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
@@ -73,6 +74,7 @@ type FilterPatch = {
   month?: string;
   groupId?: string | null;
   systemId?: string | null;
+  tab?: "year" | "month";
 };
 
 type CalendarDayCell = {
@@ -137,6 +139,7 @@ function buildCalendarHref(current: CalendarFilters, patch: FilterPatch = {}) {
   params.set("month", next.month);
   if (next.groupId) params.set("group", next.groupId);
   if (next.systemId) params.set("system", next.systemId);
+  if (patch.tab) params.set("tab", patch.tab);
   return `/ppr/calendar?${params.toString()}`;
 }
 
@@ -359,6 +362,32 @@ export function PprCalendarAdmin({
   selectedGroupId?: string;
   selectedSystemId?: string;
 }) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  
+  const tabParam = searchParams.get("tab");
+  const initialTab = tabParam === "month" ? "month" : "year";
+  
+  const [activeTab, setActiveTab] = useState<"year" | "month">(initialTab);
+  const [monthView, setMonthView] = useState<"calendar" | "list">("calendar");
+
+  // Sync tab state with URL parameter changes
+  useEffect(() => {
+    if (tabParam === "month") {
+      setActiveTab("month");
+    } else if (tabParam === "year") {
+      setActiveTab("year");
+    }
+  }, [tabParam]);
+
+  const handleTabChange = (tab: "year" | "month") => {
+    setActiveTab(tab);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", tab);
+    router.replace(`${pathname}?${params.toString()}` as never);
+  };
+
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const editingItem = editingItemId ? monthPlanItems.find((item) => item.id === editingItemId) ?? null : null;
@@ -410,8 +439,28 @@ export function PprCalendarAdmin({
 
   return (
     <>
-      <div className="section-card" style={{ padding: "0.75rem" }}>
+      <div className="section-card sticky-toolbar" style={{ padding: "0.75rem", position: "sticky", top: "1rem", zIndex: 10 }}>
+        <div className="row" style={{ gap: "1rem", alignItems: "center", flexWrap: "wrap", borderBottom: "1px solid var(--line)", paddingBottom: "0.75rem", marginBottom: "0.75rem" }}>
+          <div className="row" style={{ gap: "0.5rem" }}>
+            <button 
+              type="button"
+              className={`btn ${activeTab === "year" ? "btn-accent" : "btn-ghost"}`}
+              onClick={() => handleTabChange("year")}
+            >
+              Годовой обзор
+            </button>
+            <button 
+              type="button"
+              className={`btn ${activeTab === "month" ? "btn-accent" : "btn-ghost"}`}
+              onClick={() => handleTabChange("month")}
+            >
+              Месяц
+            </button>
+          </div>
+        </div>
+
         <form method="get" className="row" style={{ gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+          <input type="hidden" name="tab" value={activeTab} />
           <div className="row" style={{ gap: "0.5rem", alignItems: "center" }}>
             <input 
               className="input" 
@@ -420,7 +469,7 @@ export function PprCalendarAdmin({
               max={2100} 
               name="year" 
               defaultValue={currentYear} 
-              style={{ width: "80px" }}
+              style={{ width: "80px", display: activeTab === "year" ? "block" : "none" }}
               aria-label="Год"
             />
             <input 
@@ -429,6 +478,7 @@ export function PprCalendarAdmin({
               name="month" 
               defaultValue={currentMonthInput} 
               aria-label="Месяц"
+              style={{ display: activeTab === "month" ? "block" : "none" }}
             />
           </div>
           
@@ -468,352 +518,397 @@ export function PprCalendarAdmin({
             <button className="btn btn-secondary" type="submit">
               Обновить
             </button>
-            <Link href="/ppr/calendar" className="btn btn-ghost">
+            <Link href={`/ppr/calendar?tab=${activeTab}`} className="btn btn-ghost">
               Сбросить
             </Link>
           </div>
         </form>
       </div>
 
-      <div className="section-card grid" style={{ gap: "0.85rem" }}>
-        <div className="grid" style={{ gap: "0.35rem" }}>
-          <strong>Уровень 1. Годовой обзор по группам систем</strong>
-          <span className="text-soft">
-            Обзор нагрузки по месяцам. Ячейки показывают количество работ и часы. Красная точка — есть просроченные работы.
-          </span>
-        </div>
+      {activeTab === "year" && (
+        <>
+          <div className="section-card grid" style={{ gap: "0.85rem" }}>
+            <div className="grid" style={{ gap: "0.35rem" }}>
+              <strong>Уровень 1. Годовой обзор по группам систем</strong>
+              <span className="text-soft">
+                Обзор нагрузки по месяцам. Ячейки показывают количество работ и часы. Красная точка — есть просроченные работы.
+              </span>
+            </div>
 
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: "0 0.5rem", minWidth: "1050px" }}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: "left", padding: "0 0.75rem 0.5rem", fontSize: "0.85rem", color: "var(--text-soft)" }}>Группа систем</th>
-                {Array.from({ length: 12 }, (_, index) => {
-                  const month = `${currentYear}-${String(index + 1).padStart(2, "0")}`;
-                  return (
-                    <th key={month} style={{ textAlign: "center", padding: "0 0.25rem 0.5rem", fontSize: "0.85rem", color: "var(--text-soft)" }}>
-                      {formatMonthLabel(month, "short")}
-                    </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {yearGroupOverview.map((row) => (
-                <tr key={row.system_group_id}>
-                  <td style={{ padding: "0.5rem 0.75rem", verticalAlign: "middle" }}>
-                    <div className="grid" style={{ gap: "0.35rem" }}>
-                      <a
-                        href={buildCalendarHref(filters, { groupId: row.system_group_id, systemId: null })}
-                        style={{ color: "inherit", textDecoration: "none", fontWeight: 600, fontSize: "0.95rem" }}
-                      >
-                        {row.name}
-                      </a>
-                      <span className="text-soft" style={{ fontSize: "0.8rem" }}>
-                        {row.code} • {row.systems_count} систем
-                      </span>
-                    </div>
-                  </td>
-                  {row.months.map((metrics) => (
-                    <td key={`${row.system_group_id}-${metrics.month}`} style={{ padding: "0 0.25rem", height: "1px" }}>
-                      <AnnualMetricCell 
-                        href={buildCalendarHref(filters, { groupId: row.system_group_id, month: metrics.month, systemId: null })} 
-                        metrics={metrics} 
-                        maxHours={globalMaxHours}
-                      />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {selectedGroupId && yearSystemOverview.length ? (
-        <div className="section-card grid" style={{ gap: "0.85rem" }}>
-          <div className="grid" style={{ gap: "0.35rem" }}>
-            <strong>Уровень 2. Годовой обзор по системам внутри группы</strong>
-            <span className="text-soft">
-              Выбрана группа: <strong>{selectedGroup?.name ?? "—"}</strong>. Клик по ячейке открывает дневной календарь выбранного месяца.
-            </span>
-          </div>
-
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: "0 0.5rem", minWidth: "1100px" }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: "left", padding: "0 0.75rem 0.5rem", fontSize: "0.85rem", color: "var(--text-soft)" }}>Система</th>
-                  {Array.from({ length: 12 }, (_, index) => {
-                    const month = `${currentYear}-${String(index + 1).padStart(2, "0")}`;
-                    return (
-                      <th key={month} style={{ textAlign: "center", padding: "0 0.25rem 0.5rem", fontSize: "0.85rem", color: "var(--text-soft)" }}>
-                        {formatMonthLabel(month, "short")}
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {yearSystemOverview.map((row) => (
-                  <tr key={row.system_id}>
-                    <td style={{ padding: "0.5rem 0.75rem", verticalAlign: "middle" }}>
-                      <div className="grid" style={{ gap: "0.35rem" }}>
-                        <a
-                          href={buildCalendarHref(filters, {
-                            groupId: row.system_group_id,
-                            systemId: row.system_id,
-                          })}
-                          style={{ color: "inherit", textDecoration: "none", fontWeight: 600, fontSize: "0.95rem" }}
-                        >
-                          {row.name}
-                        </a>
-                        <span className="text-soft" style={{ fontSize: "0.8rem" }}>
-                          {row.object_name}
-                        </span>
-                      </div>
-                    </td>
-                    {row.months.map((metrics) => (
-                      <td key={`${row.system_id}-${metrics.month}`} style={{ padding: "0 0.25rem", height: "1px" }}>
-                        <AnnualMetricCell
-                          href={buildCalendarHref(filters, {
-                            groupId: row.system_group_id,
-                            systemId: row.system_id,
-                            month: metrics.month,
-                          })}
-                          metrics={metrics}
-                          maxHours={globalMaxHours}
-                        />
-                      </td>
-                    ))}
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: "0 0.5rem", minWidth: "1050px" }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: "left", padding: "0 0.75rem 0.5rem", fontSize: "0.85rem", color: "var(--text-soft)" }}>Группа систем</th>
+                    {Array.from({ length: 12 }, (_, index) => {
+                      const month = `${currentYear}-${String(index + 1).padStart(2, "0")}`;
+                      return (
+                        <th key={month} style={{ textAlign: "center", padding: "0 0.25rem 0.5rem", fontSize: "0.85rem", color: "var(--text-soft)" }}>
+                          {formatMonthLabel(month, "short")}
+                        </th>
+                      );
+                    })}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {yearGroupOverview.map((row) => (
+                    <tr key={row.system_group_id}>
+                      <td style={{ padding: "0.5rem 0.75rem", verticalAlign: "middle" }}>
+                        <div className="grid" style={{ gap: "0.35rem" }}>
+                          <a
+                            href={buildCalendarHref(filters, { groupId: row.system_group_id, systemId: null })}
+                            style={{ color: "inherit", textDecoration: "none", fontWeight: 600, fontSize: "0.95rem" }}
+                          >
+                            {row.name}
+                          </a>
+                          <span className="text-soft" style={{ fontSize: "0.8rem" }}>
+                            {row.code} • {row.systems_count} систем
+                          </span>
+                        </div>
+                      </td>
+                      {row.months.map((metrics) => (
+                        <td key={`${row.system_group_id}-${metrics.month}`} style={{ padding: "0 0.25rem", height: "1px" }}>
+                          <AnnualMetricCell 
+                            href={buildCalendarHref(filters, { groupId: row.system_group_id, month: metrics.month, systemId: null, tab: "month" })} 
+                            metrics={metrics} 
+                            maxHours={globalMaxHours}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      ) : null}
 
-      <div className="section-card grid" style={{ gap: "0.85rem" }}>
-        <div className="grid" style={{ gap: "0.35rem" }}>
-          <strong>Уровень 3. Дневной календарь месяца</strong>
-          <span className="text-soft">
-            Месяц: <strong>{formatMonthLabel(currentMonthInput)}</strong>
-            {selectedGroup ? <> • группа: <strong>{selectedGroup.name}</strong></> : null}
-            {selectedSystem ? <> • система: <strong>{selectedSystem.name}</strong></> : null}
-          </span>
-          <span className="text-soft">
-            Правило переноса зафиксировано: из календаря ППР работа двигается только внутри выбранного месяца. До materialization меняется
-            `ppr_month_plan_item`, после materialization - связанная `ppr_task` с синхронизацией даты обратно в plan items.
-          </span>
-        </div>
-
-        <div className="row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
-          <Badge tone="info">Позиций: {monthTotals.items}</Badge>
-          <Badge tone="violet">Нормо-часы: {formatHours(monthTotals.hours)}</Badge>
-          {monthTotals.materialized ? <Badge tone="warning">В задачах: {monthTotals.materialized}</Badge> : null}
-          {monthTotals.carried ? <Badge tone="warning">Carryover: {monthTotals.carried}</Badge> : null}
-          {monthTotals.overdue ? <Badge tone="danger">Просрочено: {monthTotals.overdue}</Badge> : null}
-        </div>
-      </div>
-
-      <div className="section-card">
-        <form action={generatePprMonthPlanAction} className="row" style={{ gap: "0.75rem", flexWrap: "wrap", alignItems: "end" }}>
-          <label className="grid" style={{ gap: "0.3rem" }}>
-            <span className="text-soft">Сформировать план по системе</span>
-            <select className="select" name="system_id" required defaultValue={selectedSystemId ?? ""}>
-              <option value="" disabled>
-                Выберите систему
-              </option>
-              {filteredSystems.map((system) => (
-                <option key={system.id} value={system.id}>
-                  {resolveName(system.object)} / {system.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <input type="hidden" name="plan_month" value={currentMonthInput} />
-          <button className="btn btn-accent" type="submit">
-            Сформировать месяц
-          </button>
-        </form>
-      </div>
-
-      {!monthPlans.length ? (
-        <EmptyState
-          message="Месячный план ещё не сформирован"
-          hint="Сформируйте план хотя бы для одной системы выбранной области и затем распределите работы по дням."
-        />
-      ) : (
-        <div className="grid" style={{ gap: "0.75rem" }}>
-          {monthPlans.map((plan) => (
-            <div key={plan.id} className="section-card">
+          {selectedGroupId && yearSystemOverview.length ? (
+            <div className="section-card grid" style={{ gap: "0.85rem" }}>
               <div className="grid" style={{ gap: "0.35rem" }}>
-                <div>
-                  <strong>{resolveName(plan.object)}</strong> / {resolveName(plan.system)}
-                </div>
-                <div className="text-soft">Месяц: {new Date(plan.plan_month).toLocaleDateString("ru-RU", { year: "numeric", month: "long" })}</div>
-                <div className="text-soft">Сформирован: {new Date(plan.generated_at).toLocaleString("ru-RU")}</div>
+                <strong>Уровень 2. Годовой обзор по системам внутри группы</strong>
+                <span className="text-soft">
+                  Выбрана группа: <strong>{selectedGroup?.name ?? "—"}</strong>. Клик по ячейке открывает дневной календарь выбранного месяца.
+                </span>
+              </div>
+
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: "0 0.5rem", minWidth: "1100px" }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: "left", padding: "0 0.75rem 0.5rem", fontSize: "0.85rem", color: "var(--text-soft)" }}>Система</th>
+                      {Array.from({ length: 12 }, (_, index) => {
+                        const month = `${currentYear}-${String(index + 1).padStart(2, "0")}`;
+                        return (
+                          <th key={month} style={{ textAlign: "center", padding: "0 0.25rem 0.5rem", fontSize: "0.85rem", color: "var(--text-soft)" }}>
+                            {formatMonthLabel(month, "short")}
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {yearSystemOverview.map((row) => (
+                      <tr key={row.system_id}>
+                        <td style={{ padding: "0.5rem 0.75rem", verticalAlign: "middle" }}>
+                          <div className="grid" style={{ gap: "0.35rem" }}>
+                            <a
+                              href={buildCalendarHref(filters, {
+                                groupId: row.system_group_id,
+                                systemId: row.system_id,
+                              })}
+                              style={{ color: "inherit", textDecoration: "none", fontWeight: 600, fontSize: "0.95rem" }}
+                            >
+                              {row.name}
+                            </a>
+                            <span className="text-soft" style={{ fontSize: "0.8rem" }}>
+                              {row.object_name}
+                            </span>
+                          </div>
+                        </td>
+                        {row.months.map((metrics) => (
+                          <td key={`${row.system_id}-${metrics.month}`} style={{ padding: "0 0.25rem", height: "1px" }}>
+                            <AnnualMetricCell
+                              href={buildCalendarHref(filters, {
+                                groupId: row.system_group_id,
+                                systemId: row.system_id,
+                                month: metrics.month,
+                                tab: "month"
+                              })}
+                              metrics={metrics}
+                              maxHours={globalMaxHours}
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
-          ))}
-        </div>
+          ) : null}
+        </>
       )}
 
-      {!monthPlanItems.length ? (
-        <EmptyState
-          message="Позиций month plan пока нет"
-          hint="После формирования плана здесь появятся позиции по активным назначениям."
-        />
-      ) : (
+      {activeTab === "month" && (
         <>
-          <div className="section-card desktop-only grid" style={{ gap: "0.75rem" }}>
-            <div className="grid" style={{ gap: "0.35rem" }}>
-              <strong>Календарная сетка по дням</strong>
-              <span className="text-soft">Основной operational-слой: инженер распределяет реальную нагрузку по датам месяца.</span>
+          <div className="section-card grid" style={{ gap: "0.85rem" }}>
+            <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
+              <div className="grid" style={{ gap: "0.35rem" }}>
+                <strong>Месячный план</strong>
+                <span className="text-soft">
+                  Месяц: <strong>{formatMonthLabel(currentMonthInput)}</strong>
+                  {selectedGroup ? <> • группа: <strong>{selectedGroup.name}</strong></> : null}
+                  {selectedSystem ? <> • система: <strong>{selectedSystem.name}</strong></> : null}
+                </span>
+              </div>
+              
+              <div className="row desktop-only" style={{ gap: "0.5rem", background: "var(--panel-soft)", padding: "0.25rem", borderRadius: "8px" }}>
+                <button 
+                  type="button"
+                  className={`btn ${monthView === "calendar" ? "btn-secondary" : "btn-ghost"}`}
+                  onClick={() => setMonthView("calendar")}
+                  style={{ padding: "0.25rem 0.75rem", fontSize: "0.85rem" }}
+                >
+                  Календарь
+                </button>
+                <button 
+                  type="button"
+                  className={`btn ${monthView === "list" ? "btn-secondary" : "btn-ghost"}`}
+                  onClick={() => setMonthView("list")}
+                  style={{ padding: "0.25rem 0.75rem", fontSize: "0.85rem" }}
+                >
+                  Список
+                </button>
+              </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: "0.6rem" }}>
-              {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((label) => (
-                <div key={label} className="text-soft" style={{ fontWeight: 600, padding: "0 0.25rem" }}>
-                  {label}
+            <details style={{ background: "var(--panel-soft)", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid var(--line)" }}>
+              <summary style={{ cursor: "pointer", fontWeight: 500, fontSize: "0.85rem", color: "var(--text-soft)" }}>
+                ℹ️ Правила переноса работ
+              </summary>
+              <div className="text-soft" style={{ marginTop: "0.5rem", fontSize: "0.85rem", lineHeight: 1.5 }}>
+                Правило переноса зафиксировано: из календаря ППР работа двигается только внутри выбранного месяца. До materialization меняется `ppr_month_plan_item`, после materialization - связанная `ppr_task` с синхронизацией даты обратно в plan items.
+              </div>
+            </details>
+
+            <div className="row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
+              <Badge tone="info">Позиций: {monthTotals.items}</Badge>
+              <Badge tone="violet">Нормо-часы: {formatHours(monthTotals.hours)}</Badge>
+              {monthTotals.materialized ? <Badge tone="warning">В задачах: {monthTotals.materialized}</Badge> : null}
+              {monthTotals.carried ? <Badge tone="warning">Carryover: {monthTotals.carried}</Badge> : null}
+              {monthTotals.overdue ? <Badge tone="danger">Просрочено: {monthTotals.overdue}</Badge> : null}
+            </div>
+          </div>
+
+          <details className="section-card" style={{ padding: "0.75rem" }}>
+            <summary style={{ cursor: "pointer", fontWeight: 600, userSelect: "none" }}>
+              Управление планами систем
+            </summary>
+            <div className="grid" style={{ gap: "1rem", marginTop: "1rem" }}>
+              <form action={generatePprMonthPlanAction} className="row" style={{ gap: "0.75rem", flexWrap: "wrap", alignItems: "end" }}>
+                <label className="grid" style={{ gap: "0.3rem" }}>
+                  <span className="text-soft">Сформировать план по системе</span>
+                  <select className="select" name="system_id" required defaultValue={selectedSystemId ?? ""}>
+                    <option value="" disabled>
+                      Выберите систему
+                    </option>
+                    {filteredSystems.map((system) => (
+                      <option key={system.id} value={system.id}>
+                        {resolveName(system.object)} / {system.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <input type="hidden" name="plan_month" value={currentMonthInput} />
+                <button className="btn btn-accent" type="submit">
+                  Сформировать месяц
+                </button>
+              </form>
+
+              {!monthPlans.length ? (
+                <div className="text-soft" style={{ fontSize: "0.85rem" }}>
+                  Месячный план ещё не сформирован. Сформируйте план хотя бы для одной системы.
                 </div>
-              ))}
-
-              {monthCells.map((cell, index) =>
-                cell ? (
-                  <div
-                    key={cell.isoDate}
-                    style={{
-                      minHeight: "120px",
-                      display: "grid",
-                      alignContent: "start",
-                      gap: "0.35rem",
-                      padding: "0.5rem",
-                      borderRadius: "8px",
-                      border: "1px solid var(--line)",
-                      background: cell.items.length
-                        ? "color-mix(in srgb, var(--panel-soft) 42%, transparent)"
-                        : "transparent",
-                    }}
-                  >
-                    <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.2rem" }}>
-                      <span style={{ fontWeight: 600, fontSize: "0.9rem", color: countMonthHours(cell.items) > 8 ? "var(--danger)" : "inherit" }}>
-                        {cell.dayNumber}
-                      </span>
-                      {cell.items.length > 0 && (
-                        <div className="row" style={{ gap: "0.3rem", alignItems: "center" }}>
-                          <span className="text-soft" style={{ fontSize: "0.7rem", color: countMonthHours(cell.items) > 8 ? "var(--danger)" : "inherit" }}>
-                            {formatHours(countMonthHours(cell.items))} ч
-                          </span>
-                          <Badge tone={cell.items.some((item) => item.is_overdue) ? "danger" : "neutral"}>
-                            {cell.items.length}
-                          </Badge>
+              ) : (
+                <div className="grid" style={{ gap: "0.5rem" }}>
+                  <strong style={{ fontSize: "0.85rem" }}>Сформированные планы:</strong>
+                  <div className="grid" style={{ gap: "0.5rem" }}>
+                    {monthPlans.map((plan) => (
+                      <div key={plan.id} style={{ padding: "0.5rem", background: "var(--panel-soft)", borderRadius: "6px", border: "1px solid var(--line)" }}>
+                        <div className="grid" style={{ gap: "0.2rem" }}>
+                          <div style={{ fontSize: "0.85rem" }}>
+                            <strong>{resolveName(plan.object)}</strong> / {resolveName(plan.system)}
+                          </div>
+                          <div className="text-soft" style={{ fontSize: "0.75rem" }}>
+                            Сформирован: {new Date(plan.generated_at).toLocaleString("ru-RU")}
+                          </div>
                         </div>
-                      )}
-                    </div>
-
-                    <div className="grid" style={{ gap: "0.3rem" }}>
-                      {cell.items.map((item) => (
-                        <CompactWorkItemCard key={item.id} item={item} onEdit={setEditingItemId} />
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </div>
-                ) : (
-                  <div key={`empty-${index}`} style={{ minHeight: "120px" }} />
-                )
+                </div>
               )}
             </div>
-          </div>
+          </details>
 
-          <div className="desktop-only">
-            <DataTable
-              columns={[
-                { key: "system", label: "Система" },
-                { key: "equipment", label: "Оборудование" },
-                { key: "template", label: "Шаблон" },
-                { key: "source", label: "Исходная дата" },
-                { key: "planned", label: "Плановая дата" },
-                { key: "status", label: "Статус" },
-                { key: "actions", label: "Действия" },
-              ]}
-            >
-              {monthPlanItems.map((item) => {
-                const statusMeta = pprMonthPlanItemStatusMeta[item.status];
-                const task = resolveTask(item.task);
-                const template = resolveTemplate(item.template);
-                return (
-                  <tr key={item.id}>
-                    <td>{resolveName(item.system)}</td>
-                    <td>{resolveEquipment(item.equipment)}</td>
-                    <td>
-                      {template?.name ?? "—"}
-                      {template?.norm_hours !== null && template?.norm_hours !== undefined ? (
-                        <div className="text-soft">{formatHours(template.norm_hours)} ч</div>
-                      ) : null}
-                    </td>
-                    <td>{formatDate(item.source_due_date)}</td>
-                    <td>{formatDate(item.planned_for)}</td>
-                    <td>
-                      <div className="row" style={{ gap: "0.4rem", flexWrap: "wrap" }}>
-                        <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>
-                        {item.is_carried_over ? <Badge tone="warning">Carryover</Badge> : null}
-                        {task ? <Badge tone={pprTaskStatusMeta[task.status].tone}>{pprTaskStatusMeta[task.status].label}</Badge> : null}
+          {!monthPlanItems.length ? (
+            <EmptyState
+              message="Позиций month plan пока нет"
+              hint="После формирования плана здесь появятся позиции по активным назначениям."
+            />
+          ) : (
+            <>
+              {monthView === "calendar" ? (
+                <div className="section-card desktop-only grid" style={{ gap: "0.75rem" }}>
+                  <div className="grid" style={{ gap: "0.35rem" }}>
+                    <strong>Календарная сетка по дням</strong>
+                    <span className="text-soft">Основной operational-слой: инженер распределяет реальную нагрузку по датам месяца.</span>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: "0.6rem" }}>
+                    {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((label) => (
+                      <div key={label} className="text-soft" style={{ fontWeight: 600, padding: "0 0.25rem" }}>
+                        {label}
                       </div>
-                    </td>
-                    <td>
-                      <div className="ppr-table-actions">
-                        <button
-                          className="btn btn-ghost ppr-action-btn"
-                          type="button"
-                          disabled={!canRescheduleFromCalendar(item)}
-                          onClick={() => setEditingItemId(item.id)}
+                    ))}
+
+                    {monthCells.map((cell, index) =>
+                      cell ? (
+                        <div
+                          key={cell.isoDate}
+                          style={{
+                            minHeight: "120px",
+                            display: "grid",
+                            alignContent: "start",
+                            gap: "0.35rem",
+                            padding: "0.5rem",
+                            borderRadius: "8px",
+                            border: "1px solid var(--line)",
+                            background: cell.items.length
+                              ? "color-mix(in srgb, var(--panel-soft) 42%, transparent)"
+                              : "transparent",
+                          }}
                         >
-                          Перенести
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </DataTable>
-          </div>
+                          <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.2rem" }}>
+                            <span style={{ fontWeight: 600, fontSize: "0.9rem", color: countMonthHours(cell.items) > 8 ? "var(--danger)" : "inherit" }}>
+                              {cell.dayNumber}
+                            </span>
+                            {cell.items.length > 0 && (
+                              <div className="row" style={{ gap: "0.3rem", alignItems: "center" }}>
+                                <span className="text-soft" style={{ fontSize: "0.7rem", color: countMonthHours(cell.items) > 8 ? "var(--danger)" : "inherit" }}>
+                                  {formatHours(countMonthHours(cell.items))} ч
+                                </span>
+                                <Badge tone={cell.items.some((item) => item.is_overdue) ? "danger" : "neutral"}>
+                                  {cell.items.length}
+                                </Badge>
+                              </div>
+                            )}
+                          </div>
 
-          <div className="mobile-cards mobile-only">
-            {monthPlanItems.map((item) => {
-              const statusMeta = pprMonthPlanItemStatusMeta[item.status];
-              const task = resolveTask(item.task);
-              const template = resolveTemplate(item.template);
-              return (
-                <div key={item.id} className="section-card mobile-card">
-                  <div className="grid" style={{ gap: "0.45rem" }}>
-                    <div>{resolveEquipment(item.equipment)}</div>
-                    <div className="text-soft">Система: {resolveName(item.system)}</div>
-                    <div className="text-soft">
-                      Шаблон: {template?.name ?? "—"}
-                      {template?.norm_hours !== null && template?.norm_hours !== undefined ? ` • ${formatHours(template.norm_hours)} ч` : ""}
-                    </div>
-                    <div className="text-soft">Исходная дата: {formatDate(item.source_due_date)}</div>
-                    <div className="text-soft">Плановая дата: {formatDate(item.planned_for)}</div>
-                    <div className="row" style={{ gap: "0.4rem", flexWrap: "wrap" }}>
-                      <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>
-                      {task ? <Badge tone={pprTaskStatusMeta[task.status].tone}>{pprTaskStatusMeta[task.status].label}</Badge> : null}
-                    </div>
-                    <div className="ppr-table-actions">
-                      <button
-                        className="btn btn-ghost ppr-action-btn"
-                        type="button"
-                        disabled={!canRescheduleFromCalendar(item)}
-                        onClick={() => setEditingItemId(item.id)}
-                      >
-                        Перенести
-                      </button>
-                    </div>
+                          <div className="grid" style={{ gap: "0.3rem" }}>
+                            {cell.items.map((item) => (
+                              <CompactWorkItemCard key={item.id} item={item} onEdit={setEditingItemId} />
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div key={`empty-${index}`} style={{ minHeight: "120px" }} />
+                      )
+                    )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              ) : (
+                <div className="desktop-only">
+                  <DataTable
+                    columns={[
+                      { key: "system", label: "Система" },
+                      { key: "equipment", label: "Оборудование" },
+                      { key: "template", label: "Шаблон" },
+                      { key: "source", label: "Исходная дата" },
+                      { key: "planned", label: "Плановая дата" },
+                      { key: "status", label: "Статус" },
+                      { key: "actions", label: "Действия" },
+                    ]}
+                  >
+                    {monthPlanItems.map((item) => {
+                      const statusMeta = pprMonthPlanItemStatusMeta[item.status];
+                      const task = resolveTask(item.task);
+                      const template = resolveTemplate(item.template);
+                      return (
+                        <tr key={item.id}>
+                          <td>{resolveName(item.system)}</td>
+                          <td>{resolveEquipment(item.equipment)}</td>
+                          <td>
+                            {template?.name ?? "—"}
+                            {template?.norm_hours !== null && template?.norm_hours !== undefined ? (
+                              <div className="text-soft">{formatHours(template.norm_hours)} ч</div>
+                            ) : null}
+                          </td>
+                          <td>{formatDate(item.source_due_date)}</td>
+                          <td>{formatDate(item.planned_for)}</td>
+                          <td>
+                            <div className="row" style={{ gap: "0.4rem", flexWrap: "wrap" }}>
+                              <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>
+                              {item.is_carried_over ? <Badge tone="warning">Carryover</Badge> : null}
+                              {task ? <Badge tone={pprTaskStatusMeta[task.status].tone}>{pprTaskStatusMeta[task.status].label}</Badge> : null}
+                            </div>
+                          </td>
+                          <td>
+                            <div className="ppr-table-actions">
+                              <button
+                                className="btn btn-ghost ppr-action-btn"
+                                type="button"
+                                disabled={!canRescheduleFromCalendar(item)}
+                                onClick={() => setEditingItemId(item.id)}
+                              >
+                                Перенести
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </DataTable>
+                </div>
+              )}
+
+              <div className="mobile-cards mobile-only">
+                {monthPlanItems.map((item) => {
+                  const statusMeta = pprMonthPlanItemStatusMeta[item.status];
+                  const task = resolveTask(item.task);
+                  const template = resolveTemplate(item.template);
+                  return (
+                    <div key={item.id} className="section-card mobile-card">
+                      <div className="grid" style={{ gap: "0.45rem" }}>
+                        <div>{resolveEquipment(item.equipment)}</div>
+                        <div className="text-soft">Система: {resolveName(item.system)}</div>
+                        <div className="text-soft">
+                          Шаблон: {template?.name ?? "—"}
+                          {template?.norm_hours !== null && template?.norm_hours !== undefined ? ` • ${formatHours(template.norm_hours)} ч` : ""}
+                        </div>
+                        <div className="text-soft">Исходная дата: {formatDate(item.source_due_date)}</div>
+                        <div className="text-soft">Плановая дата: {formatDate(item.planned_for)}</div>
+                        <div className="row" style={{ gap: "0.4rem", flexWrap: "wrap" }}>
+                          <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>
+                          {task ? <Badge tone={pprTaskStatusMeta[task.status].tone}>{pprTaskStatusMeta[task.status].label}</Badge> : null}
+                        </div>
+                        <div className="ppr-table-actions">
+                          <button
+                            className="btn btn-ghost ppr-action-btn"
+                            type="button"
+                            disabled={!canRescheduleFromCalendar(item)}
+                            onClick={() => setEditingItemId(item.id)}
+                          >
+                            Перенести
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </>
       )}
 

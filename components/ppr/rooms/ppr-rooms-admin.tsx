@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createObjectRoomAction, updateObjectRoomAction } from "@/app/actions/object-room-actions";
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PprModal, PprFormGroup } from "@/components/ppr/ui/ppr-modal";
+import { DirectoryToolbar } from "@/components/ppr/ui/directory-toolbar";
+import { DirectorySummary } from "@/components/ppr/ui/directory-summary";
+import { StatusBadge } from "@/components/ppr/ui/status-badge";
 
 type RoomRow = {
   id: string;
@@ -29,39 +32,147 @@ export function PprRoomsAdmin({ rooms, objects }: { rooms: RoomRow[]; objects: O
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
 
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterObjectId, setFilterObjectId] = useState("");
+  const [filterFloor, setFilterFloor] = useState("");
+  const [filterStatus, setFilterStatus] = useState<"all" | "active" | "inactive">("all");
+
   const editingRoom = editingId ? rooms.find((item) => item.id === editingId) ?? null : null;
 
+  // Collect unique floors for filter
+  const uniqueFloors = useMemo(() => {
+    const floors = new Set<string>();
+    rooms.forEach((room) => {
+      if (room.floor) floors.add(room.floor);
+    });
+    return Array.from(floors).sort();
+  }, [rooms]);
+
+  // Filter logic
+  const filteredRooms = useMemo(() => {
+    return rooms.filter((room) => {
+      const matchesSearch = searchTerm === "" || room.name.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesObject = filterObjectId === "" || room.object_id === filterObjectId;
+      const matchesFloor = filterFloor === "" || room.floor === filterFloor;
+      const matchesStatus =
+        filterStatus === "all" ||
+        (filterStatus === "active" && room.is_active) ||
+        (filterStatus === "inactive" && !room.is_active);
+
+      return matchesSearch && matchesObject && matchesFloor && matchesStatus;
+    }).sort((a, b) => {
+      // Sort by Object -> Floor -> Name
+      const objectA = resolveName(a.object);
+      const objectB = resolveName(b.object);
+      if (objectA !== objectB) return objectA.localeCompare(objectB);
+      
+      const floorA = a.floor || "";
+      const floorB = b.floor || "";
+      if (floorA !== floorB) return floorA.localeCompare(floorB, undefined, { numeric: true });
+      
+      return a.name.localeCompare(b.name);
+    });
+  }, [rooms, searchTerm, filterObjectId, filterFloor, filterStatus]);
+
+  // Summary metrics
+  const metrics = useMemo(() => {
+    const total = rooms.length;
+    
+    // Most populated floor
+    const floorCounts = rooms.reduce((acc, room) => {
+      const floor = room.floor || "Без этажа";
+      acc[floor] = (acc[floor] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    const topFloor = Object.entries(floorCounts)
+      .sort(([, a], [, b]) => b - a)[0];
+
+    return [
+      { label: "Всего помещений", value: total, tone: "neutral" as const },
+      { 
+        label: "Больше всего помещений", 
+        value: topFloor ? `${topFloor[0]} (${topFloor[1]})` : "—", 
+        tone: "info" as const 
+      },
+    ];
+  }, [rooms]);
+
   return (
-    <>
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-        <div className="text-soft">Общий справочник помещений уровня объекта. Его используют ППР и будущие обходы.</div>
+    <div className="grid" style={{ gap: "1.5rem" }}>
+      <DirectorySummary metrics={metrics} />
+
+      <DirectoryToolbar onSearch={setSearchTerm} searchPlaceholder="Поиск по названию...">
+        <select
+          className="select"
+          value={filterObjectId}
+          onChange={(e) => setFilterObjectId(e.target.value)}
+          style={{ maxWidth: "200px" }}
+        >
+          <option value="">Все объекты</option>
+          {objects.map((obj) => (
+            <option key={obj.id} value={obj.id}>
+              {obj.name}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className="select"
+          value={filterFloor}
+          onChange={(e) => setFilterFloor(e.target.value)}
+          style={{ maxWidth: "150px" }}
+        >
+          <option value="">Все этажи</option>
+          {uniqueFloors.map((floor) => (
+            <option key={floor} value={floor}>
+              {floor}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className="select"
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value as any)}
+          style={{ maxWidth: "150px" }}
+        >
+          <option value="all">Все статусы</option>
+          <option value="active">Активные</option>
+          <option value="inactive">Неактивные</option>
+        </select>
+
         <button className="btn btn-accent" type="button" onClick={() => setIsCreateOpen(true)} disabled={!objects.length}>
-          + Добавить помещение
+          + Добавить
         </button>
-      </div>
+      </DirectoryToolbar>
 
       {!objects.length ? (
         <EmptyState message="Нет доступных объектов" hint="Чтобы добавить помещение, сначала нужен доступ хотя бы к одному объекту." />
-      ) : !rooms.length ? (
-        <EmptyState message="Помещения пока не созданы" hint="Создайте первое помещение для доступного объекта." />
+      ) : !filteredRooms.length ? (
+        <EmptyState 
+          message="Помещения не найдены" 
+          hint={rooms.length ? "Попробуйте изменить параметры фильтрации." : "Создайте первое помещение для доступного объекта."} 
+        />
       ) : (
         <>
           <div className="desktop-only">
             <DataTable
               columns={[
-                { key: "object", label: "Объект" },
                 { key: "name", label: "Помещение" },
+                { key: "object", label: "Объект" },
                 { key: "floor", label: "Этаж" },
                 { key: "status", label: "Статус" },
                 { key: "actions", label: "Действия" },
               ]}
             >
-              {rooms.map((room) => (
+              {filteredRooms.map((room) => (
                 <tr key={room.id}>
+                  <td style={{ fontWeight: 600 }}>{room.name}</td>
                   <td>{resolveName(room.object)}</td>
-                  <td>{room.name}</td>
                   <td>{room.floor ?? "—"}</td>
-                  <td>{room.is_active ? "Активно" : "Отключено"}</td>
+                  <td><StatusBadge isActive={room.is_active} /></td>
                   <td>
                     <div className="ppr-table-actions">
                       <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(room.id)}>
@@ -75,13 +186,13 @@ export function PprRoomsAdmin({ rooms, objects }: { rooms: RoomRow[]; objects: O
           </div>
 
           <div className="mobile-cards mobile-only">
-            {rooms.map((room) => (
+            {filteredRooms.map((room) => (
               <div key={room.id} className="section-card mobile-card">
                 <div className="grid" style={{ gap: "0.45rem" }}>
-                  <div>{room.name}</div>
+                  <div style={{ fontWeight: 600 }}>{room.name}</div>
                   <div className="text-soft">Объект: {resolveName(room.object)}</div>
                   <div className="text-soft">Этаж: {room.floor ?? "—"}</div>
-                  <div className="text-soft">{room.is_active ? "Активно" : "Отключено"}</div>
+                  <div><StatusBadge isActive={room.is_active} /></div>
                   <div className="ppr-table-actions">
                     <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(room.id)}>
                       Изменить
@@ -168,6 +279,6 @@ export function PprRoomsAdmin({ rooms, objects }: { rooms: RoomRow[]; objects: O
           </form>
         ) : null}
       </PprModal>
-    </>
+    </div>
   );
 }
