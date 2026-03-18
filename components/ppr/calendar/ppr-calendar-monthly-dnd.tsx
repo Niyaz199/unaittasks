@@ -188,11 +188,6 @@ function formatHours(value: number) {
   return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 }).format(value);
 }
 
-function formatTemplateLabel(name: string | undefined, limit = 18) {
-  if (!name) return "Работа";
-  return name.length > limit ? `${name.slice(0, limit - 1)}…` : name;
-}
-
 function buildCalendarHref(current: CalendarFilters, patch: FilterPatch = {}) {
   const next: CalendarFilters = {
     year: patch.year ?? current.year,
@@ -340,24 +335,29 @@ function AnnualMetricCell({
         .join("\n")}
       style={{
         display: "grid",
-        gap: "0.25rem",
-        padding: "0.7rem",
-        borderRadius: "10px",
+        gap: "0.15rem",
+        padding: "0.55rem 0.6rem",
+        borderRadius: "8px",
         border: `1px solid ${isEmpty ? "var(--line)" : `color-mix(in srgb, var(--${tone}) 20%, var(--line))`}`,
         background: isEmpty ? "var(--panel)" : `color-mix(in srgb, var(--${tone}) ${opacityPercent}%, var(--panel))`,
         color: "inherit",
         textDecoration: "none",
-        minHeight: "82px",
-        alignContent: "space-between",
+        minHeight: "68px",
+        alignContent: "center",
       }}
     >
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", gap: "0.5rem" }}>
-        <span style={{ fontSize: "1rem", fontWeight: 700 }}>{isEmpty ? "—" : `${formatHours(metrics.norm_hours_total)} ч`}</span>
-        {!isEmpty ? <span className="text-soft" style={{ fontSize: "0.72rem" }}>{metrics.items_count} поз.</span> : null}
-      </div>
-      <span className="text-soft" style={{ fontSize: "0.68rem" }}>
-        {isEmpty ? "Нет запланированной нагрузки" : "Плановая нагрузка месяца"}
-      </span>
+      {isEmpty ? (
+        <span style={{ fontSize: "0.95rem", fontWeight: 700, textAlign: "center", opacity: 0.55 }}>—</span>
+      ) : (
+        <>
+          <span style={{ fontSize: "0.98rem", fontWeight: 700, textAlign: "center", lineHeight: 1.1 }}>
+            {formatHours(metrics.norm_hours_total)} ч
+          </span>
+          <span className="text-soft" style={{ fontSize: "0.7rem", textAlign: "center", lineHeight: 1.05 }}>
+            {metrics.items_count} поз.
+          </span>
+        </>
+      )}
     </a>
   );
 }
@@ -378,6 +378,8 @@ function DraggableWorkChip({
   const template = resolveTemplate(item.template);
   const task = resolveTask(item.task);
   const canReschedule = canRescheduleFromCalendar(item);
+  const hoursLabel = template?.norm_hours ? `${formatHours(template.norm_hours)} ч` : "—";
+  const statusLabel = task ? pprTaskStatusMeta[task.status].label : pprMonthPlanItemStatusMeta[item.status].label;
 
   return (
     <button
@@ -393,33 +395,32 @@ function DraggableWorkChip({
       onDragEnd={onDragEnd}
       title={[
         template?.name ?? "Работа",
+        `Часы: ${hoursLabel}`,
+        `Статус: ${statusLabel}`,
         `План: ${formatDate(item.planned_for)}`,
         canReschedule ? "Перетащите на другой день месяца" : "Перенос недоступен для текущего статуса",
       ].join("\n")}
       style={{
-        width: "100%",
-        display: "grid",
-        gap: "0.12rem",
-        padding: "0.36rem 0.46rem 0.36rem 0.55rem",
-        borderRadius: "9px",
-        border: "1px solid color-mix(in srgb, var(--line) 88%, transparent)",
-        background: isDragging ? "color-mix(in srgb, var(--info) 10%, var(--panel))" : "color-mix(in srgb, var(--panel-soft) 75%, var(--panel))",
-        borderLeft: `3px solid ${canReschedule ? "var(--info)" : "var(--line)"}`,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minWidth: "0",
+        padding: "0.2rem 0.35rem",
+        borderRadius: "999px",
+        border: "1px solid color-mix(in srgb, var(--line) 80%, transparent)",
+        background: isDragging ? "color-mix(in srgb, var(--info) 12%, var(--panel))" : "color-mix(in srgb, var(--panel-soft) 55%, var(--panel))",
         color: "inherit",
-        textAlign: "left",
+        textAlign: "center",
         cursor: canReschedule ? (isDragging ? "grabbing" : "grab") : "pointer",
         opacity: isDragging ? 0.45 : 1,
-        boxShadow: canReschedule ? "0 1px 0 color-mix(in srgb, var(--line) 45%, transparent)" : "none",
+        boxShadow: canReschedule ? "0 1px 0 color-mix(in srgb, var(--line) 30%, transparent)" : "none",
+        fontSize: "0.67rem",
+        fontWeight: 700,
+        lineHeight: 1.1,
+        whiteSpace: "nowrap",
       }}
     >
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "0.35rem" }}>
-        <span style={{ fontSize: "0.74rem", fontWeight: 700, lineHeight: 1.1 }}>{formatTemplateLabel(template?.name)}</span>
-        {canReschedule ? <span className="text-soft" style={{ fontSize: "0.62rem" }}>drag</span> : null}
-      </div>
-      <span className="text-soft" style={{ fontSize: "0.67rem", lineHeight: 1.1 }}>
-        {template?.norm_hours ? `${formatHours(template.norm_hours)} ч` : "Без часов"}
-        {task ? " • заявка" : ""}
-      </span>
+      {hoursLabel}
     </button>
   );
 }
@@ -608,7 +609,7 @@ function MonthlyDnDGrid({
       </div>
 
       <div style={{ overflow: "auto", border: "1px solid var(--line)", borderRadius: "14px" }}>
-        <table style={{ width: "100%", minWidth: `${280 + days.length * 76}px`, borderCollapse: "separate", borderSpacing: 0 }}>
+        <table style={{ width: "100%", minWidth: `${280 + days.length * 64}px`, borderCollapse: "separate", borderSpacing: 0 }}>
           <thead>
             <tr>
               <th
@@ -638,15 +639,15 @@ function MonthlyDnDGrid({
                       position: "sticky",
                       top: 0,
                       zIndex: 4,
-                      minWidth: "76px",
+                      minWidth: "64px",
                       background: `color-mix(in srgb, var(--${tone}) 6%, var(--panel))`,
                       textAlign: "center",
-                      padding: "0.45rem 0.25rem",
+                      padding: "0.35rem 0.2rem",
                       borderBottom: "1px solid var(--line)",
                       borderRight: "1px solid var(--line)",
                     }}
                   >
-                    <div style={{ fontSize: "0.9rem", fontWeight: 700 }}>{day.dayNumber}</div>
+                    <div style={{ fontSize: "0.84rem", fontWeight: 700 }}>{day.dayNumber}</div>
                     <div className="text-soft" style={{ fontSize: "0.64rem" }}>
                       {summary.itemsCount ? `${summary.itemsCount}` : "—"}
                     </div>
@@ -732,8 +733,8 @@ function MonthlyDnDGrid({
                         clearDragState();
                       }}
                       style={{
-                        minWidth: "76px",
-                        padding: "0.28rem",
+                        minWidth: "64px",
+                        padding: "0.18rem",
                         verticalAlign: "top",
                         borderBottom: "1px solid var(--line)",
                         borderRight: "1px solid var(--line)",
@@ -744,7 +745,7 @@ function MonthlyDnDGrid({
                       }}
                     >
                       {cellItems.length ? (
-                        <div className="grid" style={{ gap: "0.22rem" }}>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.18rem", alignContent: "flex-start" }}>
                           {cellItems.map((item) => (
                             <DraggableWorkChip
                               key={item.id}
@@ -764,18 +765,18 @@ function MonthlyDnDGrid({
                           ))}
                         </div>
                       ) : (
-                        <div
+                        <span
                           className="text-soft"
                           style={{
-                            minHeight: "34px",
-                            fontSize: "0.68rem",
                             display: "grid",
+                            minHeight: "20px",
                             placeItems: "center",
-                            opacity: dragState && dragState.equipmentId === row.equipmentId && dragState.sourceDate !== day.isoDate ? 0.8 : 0.35,
+                            fontSize: "0.68rem",
+                            opacity: dragState && dragState.equipmentId === row.equipmentId && dragState.sourceDate !== day.isoDate ? 0.65 : 0.35,
                           }}
                         >
-                          {isValidTarget ? "drop" : "—"}
-                        </div>
+                          —
+                        </span>
                       )}
                     </td>
                   );
@@ -1010,8 +1011,8 @@ export function PprCalendarAdmin({
 
   return (
     <>
-      <div className="section-card sticky-toolbar" style={{ padding: activeTab === "month" ? "0.75rem" : "0.9rem", position: "sticky", top: "1rem", zIndex: 10 }}>
-        <div className="grid" style={{ gap: activeTab === "month" ? "0.65rem" : "0.85rem" }}>
+      <div className="section-card sticky-toolbar" style={{ padding: activeTab === "month" ? "0.75rem" : "0.7rem", position: "sticky", top: "1rem", zIndex: 10 }}>
+        <div className="grid" style={{ gap: activeTab === "month" ? "0.65rem" : "0.6rem" }}>
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
             <div className="row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
               <button type="button" className={`btn ${activeTab === "year" ? "btn-accent" : "btn-ghost"}`} onClick={() => handleTabChange("year")}>
@@ -1023,8 +1024,7 @@ export function PprCalendarAdmin({
             </div>
             {activeTab === "year" ? (
               <div className="row" style={{ gap: "0.4rem", flexWrap: "wrap" }}>
-                <Badge tone="info">Годовой обзор нагрузки</Badge>
-                <Badge tone="neutral">Часы + позиции</Badge>
+                <Badge tone="info">Годовой обзор</Badge>
                 <Badge tone={yearScreen === "groups" ? "info" : "neutral"}>
                   {yearScreen === "groups" ? "Уровень 1: группы" : "Уровень 2: системы"}
                 </Badge>
@@ -1043,13 +1043,12 @@ export function PprCalendarAdmin({
               <div className="row" style={{ gap: "0.45rem", flexWrap: "wrap" }}>
                 {selectedObject ? <Badge tone="neutral">Объект: {selectedObject.name}</Badge> : null}
                 {selectedGroup ? <Badge tone="neutral">Группа: {selectedGroup.name}</Badge> : null}
-                {selectedSystem ? <Badge tone="neutral">Система: {selectedSystem.name}</Badge> : null}
-                <Badge tone="info">Обзор нагрузки</Badge>
+                <Badge tone="neutral">Часы + позиции</Badge>
               </div>
 
               <form method="get" className="grid" style={{ gap: "0.75rem" }}>
                 <input type="hidden" name="tab" value={activeTab} />
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "0.75rem" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "0.55rem" }}>
                   <label className="grid" style={{ gap: "0.3rem" }}>
                     <span className="text-soft" style={{ fontSize: "0.8rem" }}>Год обзора</span>
                     <input className="input" type="number" min={2024} max={2100} name="year" defaultValue={currentYear} />
@@ -1094,7 +1093,7 @@ export function PprCalendarAdmin({
                 </div>
 
                 <div className="row" style={{ gap: "0.5rem", justifyContent: "flex-end", flexWrap: "wrap" }}>
-                  <button className="btn btn-secondary" type="submit">
+                  <button className="btn btn-secondary" type="submit" style={{ paddingInline: "0.85rem" }}>
                     Применить
                   </button>
                   <a href={`/ppr/calendar?tab=${activeTab}`} className="btn btn-ghost">
@@ -1166,16 +1165,15 @@ export function PprCalendarAdmin({
               <DirectorySummary
                 metrics={[
                   { label: "Групп в обзоре", value: yearGroupOverview.length, tone: "info" },
-                  { label: "Плановых позиций за год", value: yearSummary.positions, tone: "violet" },
                   { label: "Суммарные нормо-часы", value: `${formatHours(yearSummary.totalHours)} ч`, tone: "info" },
-                  { label: "Режим", value: "Плановый обзор", tone: "neutral" },
+                  { label: "Плановых позиций", value: yearSummary.positions, tone: "neutral" },
                 ]}
               />
 
               <div className="section-card grid" style={{ gap: "0.9rem" }}>
                 <div className="grid" style={{ gap: "0.35rem" }}>
                   <strong>Уровень 1. Годовой обзор по группам систем</strong>
-                  <span className="text-soft">Это самостоятельный обзорный шаг. Выберите группу или месяц, чтобы перейти на следующий уровень drill-down по системам.</span>
+                  <span className="text-soft">Группы систем и плановая нагрузка по месяцам.</span>
                 </div>
 
                 <div style={{ overflowX: "auto" }}>
@@ -1209,7 +1207,7 @@ export function PprCalendarAdmin({
                                 {row.name}
                               </a>
                               <span className="text-soft" style={{ fontSize: "0.8rem" }}>
-                                {row.code} • {row.systems_count} систем • {formatHours(row.totals.norm_hours_total)} ч
+                                {row.code} • {row.systems_count} систем
                               </span>
                             </div>
                           </td>
@@ -1238,11 +1236,11 @@ export function PprCalendarAdmin({
             <div className="section-card grid" style={{ gap: "0.9rem" }}>
               <div className="grid" style={{ gap: "0.6rem" }}>
                 <div className="row" style={{ gap: "0.4rem", flexWrap: "wrap", alignItems: "center" }}>
-                  <Badge tone="neutral">Календарь ППР</Badge>
+                  <span className="text-soft" style={{ fontSize: "0.82rem" }}>Календарь ППР</span>
                   <span className="text-soft">/</span>
-                  <Badge tone="info">Группы систем</Badge>
+                  <span className="text-soft" style={{ fontSize: "0.82rem" }}>Группы систем</span>
                   <span className="text-soft">/</span>
-                  <Badge tone="violet">{selectedGroup?.name ?? "Выбранная группа"}</Badge>
+                  <strong style={{ fontSize: "0.88rem" }}>{selectedGroup?.name ?? "Выбранная группа"}</strong>
                 </div>
 
                 <div className="grid" style={{ gap: "0.35rem" }}>
@@ -1250,7 +1248,7 @@ export function PprCalendarAdmin({
                     <div className="grid" style={{ gap: "0.35rem" }}>
                       <strong>Уровень 2. Годовой обзор по системам внутри группы</strong>
                       <span className="text-soft">
-                        Это отдельный шаг drill-down. Здесь показаны только системы группы <strong>{selectedGroup?.name ?? "—"}</strong> и помесячная нагрузка по ним.
+                        Системы выбранной группы и плановая нагрузка по месяцам.
                       </span>
                     </div>
                     <a href={backToGroupsHref} className="btn btn-ghost">
@@ -1267,11 +1265,6 @@ export function PprCalendarAdmin({
                   {
                     label: "Суммарные часы группы",
                     value: `${formatHours(yearSystemOverview.reduce((sum, row) => sum + row.totals.norm_hours_total, 0))} ч`,
-                    tone: "violet",
-                  },
-                  {
-                    label: "Следующий шаг",
-                    value: formatMonthLabel(currentMonthInput, "long"),
                     tone: "neutral",
                   },
                 ]}
@@ -1308,7 +1301,7 @@ export function PprCalendarAdmin({
                               {row.name}
                             </a>
                             <span className="text-soft" style={{ fontSize: "0.8rem" }}>
-                              {row.object_name} • {formatHours(row.totals.norm_hours_total)} ч
+                              {row.object_name}
                             </span>
                           </div>
                         </td>
