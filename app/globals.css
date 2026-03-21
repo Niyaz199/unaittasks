@@ -2698,6 +2698,16 @@ textarea {
 }
 
 /* =========================================================
+   PPR Calendar
+   ========================================================= */
+.annual-row {
+  transition: background 0.15s ease;
+}
+.annual-row:hover {
+  background: color-mix(in srgb, var(--panel-soft) 50%, transparent);
+}
+
+/* =========================================================
    PPR Dashboard Home
    ========================================================= */
 
@@ -3050,6 +3060,14 @@ textarea {
   padding: 0 !important;
   overflow: hidden !important;
   max-height: calc(100vh - 4rem) !important;
+}
+
+.ppr-drawer-content {
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  height: 100% !important;
 }
 
 .ppr-modal-header {

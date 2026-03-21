@@ -1,218 +1,484 @@
-# Функции системы
+# Возможности системы
 
-Список реализованных функций с указанием путей к коду.
+> Документ фиксирует реализованные возможности и текущие ограничения. Он согласован с `README.md`, но более подробно разделяет функции по модулям и отмечает частичную реализацию.
 
----
+## 1. Что входит в систему
 
-## Страницы (роуты)
+В репозитории сейчас есть два прикладных контура:
 
-- **Главная, редирект** — `/` → `/login` (неавторизован) или `/my` (авторизован)
-  - `app/page.tsx` — `HomePage`
+- обычные эксплуатационные задачи;
+- модуль ППР.
 
-- **Вход** — форма логина по email/паролю (Supabase Auth)
-  - `app/login/page.tsx` — `LoginPage`
-  - `components/auth/login-form.tsx` — `LoginForm`, `onSubmit` (signInWithPassword)
+Поверх них работают:
 
-- **Мои задачи** — список задач с фильтрами (q, status, priority, object, assignee, team_member, due, sort) и поиском
-  - `app/(dashboard)/my/page.tsx` — `MyTasksPage`
-  - `lib/tasks.ts` — `listTasksForProfile` (kind: "my")
-  - `components/tasks/task-filters.tsx` — `TaskFilters`
-  - `components/tasks/task-list.tsx` — `TaskList`
+- роли и права;
+- комментарии и вложения;
+- audit;
+- push;
+- частичный offline/PWA;
+- Supabase как backend-платформа.
 
-- **Новые задачи** — список задач `status=new`, кнопка «В работу»
-  - `app/(dashboard)/new/page.tsx` — `NewTasksPage`
-  - `lib/tasks.ts` — `listTasksForProfile` (kind: "new")
-  - `components/tasks/task-list.tsx` — `TaskList` (showTakeButton)
+## 2. Что реализовано полностью или используется в продакшн-контуре
 
-- **Архив** — список задач с `archived_at is not null`
-  - `app/(dashboard)/archive/page.tsx` — `ArchivePage`
-  - `lib/tasks.ts` — `listTasksForProfile` (kind: "archive")
+### 2.1 Базовый shell приложения
 
-- **Карточка задачи** — детали, статус, описание, команда, комментарии, история, фото-вложения
-  - `app/(dashboard)/tasks/[id]/page.tsx` — `TaskDetailsPage`
-  - `lib/tasks.ts` — `getTaskByIdForProfile`, `getTaskHistoryForProfile`
-  - `components/tasks/status-control.tsx` — `StatusControl`
-  - `components/tasks/comment-form.tsx` — `CommentForm` (offline-aware, поддержка фото)
-  - `components/tasks/task-team-manager.tsx` — `TaskTeamManager`
-  - `components/tasks/attachments-gallery.tsx` — `AttachmentsGallery` (signed URLs, лайтбокс)
+Реализовано:
 
-- **Создание задачи** — форма с объектом, приоритетом, сроком, исполнителем, командой; опциональные фото
-  - `app/(dashboard)/tasks/create/page.tsx` — `CreateTaskPage`
-  - `components/tasks/create-task-form.tsx` — `CreateTaskForm`
-  - `components/tasks/photo-picker.tsx` — `PhotoPicker` (валидация, превью, удаление до отправки)
-  - `app/actions/task-actions.ts` — `createTaskAction`
+- редирект `/` в `/login` или `/my` в зависимости от сессии;
+- авторизованный dashboard layout;
+- боковая и мобильная навигация;
+- профиль пользователя;
+- login/logout через Supabase Auth.
 
-- **Объекты** — справочник объектов эксплуатации
-  - `app/(dashboard)/objects/page.tsx` — `ObjectsPage`
-  - `components/dictionaries/objects-admin-list.tsx` — `ObjectsAdminList`
+### 2.2 Модуль задач
 
-- **Создание объекта**
-  - `app/(dashboard)/objects/create/page.tsx` — `CreateObjectPage`
-  - `app/actions/task-actions.ts` — `createObjectAction`, `createObjectFormAction`
+Реализовано:
 
-- **Редактирование/удаление объекта**
-  - `app/actions/task-actions.ts` — `updateObjectAction`, `deleteObjectAction`
-  - `components/dictionaries/objects-admin-list.tsx` — формы редактирования/удаления
+- список `Мои задачи` с поиском, фильтрами, сортировкой и клиентской группировкой;
+- список `Новые задачи`;
+- `Архив`;
+- создание задачи;
+- карточка задачи;
+- назначение ответственного;
+- команда задачи;
+- комментарии;
+- история;
+- вложения;
+- ручной архив для `admin/chief`;
+- автоархив выполненных задач через cron/RPC после `36` часов.
 
-- **Пользователи** — справочник учётных записей и ролей
-  - `app/(dashboard)/users/page.tsx` — `UsersPage`
-  - `components/dictionaries/users-admin-list.tsx` — `UsersAdminList`
+Фактическая модель статусов:
 
-- **Создание пользователя**
-  - `app/(dashboard)/users/create/page.tsx` — `CreateUserPage`
-  - `app/actions/user-actions.ts` — `createUserAction`
+- `new`
+- `accepted`
+- `in_progress`
+- `paused`
+- `done`
 
-- **Редактирование/удаление пользователя**
-  - `app/actions/user-actions.ts` — `updateUserAction`, `deleteUserAction`
-  - `components/dictionaries/users-admin-list.tsx` — формы редактирования/удаления
+Особенности:
 
-- **Профиль** — ФИО, email, роль, подсказка по PWA
-  - `app/(dashboard)/profile/page.tsx` — `ProfilePage`
+- “взять в работу” сначала переводит задачу в `accepted`;
+- дальнейший рабочий переход идёт в `in_progress`;
+- пауза — отдельный сценарий через RPC;
+- завершённая задача может быть отправлена в архив вручную или автоматически.
 
-- **Журнал действий (Audit)** — лента изменений с фильтрами по action и entity_type
-  - `app/(dashboard)/audit/page.tsx` — `AuditPage`
-  - `lib/auth.ts` — `canViewAudit` (admin, chief)
+### 2.3 Модуль ППР
 
----
+Реализовано:
 
-## API
+- отдельный dashboard `/ppr`;
+- справочник групп систем;
+- справочник систем;
+- справочник помещений;
+- справочник оборудования;
+- карточка оборудования;
+- QR-код оборудования и QR-entry;
+- шаблоны периодических работ;
+- чек-листы шаблонов;
+- назначения шаблонов на оборудование;
+- календарь ППР;
+- генерация месячного плана;
+- materialization позиций плана в ППР-заявки;
+- реестр ППР-заявок;
+- список “Мои ППР”;
+- архив ППР;
+- карточка ППР-заявки;
+- назначение исполнителя ППР-заявки;
+- комментарии к ППР-заявке;
+- фото-вложения к ППР-заявке;
+- перенос ППР-заявки внутри месяца;
+- отмена и закрытие ППР-заявки;
+- cron-runner для carryover/materialization/sync.
 
-- **POST** `/api/tasks/[id]/status` — смена статуса задачи (new/in_progress/done)
-  - `app/api/tasks/[id]/status/route.ts` — `POST`
-  - `lib/task-permissions.ts` — `canChangeStatus`
-  - `lib/audit.ts` — `writeAudit` (action: status_change)
+Фактическая модель статусов ППР:
 
-- **POST** `/api/tasks/[id]/pause` — поставить задачу на паузу (причина + дата возобновления)
-  - `app/api/tasks/[id]/pause/route.ts` — `POST`
-  - RPC `pause_task` (Supabase)
+- `new`
+- `in_progress`
+- `done`
+- `closed`
+- `cancelled`
 
-- **GET** `/api/tasks/[id]/history` — история задачи (audit_log по entity_type=task)
-  - `app/api/tasks/[id]/history/route.ts` — `GET`
-  - `lib/tasks.ts` — `getTaskHistoryForProfile`
+Отдельно:
 
-- **POST** `/api/tasks/[id]/comments` — добавить комментарий (с дедупом по client_msg_id); возвращает `commentId` для привязки фото
-  - `app/api/tasks/[id]/comments/route.ts` — `POST`
-  - `lib/audit.ts` — `writeAudit` (action: comment)
+- ППР-заявка не может перейти в `done`, пока не добавлены минимум один комментарий и одно фото;
+- закрытие и отмена синхронизируются с позициями `ppr_month_plan_items`.
 
-- **POST** `/api/tasks/[id]/attachments` — загрузить фото к задаче или комментарию (до 5 шт., до 5 MB, JPEG/PNG/WebP)
-  - `app/api/tasks/[id]/attachments/route.ts` — `POST`
-  - `lib/attachments.ts` — `uploadAttachmentFile`, `saveAttachmentMeta`
-  - Supabase Storage bucket: `task-attachments` (приватный)
+### 2.4 Справочники и администрирование
 
-- **GET** `/api/tasks/[id]/attachments` — получить список вложений со signed URLs (1 ч); параметр `?comment_id=` для фильтрации по комментарию
-  - `app/api/tasks/[id]/attachments/route.ts` — `GET`
-  - `lib/attachments.ts` — `getSignedUrls`
+Реализовано:
 
-- **POST** `/api/tasks/[id]/team` — добавить участника в команду задачи
-  - `app/api/tasks/[id]/team/route.ts` — `POST`
-  - `lib/task-permissions.ts` — `canManageTaskTeam`
-  - `lib/audit.ts` — `writeAudit` (action: team_add_member)
+- список пользователей;
+- создание пользователя;
+- изменение пользователя;
+- удаление пользователя;
+- список объектов;
+- создание объекта;
+- изменение объекта;
+- удаление объекта;
+- audit-log c фильтрами по `action` и `entity_type`.
 
-- **DELETE** `/api/tasks/[id]/team` — удалить участника из команды
-  - `app/api/tasks/[id]/team/route.ts` — `DELETE`
-  - `lib/audit.ts` — `writeAudit` (action: team_remove_member)
+### 2.5 Роли и права
 
-- **POST** `/api/push/subscribe` — регистрация push-подписки устройства
-  - `app/api/push/subscribe/route.ts` — `POST`
-  - вставка в `push_subscriptions`
+Реализованы роли:
 
-- **POST** `/api/push/send-assignment` — отправка push при назначении задачи (для lead/chief/admin)
-  - `app/api/push/send-assignment/route.ts` — `POST`
-  - `lib/push.ts` — `sendPushToUser`
-  - `lib/auth.ts` — `canEditTasks`
+- `admin`
+- `chief`
+- `lead`
+- `engineer`
+- `object_engineer`
+- `tech`
 
-- **POST** `/api/cron/archive` — автоархив выполненных задач (36 ч)
-  - `app/api/cron/archive/route.ts` — `POST`
-  - проверка заголовка `x-cron-secret`
-  - RPC `archive_done_tasks` (Supabase)
+Реализовано разграничение:
 
----
+- по страницам;
+- по API routes;
+- по server actions;
+- по query-layer;
+- на уровне RLS в Supabase.
 
-## Server Actions
+Для обычных задач права завязаны на:
 
-- **Выход** — `app/actions/auth-actions.ts` — `signOutAction`
+- роль;
+- участие в задаче;
+- принадлежность объекту;
+- состав команды задачи.
 
-- **Взять задачу в работу** — `app/actions/task-actions.ts` — `takeTaskInWork`
-  - смена статуса на in_progress, accepted_at
+Для ППР права завязаны на:
 
-- **Смена статуса** — `app/actions/task-actions.ts` — `updateTaskStatus`
-  - new, in_progress, done (без paused)
+- роль;
+- доступные объекты;
+- слой ППР: структура, шаблоны, назначения, календарь, задачи, QR;
+- в части сценариев — ответственность пользователя за систему.
 
-- **Поставить на паузу** — `app/actions/task-actions.ts` — `pauseTask`
-  - RPC `pause_task`
+### 2.6 Комментарии
 
-- **Добавить комментарий** — `app/actions/task-actions.ts` — `addTaskComment`
+Обычные задачи:
 
-- **Создать задачу** — `app/actions/task-actions.ts` — `createTaskAction`
-  - push назначаемому, добавление команды
+- комментарии в карточке задачи;
+- дедупликация по `client_msg_id` для offline-сценария;
+- push наблюдателям после нового комментария.
 
-- **Добавить/удалить участника команды** — `app/actions/task-actions.ts` — `addTaskTeamMemberAction`, `removeTaskTeamMemberAction`
+ППР:
 
-- **Создать/изменить/удалить объект** — `app/actions/task-actions.ts` — `createObjectAction`, `createObjectFormAction`, `updateObjectAction`, `deleteObjectAction`
+- комментарии в карточке ППР-заявки;
+- используются как обязательная evidence-часть для завершения задачи.
 
-- **Создать/изменить/удалить пользователя** — `app/actions/user-actions.ts` — `createUserAction`, `updateUserAction`, `deleteUserAction`
-  - `createSupabaseAdminClient`, `admin.auth.admin.createUser` / `deleteUser`
-  - `profiles`, `user_objects`
+### 2.7 Вложения
 
----
+Обычные задачи:
 
-## Офлайн
+- фото к задаче;
+- фото к комментарию;
+- приватный bucket `task-attachments`;
+- signed URLs для выдачи.
 
-- **Очередь действий** — LocalForage, storeName: `pending_actions`
-  - `lib/offline/queue.ts` — `enqueueAction`, `flushQueue`, `runAction`
-  - типы: `update_status`, `add_comment`
-  - при online — отправка в `/api/tasks/[id]/status` и `/api/tasks/[id]/comments`
+ППР:
 
-- **Запись в очередь при офлайне**
-  - `components/tasks/status-control.tsx` — при `!navigator.onLine` вызывает `enqueueAction` (update_status)
-  - `components/tasks/comment-form.tsx` — при `!navigator.onLine` вызывает `enqueueAction` (add_comment)
-  - пауза (pause) не поддерживается офлайн — требуется сеть
+- фото к ППР-заявке;
+- фото к комментарию ППР-заявки;
+- bucket `ppr-files`;
+- signed URLs для выдачи.
 
-- **Синк при восстановлении сети**
-  - `components/offline/offline-sync-bootstrap.tsx` — `OfflineSyncBootstrap`
-  - `useEffect`: `flushQueue()` при mount + `window.addEventListener("online", flushQueue)`
+Ограничения загрузки в обоих контурах:
 
----
+- до `5` файлов за раз;
+- до `5 MB` на файл;
+- только `image/jpeg`, `image/png`, `image/webp`.
 
-## PWA и Push
+### 2.8 API routes
 
-- **Регистрация Service Worker** — `components/pwa/register-sw.tsx` — `RegisterSW`
-  - `navigator.serviceWorker.register("/sw.js")`
-  - запрос разрешения Notification
-  - подписка на push (PushManager.subscribe, VAPID)
-  - отправка подписки на `/api/push/subscribe`
+Реально используются следующие API-группы.
 
-- **Отправка push** — `lib/push.ts` — `sendPushToUser`
-  - web-push, VAPID
-  - чтение подписок из `push_subscriptions`
-  - вызов из `createTaskAction` и `/api/push/send-assignment`
+Обычные задачи:
 
----
+- `/api/tasks/[id]/status`
+- `/api/tasks/[id]/pause`
+- `/api/tasks/[id]/comments`
+- `/api/tasks/[id]/history`
+- `/api/tasks/[id]/team`
+- `/api/tasks/[id]/attachments`
+- `/api/tasks/[id]/archive`
 
-## Middleware и Auth
+Push и системные:
 
-- **Middleware** — `middleware.ts`
-  - обновление сессии Supabase (getUser)
-  - matcher: всё кроме `_next/static`, `_next/image`, `favicon.ico`, `sw.js`, `manifest.webmanifest`
+- `/api/push/subscribe`
+- `/api/push/test`
+- `/api/push/send-assignment`
+- `/api/cron/archive`
 
-- **Авторизация API** — `lib/api-auth.ts` — `getApiSession`
-  - использует `createSupabaseServerClient`, `getUser`, профиль из `profiles`
+ППР:
 
-- **Права** — `lib/auth.ts` — `requireProfile`, `canManageUsers`, `canManageObjects`, `canEditTasks`, `canManageTaskTeam`, `canViewAudit`, `getSessionUser`
+- `/api/ppr/tasks/[id]/status`
+- `/api/ppr/tasks/[id]/assign`
+- `/api/ppr/tasks/[id]/cancel`
+- `/api/ppr/tasks/[id]/comments`
+- `/api/ppr/tasks/[id]/attachments`
+- `/api/ppr/tasks/[id]/reschedule`
+- `/api/ppr/qr/[token]`
+- `/api/ppr/cron/run`
 
-- **Права задач** — `lib/task-permissions.ts` — `canChangeStatus`, `canReadTaskByRole`, `canManageTaskTeam`, `canCreateOrAssignTask`
+### 2.9 Server actions
 
----
+Реально используются:
 
-## Audit
+- auth actions;
+- task actions;
+- user actions;
+- object room actions;
+- PPR directory actions;
+- PPR template actions;
+- PPR calendar actions;
+- часть PPR task actions.
 
-- **Запись в журнал** — `lib/audit.ts` — `writeAudit`
-  - вставка в `audit_log` (actor_id, action, entity_type, entity_id, meta)
-  - вызывается из actions и API при status_change, comment, team_add/remove, create/update/delete object/user, create_task, assign_task, accept, pause_task
+Server actions особенно важны для:
 
----
+- создания сущностей;
+- административных изменений;
+- форм с `revalidatePath`;
+- части сценариев задач и ППР, где не нужен offline-aware JSON flow.
 
-## Справочники
+### 2.10 Supabase
 
-- **Типы статусов и приоритетов** — `lib/task-presentation.ts` — `taskStatusMeta`, `taskPriorityMeta`
-- **Типы** — `lib/types.ts` — Profile, TaskItem, TaskStatus, TaskPriority и др.
+Реализовано использование:
+
+- `Supabase Auth` для логина и сессий;
+- `Postgres` для бизнес-данных;
+- `RLS` для разграничения доступа;
+- `Storage` для вложений;
+- `RPC` для pause/archive/PPR cron;
+- `admin client` для системных операций.
+
+## 3. Что реализовано частично
+
+### 3.1 Offline
+
+Реализовано частично:
+
+- очередь в `localforage`;
+- синк при событии `online`;
+- повторная отправка статусов обычных задач;
+- повторная отправка комментариев обычных задач.
+
+Не покрыто offline-механизмом:
+
+- ППР;
+- вложения;
+- пауза;
+- команда задачи;
+- справочники;
+- админские операции;
+- QR-потоки.
+
+### 3.2 PWA
+
+Реализовано частично:
+
+- `manifest.webmanifest`;
+- регистрация service worker;
+- push notification flow;
+- установка приложения как PWA;
+- кэширование части статических ассетов.
+
+Не реализовано как полноценная возможность:
+
+- полноценный offline-browse всех экранов;
+- offline-first data cache для задач или ППР;
+- универсальная очередь для всех mutating-операций.
+
+### 3.3 Push
+
+Реализовано:
+
+- подписка устройства;
+- тестовый push;
+- push при назначении задачи;
+- push после комментария к обычной задаче.
+
+Частично:
+
+- push не является универсальным уведомительным контуром всей системы;
+- отдельных push-сценариев для ППР в коде сейчас нет.
+
+### 3.4 ППР file layer
+
+В модели данных и миграциях есть инфраструктура для файлов ППР шире, чем только ППР-задачи:
+
+- вложения оборудования;
+- вложения шаблонов;
+- вложения ППР-задач.
+
+Но в текущем UI явно используются прежде всего вложения ППР-задач. Остальные file-сценарии не образуют такой же выраженный пользовательский поток.
+
+## 4. Что ограничено текущей архитектурой
+
+### 4.1 Два контура задач
+
+Обычные задачи и ППР решают похожие по смыслу задачи, но технически реализованы разными доменными слоями.
+
+Это означает:
+
+- разные статусы;
+- разные таблицы;
+- разные handlers;
+- разные наборы permission-функций;
+- отсутствие общего task engine.
+
+### 4.2 Дублирование transport-логики
+
+Для обычных задач часть действий есть и как `server actions`, и как `API routes`.
+
+Из-за этого:
+
+- документация быстро устаревает;
+- изменения lifecycle надо проверять в нескольких местах;
+- поведение формы и поведение интерактивного fetch-flow могут расходиться.
+
+### 4.3 Middleware не покрывает всё приложение
+
+`middleware.ts` защищает:
+
+- `/my`
+- `/new`
+- `/archive`
+- `/tasks/*`
+- `/objects/*`
+- `/users/*`
+- `/audit`
+- `/profile`
+
+Но не включает `/ppr/*`.
+
+Практически это компенсируется server-side проверками на страницах и в handlers, но сама защита распределена по разным уровням.
+
+### 4.4 Права распределены по нескольким слоям
+
+Для одной и той же операции могут одновременно участвовать:
+
+- page-level guard;
+- API/session guard;
+- `lib/*` permission helper;
+- RLS.
+
+Это даёт защиту в глубину, но усложняет развитие функциональности.
+
+### 4.5 Offline и комментарии/вложения
+
+Для обычных задач offline-очередь работает только на этапе создания комментария и смены статуса.
+
+Вложения при этом всё равно требуют онлайн-сети, поэтому пользовательский опыт “полностью офлайн-комментарий с фото” не завершён end-to-end.
+
+## 5. Разделение возможностей по модулям
+
+### Обычные задачи
+
+Реализовано:
+
+- списки задач;
+- фильтры;
+- статусы;
+- пауза;
+- карточка;
+- комментарии;
+- история;
+- вложения;
+- команда;
+- архив;
+- push.
+
+Частично:
+
+- offline;
+- дублирование между actions и API.
+
+### ППР
+
+Реализовано:
+
+- структура;
+- оборудование;
+- QR;
+- шаблоны;
+- назначения;
+- календарь;
+- cron orchestration;
+- lifecycle ППР-заявок;
+- комментарии;
+- вложения.
+
+Частично:
+
+- файловый контур за пределами ППР-заявок;
+- отсутствие собственного push-контура;
+- смешение API routes и server actions для lifecycle.
+
+### Комментарии
+
+Реализовано:
+
+- обычные задачи;
+- ППР;
+- audit-интеграция;
+- у обычных задач — дедуп по `client_msg_id`.
+
+Частично:
+
+- офлайн только для обычных задач.
+
+### Вложения
+
+Реализовано:
+
+- фото-вложения в обычных задачах;
+- фото-вложения в ППР-заявках;
+- signed URL;
+- приватные buckets.
+
+Частично:
+
+- автоочистка обычных вложений не доведена до рабочего cron-процесса;
+- offline upload не поддерживается.
+
+### Статусы
+
+Реализовано:
+
+- отдельные lifecycle для обычных задач и ППР;
+- проверка допустимых переходов;
+- проверка прав на переход;
+- синхронизация ППР lifecycle с календарным планом.
+
+Ограничение:
+
+- нет унифицированной общей модели lifecycle между двумя доменами.
+
+### Роли и права
+
+Реализовано:
+
+- прикладные роли;
+- доступ по объектам;
+- различие прав между обычными задачами и ППР;
+- более тонкая модель прав в ППР по типу экрана.
+
+Ограничение:
+
+- право-модель сложная и распределённая, поэтому дорого поддерживается документами и тестами.
+
+## 6. Краткий вывод
+
+Система уже покрывает не только эксплуатационные задачи, но и значительный модуль ППР с отдельной архитектурой и бизнес-потоками.
+
+Самые зрелые части сейчас:
+
+- обычные задачи;
+- справочники;
+- audit;
+- базовый PPR lifecycle;
+- PPR структура и календарь.
+
+Самые частично завершённые части:
+
+- offline;
+- PWA как fully-offline опыт;
+- единая архитектура действий без дублирования между `API routes` и `server actions`;
+- расширенный file/push-контур ППР.

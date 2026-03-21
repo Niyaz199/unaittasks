@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { generatePprMonthPlanAction, reschedulePprMonthPlanItemAction } from "@/app/actions/ppr-calendar-actions";
 import { DirectorySummary } from "@/components/ppr/ui/directory-summary";
-import { PprFormGroup, PprModal } from "@/components/ppr/ui/ppr-modal";
+import { PprFormGroup } from "@/components/ppr/ui/ppr-modal";
+import { PprDrawer } from "@/components/ppr/ui/ppr-drawer";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -13,26 +14,8 @@ import type { PprCalendarYearGroupOverviewRow, PprCalendarYearSystemOverviewRow 
 
 type BadgeTone = "neutral" | "info" | "warning" | "success" | "danger" | "violet";
 
-type CalendarObjectOption = {
-  id: string;
-  name: string;
-};
-
-type CalendarSystemGroupOption = {
-  id: string;
-  name: string;
-  code: string;
-};
-
-type CalendarSystemOption = {
-  id: string;
-  object_id: string;
-  system_group_id: string;
-  name: string;
-  responsible_user_id: string | null;
-  object: { name: string } | Array<{ name: string }> | null;
-  system_group: { name: string; code: string } | Array<{ name: string; code: string }> | null;
-};
+import { PprFiltersDrawer } from "./filters-drawer";
+import type { CalendarObjectOption, CalendarSystemGroupOption, CalendarSystemOption } from "./types";
 
 type MonthPlanRow = {
   id: string;
@@ -97,6 +80,7 @@ type FilterPatch = {
 type MonthDay = {
   isoDate: string;
   dayNumber: number;
+  isWeekend: boolean;
 };
 
 type DaySummary = {
@@ -238,9 +222,12 @@ function buildMonthDays(month: string) {
   const daysInMonth = new Date(Date.UTC(yearValue, monthValue, 0)).getUTCDate();
   return Array.from({ length: daysInMonth }, (_, index) => {
     const dayNumber = index + 1;
+    const date = new Date(Date.UTC(yearValue, monthValue - 1, dayNumber));
+    const dayOfWeek = date.getUTCDay();
     return {
       isoDate: `${month}-${String(dayNumber).padStart(2, "0")}`,
       dayNumber,
+      isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
     };
   });
 }
@@ -338,8 +325,8 @@ function AnnualMetricCell({
         gap: "0.15rem",
         padding: "0.55rem 0.6rem",
         borderRadius: "8px",
-        border: `1px solid ${isEmpty ? "var(--line)" : `color-mix(in srgb, var(--${tone}) 20%, var(--line))`}`,
-        background: isEmpty ? "var(--panel)" : `color-mix(in srgb, var(--${tone}) ${opacityPercent}%, var(--panel))`,
+        border: "1px solid transparent",
+        background: isEmpty ? "transparent" : `color-mix(in srgb, var(--${tone}) ${opacityPercent}%, transparent)`,
         color: "inherit",
         textDecoration: "none",
         minHeight: "68px",
@@ -347,13 +334,13 @@ function AnnualMetricCell({
       }}
     >
       {isEmpty ? (
-        <span style={{ fontSize: "0.95rem", fontWeight: 700, textAlign: "center", opacity: 0.55 }}>—</span>
+        <span style={{ fontSize: "0.95rem", fontWeight: 700, textAlign: "center", color: "var(--text-soft)", opacity: 0.5 }}>—</span>
       ) : (
         <>
-          <span style={{ fontSize: "0.98rem", fontWeight: 700, textAlign: "center", lineHeight: 1.1 }}>
+          <span style={{ fontSize: "1rem", fontWeight: 600, textAlign: "center", lineHeight: 1.1, color: "var(--text)" }}>
             {formatHours(metrics.norm_hours_total)} ч
           </span>
-          <span className="text-soft" style={{ fontSize: "0.7rem", textAlign: "center", lineHeight: 1.05 }}>
+          <span style={{ fontSize: "0.75rem", textAlign: "center", lineHeight: 1.05, color: "var(--text-soft)" }}>
             {metrics.items_count} поз.
           </span>
         </>
@@ -405,18 +392,19 @@ function DraggableWorkChip({
         alignItems: "center",
         justifyContent: "center",
         minWidth: "0",
-        padding: "0.2rem 0.35rem",
-        borderRadius: "999px",
+        height: "24px",
+        padding: "0 0.25rem",
+        borderRadius: "6px",
         border: "1px solid color-mix(in srgb, var(--line) 80%, transparent)",
         background: isDragging ? "color-mix(in srgb, var(--info) 12%, var(--panel))" : "color-mix(in srgb, var(--panel-soft) 55%, var(--panel))",
         color: "inherit",
         textAlign: "center",
         cursor: canReschedule ? (isDragging ? "grabbing" : "grab") : "pointer",
         opacity: isDragging ? 0.45 : 1,
-        boxShadow: canReschedule ? "0 1px 0 color-mix(in srgb, var(--line) 30%, transparent)" : "none",
-        fontSize: "0.67rem",
-        fontWeight: 700,
-        lineHeight: 1.1,
+        boxShadow: isDragging ? "0 10px 15px -3px rgba(0, 0, 0, 0.3)" : (canReschedule ? "0 1px 0 color-mix(in srgb, var(--line) 30%, transparent)" : "none"),
+        fontSize: "12px",
+        fontWeight: 500,
+        lineHeight: 1,
         whiteSpace: "nowrap",
       }}
     >
@@ -609,7 +597,7 @@ function MonthlyDnDGrid({
       </div>
 
       <div style={{ overflow: "auto", border: "1px solid var(--line)", borderRadius: "14px" }}>
-        <table style={{ width: "100%", minWidth: `${280 + days.length * 64}px`, borderCollapse: "separate", borderSpacing: 0 }}>
+        <table style={{ width: "100%", minWidth: `${240 + days.length * 48}px`, borderCollapse: "separate", borderSpacing: 0 }}>
           <thead>
             <tr>
               <th
@@ -618,13 +606,14 @@ function MonthlyDnDGrid({
                   top: 0,
                   left: 0,
                   zIndex: 5,
-                  minWidth: "280px",
-                  maxWidth: "280px",
+                  minWidth: "240px",
+                  maxWidth: "240px",
                   background: "var(--panel)",
                   textAlign: "left",
                   padding: "0.75rem",
                   borderBottom: "1px solid var(--line)",
                   borderRight: "1px solid var(--line)",
+                  boxShadow: "4px 0 12px rgba(0,0,0,0.15)",
                 }}
               >
                 Оборудование / помещение
@@ -639,12 +628,14 @@ function MonthlyDnDGrid({
                       position: "sticky",
                       top: 0,
                       zIndex: 4,
-                      minWidth: "64px",
-                      background: `color-mix(in srgb, var(--${tone}) 6%, var(--panel))`,
+                      minWidth: "48px",
+                      background: day.isWeekend 
+                        ? `color-mix(in srgb, var(--panel-soft) 40%, var(--panel))`
+                        : `color-mix(in srgb, var(--${tone}) 6%, var(--panel))`,
                       textAlign: "center",
                       padding: "0.35rem 0.2rem",
                       borderBottom: "1px solid var(--line)",
-                      borderRight: "1px solid var(--line)",
+                      borderRight: "1px solid color-mix(in srgb, var(--line) 40%, transparent)",
                     }}
                   >
                     <div style={{ fontSize: "0.84rem", fontWeight: 700 }}>{day.dayNumber}</div>
@@ -671,13 +662,14 @@ function MonthlyDnDGrid({
                     padding: "0.7rem",
                     borderBottom: "1px solid var(--line)",
                     borderRight: "1px solid var(--line)",
+                    boxShadow: "4px 0 12px rgba(0,0,0,0.15)",
                     verticalAlign: "top",
-                    minWidth: "280px",
-                    maxWidth: "280px",
+                    minWidth: "240px",
+                    maxWidth: "240px",
                   }}
                 >
                   <div className="grid" style={{ gap: "0.22rem" }}>
-                    <strong style={{ fontSize: "0.86rem", lineHeight: 1.2 }}>{row.equipmentName}</strong>
+                    <strong style={{ fontSize: "0.86rem", lineHeight: 1.2, fontWeight: 600 }}>{row.equipmentName}</strong>
                     <span className="text-soft" style={{ fontSize: "0.74rem" }}>{row.inventoryNo}</span>
                     <span className="text-soft" style={{ fontSize: "0.74rem" }}>{row.roomName}</span>
                     <span className="text-soft" style={{ fontSize: "0.74rem" }}>{row.itemsCount} работ • {formatHours(row.hours)} ч</span>
@@ -701,7 +693,9 @@ function MonthlyDnDGrid({
                         ? "color-mix(in srgb, var(--info) 6%, var(--panel))"
                         : cellItems.length
                           ? `color-mix(in srgb, var(--${tone}) 3%, transparent)`
-                          : "transparent";
+                          : day.isWeekend
+                            ? "color-mix(in srgb, var(--panel-soft) 30%, transparent)"
+                            : "transparent";
 
                   return (
                     <td
@@ -733,11 +727,11 @@ function MonthlyDnDGrid({
                         clearDragState();
                       }}
                       style={{
-                        minWidth: "64px",
+                        minWidth: "48px",
                         padding: "0.18rem",
                         verticalAlign: "top",
                         borderBottom: "1px solid var(--line)",
-                        borderRight: "1px solid var(--line)",
+                        borderRight: "1px solid color-mix(in srgb, var(--line) 40%, transparent)",
                         background,
                         outline: isHovered ? `2px solid ${hoverCell?.valid ? "var(--warning)" : "var(--danger)"}` : isValidTarget ? "1px dashed var(--warning)" : "none",
                         outlineOffset: "-2px",
@@ -746,7 +740,7 @@ function MonthlyDnDGrid({
                     >
                       {cellItems.length ? (
                         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.18rem", alignContent: "flex-start" }}>
-                          {cellItems.map((item) => (
+                          {cellItems.slice(0, 2).map((item) => (
                             <DraggableWorkChip
                               key={item.id}
                               item={item}
@@ -763,6 +757,30 @@ function MonthlyDnDGrid({
                               onDragEnd={clearDragState}
                             />
                           ))}
+                          {cellItems.length > 2 && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenItem(cellItems[2].id)}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                minWidth: "0",
+                                height: "24px",
+                                padding: "0 0.25rem",
+                                borderRadius: "6px",
+                                border: "1px solid color-mix(in srgb, var(--line) 80%, transparent)",
+                                background: "color-mix(in srgb, var(--panel-soft) 30%, var(--panel))",
+                                color: "var(--text-soft)",
+                                fontSize: "11px",
+                                fontWeight: 600,
+                                lineHeight: 1,
+                                cursor: "pointer",
+                              }}
+                            >
+                              +{cellItems.length - 2}
+                            </button>
+                          )}
                         </div>
                       ) : (
                         <span
@@ -877,6 +895,7 @@ export function PprCalendarAdmin({
   const [pendingMaterializedMove, setPendingMaterializedMove] = useState<PendingMaterializedMove | null>(null);
   const [materializedReason, setMaterializedReason] = useState("");
   const [isSubmitting, startSubmitting] = useTransition();
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
 
   useEffect(() => {
     if (tabParam === "month") {
@@ -1009,154 +1028,76 @@ export function PprCalendarAdmin({
     setMaterializedReason("");
   };
 
+  const activeFiltersCount = [selectedObjectId, selectedGroupId, selectedSystemId].filter(Boolean).length;
+
   return (
     <>
-      <div className="section-card sticky-toolbar" style={{ padding: activeTab === "month" ? "0.75rem" : "0.7rem", position: "sticky", top: "1rem", zIndex: 10 }}>
-        <div className="grid" style={{ gap: activeTab === "month" ? "0.65rem" : "0.6rem" }}>
-          <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-            <div className="row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
-              <button type="button" className={`btn ${activeTab === "year" ? "btn-accent" : "btn-ghost"}`} onClick={() => handleTabChange("year")}>
+      <div
+        className="section-card"
+        style={{
+          padding: "0.75rem 1rem",
+          position: "sticky",
+          top: "1rem",
+          zIndex: 20,
+          borderBottom: "1px solid color-mix(in srgb, var(--line) 55%, transparent)",
+          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+          background: "color-mix(in srgb, var(--panel) 95%, transparent)",
+          backdropFilter: "blur(10px)",
+          marginBottom: "1rem"
+        }}
+      >
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+          <div className="row" style={{ gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+            <span className="text-soft" style={{ fontSize: "0.88rem" }}>Календарь ППР</span>
+            <span className="text-soft">/</span>
+            <strong style={{ fontSize: "0.92rem" }}>
+              {activeTab === "year" 
+                ? (yearScreen === "groups" ? "Уровень 1: Группы" : "Уровень 2: Системы") 
+                : "Уровень 3: Операционный план"}
+            </strong>
+          </div>
+
+          <div className="row" style={{ gap: "0.75rem", flexWrap: "wrap" }}>
+            <div className="row" style={{ gap: "0.25rem", background: "var(--panel-soft)", padding: "0.2rem", borderRadius: "10px" }}>
+              <button type="button" className={`btn ${activeTab === "year" ? "btn-secondary" : "btn-ghost"}`} onClick={() => handleTabChange("year")}>
                 Уровни 1-2
               </button>
-              <button type="button" className={`btn ${activeTab === "month" ? "btn-accent" : "btn-ghost"}`} onClick={() => handleTabChange("month")}>
+              <button type="button" className={`btn ${activeTab === "month" ? "btn-secondary" : "btn-ghost"}`} onClick={() => handleTabChange("month")}>
                 Уровень 3
               </button>
             </div>
-            {activeTab === "year" ? (
-              <div className="row" style={{ gap: "0.4rem", flexWrap: "wrap" }}>
-                <Badge tone="info">Годовой обзор</Badge>
-                <Badge tone={yearScreen === "groups" ? "info" : "neutral"}>
-                  {yearScreen === "groups" ? "Уровень 1: группы" : "Уровень 2: системы"}
-                </Badge>
-              </div>
-            ) : (
-              <div className="row" style={{ gap: "0.35rem", flexWrap: "wrap" }}>
-                {selectedObject ? <Badge tone="neutral">{selectedObject.name}</Badge> : null}
-                {selectedGroup ? <Badge tone="neutral">{selectedGroup.name}</Badge> : null}
-                {selectedSystem ? <Badge tone="violet">{selectedSystem.name}</Badge> : null}
-              </div>
-            )}
+
+            <button 
+              type="button" 
+              className="btn btn-ghost tl-btn-filters" 
+              onClick={() => setIsFiltersOpen(true)}
+              style={{ position: "relative" }}
+            >
+              Фильтры
+              {activeFiltersCount > 0 && (
+                <span className="tl-filters-dot" style={{ position: "absolute", top: "4px", right: "4px" }} />
+              )}
+            </button>
           </div>
-
-          {activeTab === "year" ? (
-            <>
-              <div className="row" style={{ gap: "0.45rem", flexWrap: "wrap" }}>
-                {selectedObject ? <Badge tone="neutral">Объект: {selectedObject.name}</Badge> : null}
-                {selectedGroup ? <Badge tone="neutral">Группа: {selectedGroup.name}</Badge> : null}
-                <Badge tone="neutral">Часы + позиции</Badge>
-              </div>
-
-              <form method="get" className="grid" style={{ gap: "0.75rem" }}>
-                <input type="hidden" name="tab" value={activeTab} />
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "0.55rem" }}>
-                  <label className="grid" style={{ gap: "0.3rem" }}>
-                    <span className="text-soft" style={{ fontSize: "0.8rem" }}>Год обзора</span>
-                    <input className="input" type="number" min={2024} max={2100} name="year" defaultValue={currentYear} />
-                  </label>
-                  <input type="hidden" name="month" value={currentMonthInput} />
-
-                  <label className="grid" style={{ gap: "0.3rem" }}>
-                    <span className="text-soft" style={{ fontSize: "0.8rem" }}>Объект</span>
-                    <select className="select" name="object" defaultValue={selectedObjectId ?? ""}>
-                      <option value="">Все объекты</option>
-                      {objects.map((object) => (
-                        <option key={object.id} value={object.id}>
-                          {object.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="grid" style={{ gap: "0.3rem" }}>
-                    <span className="text-soft" style={{ fontSize: "0.8rem" }}>Группа систем</span>
-                    <select className="select" name="group" defaultValue={selectedGroupId ?? ""}>
-                      <option value="">Все группы</option>
-                      {systemGroups.map((group) => (
-                        <option key={group.id} value={group.id}>
-                          {group.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="grid" style={{ gap: "0.3rem" }}>
-                    <span className="text-soft" style={{ fontSize: "0.8rem" }}>Система</span>
-                    <select className="select" name="system" defaultValue={selectedSystemId ?? ""}>
-                      <option value="">Все системы</option>
-                      {filteredSystems.map((system) => (
-                        <option key={system.id} value={system.id}>
-                          {system.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-
-                <div className="row" style={{ gap: "0.5rem", justifyContent: "flex-end", flexWrap: "wrap" }}>
-                  <button className="btn btn-secondary" type="submit" style={{ paddingInline: "0.85rem" }}>
-                    Применить
-                  </button>
-                  <a href={`/ppr/calendar?tab=${activeTab}`} className="btn btn-ghost">
-                    Сбросить
-                  </a>
-                </div>
-              </form>
-            </>
-          ) : (
-            <details>
-              <summary style={{ cursor: "pointer", fontSize: "0.82rem", color: "var(--text-soft)" }}>Показать фильтры и контекст выбора</summary>
-              <form method="get" className="grid" style={{ gap: "0.75rem", marginTop: "0.7rem" }}>
-                <input type="hidden" name="tab" value={activeTab} />
-                <input type="hidden" name="year" value={currentYear} />
-                <input type="hidden" name="month" value={currentMonthInput} />
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "0.75rem" }}>
-                  <label className="grid" style={{ gap: "0.3rem" }}>
-                    <span className="text-soft" style={{ fontSize: "0.8rem" }}>Объект</span>
-                    <select className="select" name="object" defaultValue={selectedObjectId ?? ""}>
-                      <option value="">Все объекты</option>
-                      {objects.map((object) => (
-                        <option key={object.id} value={object.id}>
-                          {object.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="grid" style={{ gap: "0.3rem" }}>
-                    <span className="text-soft" style={{ fontSize: "0.8rem" }}>Группа систем</span>
-                    <select className="select" name="group" defaultValue={selectedGroupId ?? ""}>
-                      <option value="">Все группы</option>
-                      {systemGroups.map((group) => (
-                        <option key={group.id} value={group.id}>
-                          {group.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="grid" style={{ gap: "0.3rem" }}>
-                    <span className="text-soft" style={{ fontSize: "0.8rem" }}>Система</span>
-                    <select className="select" name="system" defaultValue={selectedSystemId ?? ""}>
-                      <option value="">Все системы</option>
-                      {filteredSystems.map((system) => (
-                        <option key={system.id} value={system.id}>
-                          {system.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                <div className="row" style={{ gap: "0.5rem", justifyContent: "flex-end", flexWrap: "wrap" }}>
-                  <button className="btn btn-secondary" type="submit">
-                    Применить
-                  </button>
-                  <a href={`/ppr/calendar?tab=${activeTab}`} className="btn btn-ghost">
-                    Сбросить
-                  </a>
-                </div>
-              </form>
-            </details>
-          )}
         </div>
       </div>
+
+      {isFiltersOpen && (
+        <PprFiltersDrawer
+          objects={objects}
+          systemGroups={systemGroups}
+          systems={filteredSystems}
+          initial={{
+            year: currentYear,
+            month: currentMonthInput,
+            objectId: selectedObjectId,
+            groupId: selectedGroupId,
+            systemId: selectedSystemId,
+            tab: activeTab
+          }}
+          onClose={() => setIsFiltersOpen(false)}
+        />
+      )}
 
       {activeTab === "year" ? (
         <div className="grid" style={{ gap: "1rem" }}>
@@ -1177,14 +1118,14 @@ export function PprCalendarAdmin({
                 </div>
 
                 <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", minWidth: "1100px", borderCollapse: "separate", borderSpacing: "0 0.65rem" }}>
+                  <table style={{ width: "100%", minWidth: "1100px", borderCollapse: "collapse" }}>
                     <thead>
                       <tr>
-                        <th style={{ textAlign: "left", padding: "0 0.75rem", color: "var(--text-soft)" }}>Группа систем</th>
+                        <th style={{ textAlign: "left", padding: "0.75rem", color: "var(--text-soft)", borderBottom: "1px solid var(--line)", fontWeight: 500 }}>Группа систем</th>
                         {Array.from({ length: 12 }, (_, index) => {
                           const month = `${currentYear}-${String(index + 1).padStart(2, "0")}`;
                           return (
-                            <th key={month} style={{ textAlign: "center", padding: "0 0.25rem", color: "var(--text-soft)" }}>
+                            <th key={month} style={{ textAlign: "center", padding: "0.75rem 0.25rem", color: "var(--text-soft)", borderBottom: "1px solid var(--line)", fontWeight: 500 }}>
                               {formatMonthLabel(month, "short")}
                             </th>
                           );
@@ -1193,8 +1134,8 @@ export function PprCalendarAdmin({
                     </thead>
                     <tbody>
                       {yearGroupOverview.map((row) => (
-                        <tr key={row.system_group_id}>
-                          <td style={{ padding: "0.5rem 0.75rem", verticalAlign: "middle" }}>
+                        <tr key={row.system_group_id} className="annual-row">
+                          <td style={{ padding: "1rem 0.75rem", verticalAlign: "middle", borderBottom: "1px solid var(--line)" }}>
                             <div className="grid" style={{ gap: "0.25rem" }}>
                               <a
                                 href={buildCalendarHref(filters, {
@@ -1212,7 +1153,7 @@ export function PprCalendarAdmin({
                             </div>
                           </td>
                           {row.months.map((metrics) => (
-                            <td key={`${row.system_group_id}-${metrics.month}`} style={{ padding: "0 0.25rem", height: "1px" }}>
+                            <td key={`${row.system_group_id}-${metrics.month}`} style={{ padding: "0.5rem 0.25rem", height: "1px", borderBottom: "1px solid var(--line)" }}>
                               <AnnualMetricCell
                                 href={buildCalendarHref(filters, {
                                   groupId: row.system_group_id,
@@ -1271,14 +1212,14 @@ export function PprCalendarAdmin({
               />
 
               <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", minWidth: "1100px", borderCollapse: "separate", borderSpacing: "0 0.65rem" }}>
+                <table style={{ width: "100%", minWidth: "1100px", borderCollapse: "collapse" }}>
                   <thead>
                     <tr>
-                      <th style={{ textAlign: "left", padding: "0 0.75rem", color: "var(--text-soft)" }}>Система</th>
+                      <th style={{ textAlign: "left", padding: "0.75rem", color: "var(--text-soft)", borderBottom: "1px solid var(--line)", fontWeight: 500 }}>Система</th>
                       {Array.from({ length: 12 }, (_, index) => {
                         const month = `${currentYear}-${String(index + 1).padStart(2, "0")}`;
                         return (
-                          <th key={month} style={{ textAlign: "center", padding: "0 0.25rem", color: "var(--text-soft)" }}>
+                          <th key={month} style={{ textAlign: "center", padding: "0.75rem 0.25rem", color: "var(--text-soft)", borderBottom: "1px solid var(--line)", fontWeight: 500 }}>
                             {formatMonthLabel(month, "short")}
                           </th>
                         );
@@ -1287,8 +1228,8 @@ export function PprCalendarAdmin({
                   </thead>
                   <tbody>
                     {yearSystemOverview.map((row) => (
-                      <tr key={row.system_id}>
-                        <td style={{ padding: "0.5rem 0.75rem", verticalAlign: "middle" }}>
+                      <tr key={row.system_id} className="annual-row">
+                        <td style={{ padding: "1rem 0.75rem", verticalAlign: "middle", borderBottom: "1px solid var(--line)" }}>
                           <div className="grid" style={{ gap: "0.25rem" }}>
                             <a
                               href={buildCalendarHref(filters, {
@@ -1306,7 +1247,7 @@ export function PprCalendarAdmin({
                           </div>
                         </td>
                         {row.months.map((metrics) => (
-                          <td key={`${row.system_id}-${metrics.month}`} style={{ padding: "0 0.25rem", height: "1px" }}>
+                          <td key={`${row.system_id}-${metrics.month}`} style={{ padding: "0.5rem 0.25rem", height: "1px", borderBottom: "1px solid var(--line)" }}>
                             <AnnualMetricCell
                               href={buildCalendarHref(filters, {
                                 groupId: row.system_group_id,
@@ -1438,7 +1379,7 @@ export function PprCalendarAdmin({
         </div>
       )}
 
-      <PprModal
+      <PprDrawer
         open={Boolean(editingItem)}
         onClose={() => {
           setEditingItemId(null);
@@ -1464,7 +1405,7 @@ export function PprCalendarAdmin({
                 setIsDirty(false);
               }}
               onChange={() => setIsDirty(true)}
-              className="ppr-modal-content"
+              className="ppr-drawer-content"
             >
               <div className="ppr-modal-body grid">
                 <input type="hidden" name="item_id" value={editingItem.id} />
@@ -1488,7 +1429,7 @@ export function PprCalendarAdmin({
               </div>
             </form>
           ) : (
-            <div className="ppr-modal-content">
+            <div className="ppr-drawer-content">
               <div className="ppr-modal-body grid">
                 <CalendarItemDetails item={editingItem} currentMonthInput={currentMonthInput} />
                 <div className="text-soft" style={{ fontSize: "0.84rem" }}>
@@ -1498,9 +1439,9 @@ export function PprCalendarAdmin({
             </div>
           )
         ) : null}
-      </PprModal>
+      </PprDrawer>
 
-      <PprModal
+      <PprDrawer
         open={Boolean(pendingMaterializedItem && pendingMaterializedMove)}
         onClose={() => {
           setPendingMaterializedMove(null);
@@ -1510,7 +1451,7 @@ export function PprCalendarAdmin({
         isDirty={Boolean(materializedReason)}
       >
         {pendingMaterializedItem && pendingMaterializedMove ? (
-          <div className="ppr-modal-content">
+          <div className="ppr-drawer-content">
             <div className="ppr-modal-body grid">
               <CalendarItemDetails item={pendingMaterializedItem} currentMonthInput={currentMonthInput} />
               <div className="section-card">
@@ -1541,7 +1482,7 @@ export function PprCalendarAdmin({
             </div>
           </div>
         ) : null}
-      </PprModal>
+      </PprDrawer>
     </>
   );
 }

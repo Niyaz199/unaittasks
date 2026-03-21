@@ -1,577 +1,487 @@
-# Архитектурная карта: Задачник эксплуатации
-
-> Версия: март 2026. Обновляй при добавлении новых модулей.
-
----
-
-## 1. Что это за проект
-
-**Задачник эксплуатации** (`ops-tasker-pwa`) — корпоративный PWA-таскменеджер для инженерных команд.
-Система позволяет создавать и вести задачи по объектам инфраструктуры, назначать ответственных, ставить задачи на паузу с указанием причины и времени возобновления, добавлять комментарии и управлять командой задачи.
-Ключевые модули: **задачи** (создание/статусы/приоритеты/пауза), **объекты** (привязка задач к инфраструктурным объектам), **команда задачи** (участники-наблюдатели), **push-уведомления** (Web Push через VAPID), **PWA/SW** (офлайн-работа, кэширование, установка на рабочий стол), **авторизация и роли** (6 ролей с разграничением прав через RLS).
-
----
-
-## 2. Технологический стек
-
-| Слой | Технология | Версия / Примечание |
-|---|---|---|
-| Frontend фреймворк | **Next.js 15**, App Router, Server Components, Server Actions | `output: "standalone"` |
-| Язык | **TypeScript 5** | strict, typed routes |
-| UI | React 19, собственные компоненты (без UI-библиотек) | |
-| База данных | **Supabase** (PostgreSQL + Auth + RLS) | `@supabase/ssr`, `@supabase/supabase-js` |
-| Push-уведомления | **Web Push / VAPID** | `web-push ^3.6.7` |
-| Офлайн-хранилище | **localforage** (IndexedDB) | очередь `ops-tasker/pending_actions` |
-| Валидация | **Zod** | схемы в Server Actions и API routes |
-| PWA | Service Worker (`public/sw.js`), Web App Manifest | кэш `ops-tasker-v2` |
-| Контейнеризация | **Docker** (multi-stage Dockerfile) + **Docker Compose** | `app` + `caddy` |
-| Reverse proxy / TLS | **Caddy 2** | автоматический HTTPS, домен `unaittasks.tech` |
-
----
-
-## 3. Структура репозитория
-
-```
-d:\zadachnik\
-├── app/                            # Next.js App Router
-│   ├── layout.tsx                  # Root layout (html/body, RegisterSW, OfflineSyncBootstrap)
-│   ├── page.tsx                    # Корень → редирект /my или /login
-│   ├── login/
-│   │   └── page.tsx                # Страница входа
-│   ├── (dashboard)/                # Route group: общий layout с навигацией
-│   │   ├── layout.tsx              # Dashboard layout (MainNav, MobileTabs, auth-guard)
-│   │   ├── my/page.tsx             # Мои задачи (фильтры, сортировка, KPI)
-│   │   ├── new/page.tsx            # Новые задачи
-│   │   ├── archive/page.tsx        # Архив задач
-│   │   ├── tasks/
-│   │   │   ├── [id]/page.tsx       # Карточка задачи
-│   │   │   └── create/page.tsx     # Создание задачи
-│   │   ├── objects/
-│   │   │   ├── page.tsx            # Список объектов
-│   │   │   └── create/page.tsx     # Создание объекта
-│   │   ├── users/
-│   │   │   ├── page.tsx            # Список пользователей
-│   │   │   └── create/page.tsx     # Создание пользователя
-│   │   ├── audit/page.tsx          # Журнал действий (admin/chief)
-│   │   └── profile/page.tsx        # Профиль пользователя
-│   ├── actions/                    # Server Actions
-│   │   ├── task-actions.ts         # takeTaskInWork, createTaskAction, addTaskComment, pauseTask, управление командой ...
-│   │   ├── user-actions.ts         # createUserAction, updateUserAction, deleteUserAction
-│   │   └── auth-actions.ts         # signOutAction
-│   └── api/                        # API Routes (Edge/Node handlers)
-│       ├── tasks/[id]/
-│       │   ├── status/route.ts     # POST: смена статуса
-│       │   ├── pause/route.ts      # POST: пауза задачи (RPC pause_task)
-│       │   ├── comments/route.ts       # POST: добавить комментарий + push; возвращает commentId
-│       │   ├── history/route.ts        # GET: история из audit_log
-│       │   ├── team/route.ts           # POST/DELETE: управление командой
-│       │   └── attachments/route.ts    # POST: загрузить фото; GET: signed URLs вложений
-│       ├── push/
-│       │   ├── subscribe/route.ts  # POST: сохранить push-подписку
-│       │   ├── test/route.ts       # POST: тестовый push
-│       │   └── send-assignment/route.ts  # POST: push при назначении задачи
-│       └── cron/
-│           └── archive/route.ts    # POST: архивировать done-задачи (x-cron-secret)
-│
-├── components/                     # React-компоненты
-│   ├── auth/
-│   │   └── login-form.tsx          # Форма входа (client)
-│   ├── tasks/
-│   │   ├── task-list.tsx           # Список задач с сортировкой
-│   │   ├── task-filters.tsx        # Фильтры + KPI-виджет
-│   │   ├── filters-drawer.tsx      # Мобильная панель фильтров
-│   │   ├── task-action-menu.tsx    # Контекстное меню задачи
-│   │   ├── status-control.tsx      # Переключатель статуса + модалка паузы (offline-aware)
-│   │   ├── create-task-form.tsx    # Форма создания задачи (+ фото-вложения)
-│   │   ├── comment-form.tsx        # Форма комментария (offline-aware, clientMsgId, + фото)
-│   │   ├── photo-picker.tsx        # Выбор фото до отправки: превью, валидация, удаление
-│   │   ├── attachments-gallery.tsx # Галерея вложений: signed URLs, лайтбокс
-│   │   ├── task-team-manager.tsx   # Управление командой
-│   │   └── team-members-picker.tsx # Пикер участников
-│   ├── dictionaries/
-│   │   ├── objects-admin-list.tsx  # CRUD объектов
-│   │   └── users-admin-list.tsx    # CRUD пользователей
-│   ├── dashboard/
-│   │   ├── main-nav.tsx            # Боковое меню (desktop)
-│   │   ├── nav-shell.tsx           # Обёртка nav (usePathname)
-│   │   └── mobile-tabs.tsx         # Нижние табы (mobile)
-│   ├── ui/                         # Базовые UI-примитивы
-│   │   ├── badge.tsx               # Бейдж (tone: neutral/info/warning/success/danger/violet)
-│   │   ├── modal.tsx               # Модальное окно
-│   │   ├── data-table.tsx          # Таблица данных
-│   │   ├── empty-state.tsx         # Пустое состояние
-│   │   ├── page-header.tsx         # Заголовок страницы
-│   │   ├── section-card.tsx        # Карточка-секция
-│   │   └── assignee-combobox.tsx   # Комбобокс исполнителя
-│   ├── pwa/
-│   │   └── register-sw.tsx         # Регистрация SW + подписка Web Push (client)
-│   └── offline/
-│       └── offline-sync-bootstrap.tsx  # Слушает событие online → flushQueue()
-│
-├── lib/                            # Утилиты и бизнес-логика (серверные)
-│   ├── types.ts                    # Все TS-типы: Role, TaskStatus, TaskItem, Profile ...
-│   ├── auth.ts                     # getSessionUser, requireAuth, getMyProfile, canView* ...
-│   ├── api-auth.ts                 # getApiSession — user+profile для API routes
-│   ├── tasks.ts                    # listTasksForProfile, getTaskByIdForProfile, getTaskHistory*
-│   ├── objects.ts                  # listObjectsForProfile (с учётом роли)
-│   ├── task-permissions.ts         # canAssignRole, isTaskParticipant, canChangeTaskStatus ...
-│   ├── audit.ts                    # writeAudit(actorId, action, entityType, entityId, meta)
-│   ├── push.ts                     # sendPushToUser(userId, payload) — через admin-клиент
-│   ├── task-presentation.ts        # taskStatusMeta, taskPriorityMeta — UI-метки и цвета
-│   ├── task-sort.ts                # smartSortTasks, sortTasks, isOverdue, isDueToday
-│   ├── attachments.ts              # ATTACHMENT_BUCKET, validateAttachmentFile, uploadAttachmentFile, getSignedUrls
-│   ├── offline/
-│   │   └── queue.ts                # enqueueAction, flushQueue — IndexedDB-очередь
-│   └── supabase/
-│       ├── server.ts               # createSupabaseServerClient — SSR (cookies)
-│       ├── browser.ts              # createSupabaseBrowserClient — клиентский
-│       └── admin.ts                # createSupabaseAdminClient — service role
-│
-├── supabase/                       # SQL-миграции (порядок по номеру)
-│   ├── 0001_initial.sql            # Все таблицы, функции, RLS, триггеры
-│   ├── 0002_objects.sql            # object_engineer_id на таблице objects
-│   ├── 0003_pause.sql              # resume_at на tasks, RPC pause_task
-│   ├── 0004_audit_rls.sql          # Расширение RLS для audit_log
-│   └── push_subscriptions.sql      # Таблица push_subscriptions (применена отдельно)
-│
-├── public/                         # Статические файлы
-│   ├── sw.js                       # Service Worker (кэш + push handler)
-│   ├── manifest.webmanifest        # PWA-манифест
-│   └── icon.svg                    # Иконка приложения
-│
-├── docs/
-│   ├── ARCHITECTURE.md             # ← этот файл
-│   └── FEATURES.md                 # Описание фич
-│
-├── middleware.ts                   # Auth middleware: защищает /my, /tasks/*, /objects/*, ...
-├── next.config.ts                  # output: standalone, заголовки sw.js
-├── Dockerfile                      # Multi-stage build (Next.js standalone)
-├── docker-compose.yml              # app (port 3000) + caddy (80/443)
-├── Caddyfile                       # unaittasks.tech → reverse_proxy app:3000
-├── .env.example                    # Шаблон переменных окружения
-└── package.json
-```
-
----
-
-## 4. Модель данных
-
-### Таблицы и ключевые поля
-
-#### `profiles` — пользователи системы
-```sql
-id          uuid  PK, REFERENCES auth.users(id)
-full_name   text  NOT NULL
-role        text  CHECK ('admin','chief','lead','engineer','object_engineer','tech')
-created_at  timestamptz
-```
-Роль хранится здесь. Нет отдельной таблицы ролей.
-
-#### `objects` — объекты инфраструктуры
-```sql
-id                    uuid  PK
-name                  text  UNIQUE NOT NULL
-object_engineer_id    uuid  REFERENCES profiles(id)  -- ответственный инженер
-created_by            uuid  REFERENCES profiles(id)
-created_at            timestamptz
-```
-
-#### `user_objects` — доступ пользователей к объектам
-```sql
-user_id    uuid  REFERENCES profiles(id)
-object_id  uuid  REFERENCES objects(id)
-PRIMARY KEY (user_id, object_id)
-```
-
-#### `tasks` — задачи
-```sql
-id            uuid  PK
-title         text  NOT NULL
-description   text
-object_id     uuid  REFERENCES objects(id) NOT NULL
-status        text  CHECK ('new','in_progress','paused','done')  DEFAULT 'new'
-priority      text  CHECK ('low','medium','high','critical')      DEFAULT 'medium'
-due_at        timestamptz   -- срок выполнения
-resume_at     timestamptz   -- время возобновления из паузы
-created_by    uuid  REFERENCES profiles(id)
-assigned_to   uuid  REFERENCES profiles(id)
-accepted_at   timestamptz   -- авто: триггер при переходе в in_progress
-completed_at  timestamptz   -- авто: триггер при переходе в done
-archived_at   timestamptz   -- авто: cron-архивация
-```
-Статусы: `new` → `in_progress` → `done` (→ архив). Из любого состояния — `paused` (с `resume_at`).
-
-#### `task_team_members` — команда задачи
-```sql
-task_id   uuid  REFERENCES tasks(id)
-user_id   uuid  REFERENCES profiles(id)
-added_by  uuid  REFERENCES profiles(id)
-PRIMARY KEY (task_id, user_id)
-```
-
-#### `task_comments` — комментарии
-```sql
-id             uuid  PK
-task_id        uuid  REFERENCES tasks(id) ON DELETE CASCADE
-author_id      uuid  REFERENCES profiles(id)
-body           text  NOT NULL
-client_msg_id  text  -- дедупликация офлайн-сообщений
-created_at     timestamptz
-UNIQUE (task_id, author_id, client_msg_id) WHERE client_msg_id IS NOT NULL
-```
-
-#### `audit_log` — журнал действий
-```sql
-id           uuid  PK
-actor_id     uuid  -- NULL для системных событий
-action       text  -- 'create_task','status_change','comment','pause_task' и др.
-entity_type  text  -- 'task'|'object'|'user'|'comment'
-entity_id    uuid
-meta         jsonb
-created_at   timestamptz
-```
-
-#### `push_subscriptions` — Web Push подписки
-```sql
-id        uuid  PK
-user_id   uuid  REFERENCES profiles(id) ON DELETE CASCADE
-endpoint  text  NOT NULL
-p256dh    text  NOT NULL
-auth      text  NOT NULL
-UNIQUE (user_id, endpoint)
-```
-
-#### `task_attachments` — метаданные фото-вложений
-```sql
-id            uuid         PK
-task_id       uuid         REFERENCES tasks(id) ON DELETE CASCADE
-comment_id    uuid         REFERENCES task_comments(id) ON DELETE CASCADE  -- NULL → вложение задачи
-storage_path  text         NOT NULL  -- путь в bucket "task-attachments" ({userId}/{taskId}/{uuid}.ext)
-file_name     text         NOT NULL
-mime_type     text         NOT NULL  -- image/jpeg | image/png | image/webp
-size_bytes    bigint       NOT NULL
-uploaded_by   uuid         REFERENCES profiles(id) ON DELETE SET NULL
-created_at    timestamptz  DEFAULT now()
-cleanup_after timestamptz  DEFAULT now() + interval '30 days'  -- каркас для cron-удаления (не активен)
-deleted_at    timestamptz  -- мягкое удаление (не активно)
-```
-Бинарные файлы хранятся в Supabase Storage (bucket `task-attachments`, приватный).
-При удалении задачи/комментария строки удаляются каскадно; файлы в Storage остаются до запуска cron.
-Доступ к файлам через signed URLs (1 ч), генерируются в `GET /api/tasks/[id]/attachments`.
-
-### Матрица ролей
-
-| Роль | Создаёт задачи | Видит задачи | Объекты / Пользователи | Аудит |
-|---|---|---|---|---|
-| `admin` | Всё | Всё | Полный CRUD | Полный |
-| `chief` | Всё | Всё | Полный CRUD | Полный |
-| `lead` | Да (assign до engineer) | Свои + командные | Только чтение | История своих задач |
-| `engineer` | Нет | Своего объекта + командные | Нет | История своих задач |
-| `object_engineer` | Нет | Задачи своего объекта | Нет | История своих задач |
-| `tech` | Нет | Только назначенные / командные | Нет | Нет |
-
----
-
-## 5. Потоки данных
-
-### 5.1 Создание задачи
-
-```
-Пользователь (lead/admin/chief)
-  → CreateTaskForm (components/tasks/create-task-form.tsx)
-    → Server Action: createTaskAction (app/actions/task-actions.ts)
-      → Supabase INSERT tasks (RLS: can_create_task())
-      → writeAudit('create_task', ...)
-      → sendPushToUser(assigned_to, { title, url })   ← lib/push.ts → web-push
-      → redirect /tasks/[id]
-```
-
-### 5.2 Комментарий к задаче
-
-```
-Пользователь
-  → CommentForm (offline-aware, clientMsgId)
-    online:  POST /api/tasks/[id]/comments
-    offline: enqueueAction('add_comment', ...) → IndexedDB
-             при online: flushQueue() → POST ...
-  → API route (app/api/tasks/[id]/comments/route.ts)
-      → Supabase INSERT task_comments (уникальный client_msg_id → дедупликация)
-      → writeAudit('comment', ...)
-      → sendPushToUser(каждый участник команды + assigned_to, { title, url })
-      → возвращает { ok, commentId }
-  → (если выбраны фото) POST /api/tasks/[id]/attachments с { comment_id, files[] }
-```
-
-### 5.2а Загрузка фото-вложений
-
-```
-Пользователь выбирает фото в PhotoPicker
-  → клиентская валидация (тип/размер/кол-во)
-  → после создания задачи/комментария:
-     POST /api/tasks/[id]/attachments (FormData: files[], comment_id?)
-  → API route (app/api/tasks/[id]/attachments/route.ts)
-      → серверная валидация (MIME, размер, кол-во)
-      → uploadAttachmentFile → Supabase Storage "task-attachments"
-      → saveAttachmentMeta → INSERT task_attachments
-  → AttachmentsGallery монтируется → GET /api/tasks/[id]/attachments?comment_id=...
-      → createSignedUrls (1 ч) → рендер превью + лайтбокс
-```
-
-### 5.3 Смена статуса задачи
-
-```
-Пользователь
-  → StatusControl (components/tasks/status-control.tsx)
-    online:  POST /api/tasks/[id]/status
-    offline: enqueueAction('update_status', ...)
-  → API route: обновляет tasks.status
-      → Триггер enforce_task_update_rules: авто-заполняет accepted_at / completed_at
-      → writeAudit('status_change', ...)
-      → sendPushToUser(created_by + team, { title })
-```
-
-### 5.4 Пауза задачи
-
-```
-Пользователь → StatusControl → модалка паузы (reason, resumeAt)
-  → POST /api/tasks/[id]/pause
-    → Supabase RPC pause_task(task_id, reason, resume_at)
-       (атомарно: UPDATE tasks + INSERT task_comments + INSERT audit_log)
-    → sendPushToUser(...)
-```
-
-### 5.5 PWA: регистрация и подписка
-
-```
-Браузер загружает app/layout.tsx
-  → <RegisterSW /> (components/pwa/register-sw.tsx, client component)
-    → navigator.serviceWorker.register('/sw.js')
-    → pushManager.subscribe({ applicationServerKey: VAPID_PUBLIC_KEY })
-    → POST /api/push/subscribe { endpoint, p256dh, auth }
-      → Supabase INSERT push_subscriptions (upsert по user_id+endpoint)
-```
-
-### 5.6 Доставка push-уведомления
-
-```
-API route / Server Action
-  → lib/push.ts: sendPushToUser(userId, payload)
-    → createSupabaseAdminClient()                   ← обходит RLS
-    → SELECT push_subscriptions WHERE user_id = ...
-    → webpush.sendNotification(subscription, payload)
-sw.js: событие 'push'
-  → self.registration.showNotification(title, { body, data.url })
-sw.js: событие 'notificationclick'
-  → clients.openWindow(data.url)
-```
-
-### 5.7 Cron-архивация
-
-```
-Внешний планировщик
-  → POST /api/cron/archive  (заголовок x-cron-secret)
-    → Supabase RPC archive_done_tasks(36)
-       (архивирует done-задачи старше 36 часов)
-```
-
----
-
-## 6. Безопасность и права
-
-### Middleware (защита маршрутов)
-`middleware.ts` проверяет наличие cookie вида `*-auth-token` (Supabase сессия).
-Защищены: `/my`, `/new`, `/archive`, `/tasks/:path*`, `/objects/:path*`, `/users/:path*`, `/audit`, `/profile`.
-Незащищено: `/login`, `/api/*` (API routes проверяют авторизацию самостоятельно).
-
-### Серверная идентификация пользователя
-- В **Server Components / Server Actions**: `lib/auth.ts` → `getSessionUser()` → `createSupabaseServerClient()` (читает cookie через `next/headers`).
-- В **API Routes**: `lib/api-auth.ts` → `getApiSession()` — возвращает `{ user, profile }`.
-- **Нельзя** доверять данным из тела запроса для определения actor_id — всегда берётся из сессии.
-
-### RLS (Row Level Security)
-Включён на всех таблицах. Ключевые функции безопасности в PostgreSQL:
-- `can_read_task(task)` — видимость задачи по роли и участию
-- `can_update_task(task)` — обновление задачи
-- `can_change_status(task)` — смена статуса
-- `can_manage_task_team(task)` — управление командой
-
-### Service Role (обход RLS)
-`lib/supabase/admin.ts` (`createSupabaseAdminClient`) используется **только** в:
-- `lib/push.ts` — чтение push_subscriptions всех пользователей (по userId переданному от API)
-- `app/api/push/subscribe/route.ts` — вставка подписки (upsert)
-- `app/api/cron/archive/route.ts` — вызов архивирующей RPC
-- `app/actions/user-actions.ts` — создание пользователей через `auth.admin`
-
-Service Role **никогда** не передаётся клиенту и не попадает в Client Components.
-
-### Авторизация API routes
-Каждый route проверяет сессию через `getApiSession()`. При отсутствии сессии → `401 Unauthorized`.
-Cron-эндпоинт `/api/cron/archive` дополнительно проверяет заголовок `x-cron-secret === process.env.CRON_SECRET`.
-
----
-
-## 7. Производительность
-
-### Server vs Client Components
-По умолчанию все компоненты в `app/` — **Server Components** (данные фетчатся на сервере, HTML приходит готовым). Client Components (`"use client"`) только там, где нужна интерактивность или браузерное API:
-- `components/tasks/status-control.tsx` — оптимистичные обновления, модалка
-- `components/tasks/comment-form.tsx` — форма с состоянием
-- `components/pwa/register-sw.tsx` — работа с navigator.serviceWorker
-- `components/offline/offline-sync-bootstrap.tsx` — window.addEventListener('online', ...)
-- `components/dashboard/nav-shell.tsx` — `usePathname`
-
-### Loading / Skeleton
-Каждая страница в `(dashboard)/` может иметь `loading.tsx` рядом — Next.js автоматически показывает его как Suspense-fallback во время загрузки Server Component.
-
-### Кэширование статики (SW)
-`public/sw.js` кэширует `/_next/static/**` и `manifest.webmanifest` (стратегия Cache First). HTML-страницы и RSC-запросы всегда идут в сеть (Network First).
-
----
-
-## 8. Как добавить новый модуль
-
-### 8.1 Новая страница
-
-1. Создай файл `app/(dashboard)/<module>/page.tsx` (Server Component).
-2. Если нужна загрузка — добавь `app/(dashboard)/<module>/loading.tsx`.
-3. Если нужна защита по роли — в начале page.tsx вызови `requireProfile()` из `lib/auth.ts` и проверь `profile.role`.
-4. Добавь ссылку в `components/dashboard/main-nav.tsx` и `components/dashboard/mobile-tabs.tsx`.
-
-```typescript
-// app/(dashboard)/reports/page.tsx
-import { requireProfile } from '@/lib/auth'
-
-export default async function ReportsPage() {
-  const profile = await requireProfile()
-  // ...
-}
-```
-
-### 8.2 Новые компоненты
-
-- **Серверные** (данные из БД, нет интерактивности) → `components/<module>/`.
-- **Клиентские** (формы, состояние, анимации) → `components/<module>/`, добавить `"use client"` первой строкой.
-- UI-примитивы (кнопки, карточки) → `components/ui/`.
-
-### 8.3 API Route
-
-Создай `app/api/<module>/route.ts`:
-
-```typescript
-import { getApiSession } from '@/lib/api-auth'
-import { NextResponse } from 'next/server'
-
-export async function POST(req: Request) {
-  const { user, profile } = await getApiSession()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  // ...
-}
-```
-
-### 8.4 Server Action
-
-Добавь функцию в `app/actions/<module>-actions.ts`:
-
-```typescript
-'use server'
-import { requireProfile } from '@/lib/auth'
-import { writeAudit } from '@/lib/audit'
-import { revalidatePath } from 'next/cache'
-
-export async function createReportAction(data: FormData) {
-  const profile = await requireProfile()
-  // INSERT в БД ...
-  await writeAudit(profile.id, 'create_report', 'report', newId, {})
-  revalidatePath('/reports')
-}
-```
-
-### 8.5 Новая таблица и RLS
-
-1. Создай файл `supabase/0005_<name>.sql`:
-
-```sql
--- Новая таблица
-CREATE TABLE reports (
-  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  created_by uuid REFERENCES profiles(id),
-  body       text NOT NULL,
-  created_at timestamptz DEFAULT now()
-);
-
--- Включить RLS
-ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
-
--- Политики
-CREATE POLICY "Авторизованные видят отчёты"
-  ON reports FOR SELECT
-  USING (auth.uid() IS NOT NULL);
-
-CREATE POLICY "Создаёт автор"
-  ON reports FOR INSERT
-  WITH CHECK (auth.uid() = created_by);
-```
-
-2. Применить к Supabase: `supabase db push` или выполнить SQL вручную через дашборд.
-
-### 8.6 Push-уведомления для нового события
-
-В API route или Server Action после совершения действия вызови `sendPushToUser`:
-
-```typescript
-import { sendPushToUser } from '@/lib/push'
-
-await sendPushToUser(recipientUserId, {
-  title: 'Новый отчёт',
-  body: 'Создан новый отчёт: ...',
-  url: `/reports/${reportId}`,
-})
-```
-
-Уведомление отобразится через `sw.js` (обработчик `push` уже реализован).
-
-### 8.7 Не сломать PWA
-
-- **Не добавляй** статические файлы с изменяемым содержимым в список кэша `sw.js` без инвалидации версии кэша (`ops-tasker-v2` → `ops-tasker-v3`).
-- Заголовки для файлов, которые должны обновляться без перезагрузки SW, настраивай в `next.config.ts`.
-- Если добавляешь новый файл в `public/`, который должен работать офлайн — добавь его в `STATIC_ASSETS` внутри `sw.js`.
-- `register-sw.tsx` — единственное место регистрации SW; не регистрируй SW повторно из других компонентов.
-
----
-
-## 9. Переменные окружения
-
-| Переменная | Где используется | Обязательна |
-|---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Везде (browser + server) | Да |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Browser-клиент, SSR-клиент | Да |
-| `SUPABASE_SERVICE_ROLE_KEY` | `lib/supabase/admin.ts` (только server) | Да |
-| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | `components/pwa/register-sw.tsx` (browser) | Да |
-| `VAPID_PUBLIC_KEY` | `lib/push.ts` (server) | Да |
-| `VAPID_PRIVATE_KEY` | `lib/push.ts` (server) | Да |
-| `VAPID_SUBJECT` | `lib/push.ts` (server, mailto:) | Да |
-| `CRON_SECRET` | `/api/cron/archive` (server) | Да |
-
-> `NEXT_PUBLIC_*` переменные попадают в клиентский бандл. Никогда не помечай `SUPABASE_SERVICE_ROLE_KEY` или `VAPID_PRIVATE_KEY` префиксом `NEXT_PUBLIC_`.
-
----
-
-## 10. Технический долг и точки для улучшения
-
-### 10.1 Дублирование VAPID ключа
-`NEXT_PUBLIC_VAPID_PUBLIC_KEY` и `VAPID_PUBLIC_KEY` содержат одно и то же значение — публичный VAPID-ключ. Это вынуждено разделением browser/server контекста в Next.js, но стоит добавить в документацию `.env.example` явный комментарий об этом, чтобы новые разработчики не терялись.
-
-### 10.2 Миграции применяются вручную
-`push_subscriptions.sql` применена отдельно от нумерованных файлов `0001–0004`. Лучше перенести её содержимое в `0005_push_subscriptions.sql` и применять только через нумерованный пайплайн.
-
-### 10.3 Нет автоматического запуска cron
-`/api/cron/archive` требует внешнего вызова (curl/cron-сервис). Не задокументирован способ настройки — стоит добавить пример в `docs/` или `README.md` (например, конфиг для Vercel Cron или systemd-timer).
-
-### 10.4 Нет миграционного инструмента
-Миграции — обычные `.sql` файлы без инструмента версионирования (Flyway, supabase CLI migrations). Стоит перейти на `supabase migrations` (`supabase/migrations/`) и отслеживать применённые версии через таблицу `supabase_migrations`.
-
-### 10.5 Отсутствует обработка истёкших push-подписок
-`lib/push.ts` не удаляет подписки, вернувшие HTTP 410 (Gone) от push-сервиса. Со временем таблица `push_subscriptions` будет копить мёртвые записи — стоит добавить обработку ошибок `410` с удалением записи.
-
-### 10.6 `loading.tsx` не реализованы для всех страниц
-Skeleton-loading есть не везде. Рекомендуется добавить для страниц с тяжёлыми запросами (`/audit`, `/tasks/[id]`).
+# Архитектура проекта
+
+> Документ описывает фактическую архитектуру репозитория на текущем этапе и согласован с `README.md`. Если поведение в коде и в этом файле расходится, источником истины считается код.
+
+## 1. Общая картина
+
+Проект состоит из двух прикладных контуров:
+
+- классический контур эксплуатационных задач;
+- контур ППР с отдельной структурой объектов, планированием и lifecycle ППР-заявок.
+
+Технически это одно приложение на `Next.js 15` с `App Router`, где:
+
+- страницы и серверные компоненты живут в `app/`;
+- интерактивный UI вынесен в `components/`;
+- бизнес-правила и запросы к данным сосредоточены в `lib/`;
+- `route handlers` и `server actions` параллельно используются как два механизма записи;
+- источником данных выступает `Supabase` (`Auth`, `Postgres`, `RLS`, `Storage`);
+- на клиенте есть `PWA`-обвязка и частичная offline-очередь.
+
+Важно: проект уже не является “только задачником”. ППР-модуль сопоставим по размеру с основным контуром задач и имеет собственные страницы, API routes, server actions, доменную модель, миграции и сквозные процессы.
+
+## 2. Архитектура по слоям
+
+### 2.1 UI-слой
+
+UI строится вокруг server-first подхода:
+
+- страницы в `app/` по умолчанию серверные;
+- клиентские компоненты используются только там, где нужен браузерный API, локальное состояние, drag-and-drop или offline-логика;
+- единый dashboard-shell собирается в `app/(dashboard)/layout.tsx`.
+
+Основные UI-пакеты:
+
+- `components/tasks/*` — обычные задачи;
+- `components/ppr/*` — ППР;
+- `components/dashboard/*` — навигация и shell;
+- `components/ui/*` — примитивы;
+- `components/pwa/*` и `components/offline/*` — инфраструктурные клиентские компоненты.
+
+### 2.2 Маршруты и orchestration-слой
+
+`app/` совмещает три разных механизма:
+
+- страницы и layouts;
+- `app/api/*` для JSON/FormData API;
+- `app/actions/*` для `server actions`.
+
+Это означает, что orchestration-логика в проекте частично дублируется:
+
+- классические задачи имеют и `server actions`, и `API routes` для похожих операций;
+- ППР-структура и админские сценарии в основном опираются на `server actions`;
+- ППР lifecycle в основном вынесен в `API routes`, но часть операций остаётся в `server actions`, например закрытие ППР-заявки и генерация календарного плана.
+
+### 2.3 Доменный слой
+
+Бизнес-логика в `lib/` разделена по доменам:
+
+- `lib/tasks.ts`, `lib/task-permissions.ts`, `lib/task-sort.ts`, `lib/task-presentation.ts` — обычные задачи;
+- `lib/ppr/*` — ППР-домен;
+- `lib/auth.ts`, `lib/api-auth.ts` — аутентификация и роль/профиль;
+- `lib/attachments.ts`, `lib/ppr/files.ts` — storage и signed URLs;
+- `lib/offline/queue.ts` — offline queue;
+- `lib/audit.ts`, `lib/push.ts` — сквозная инфраструктура.
+
+Доменные модули используются и страницами, и API, и server actions, но не всегда одинаково глубоко: часть правил лежит в `lib/*`, а часть повторяется на уровне handlers.
+
+### 2.4 Данные и интеграции
+
+Хранилище построено на Supabase:
+
+- `Auth` — сессии и пользователи;
+- `profiles` — прикладной профиль пользователя и роль;
+- `Postgres + RLS` — основная доменная модель;
+- `Storage` — файлы обычных задач и ППР;
+- `RPC` — pause/archive/PPR cron-операции.
+
+Приложение использует три клиента Supabase:
+
+- `lib/supabase/server.ts` — SSR и server actions;
+- `lib/supabase/browser.ts` — клиентский доступ, когда он нужен;
+- `lib/supabase/admin.ts` — service role для системных операций.
+
+## 3. Назначение основных директорий
+
+### `app/`
+
+Содержит:
+
+- `layout.tsx` — корневой layout с `RegisterSW`;
+- `(dashboard)/layout.tsx` — авторизованный shell, `OfflineSyncBootstrap`, боковое меню и мобильные табы;
+- страницы классического контура задач;
+- страницы ППР под `/ppr`;
+- `app/api/*` — API routes;
+- `app/actions/*` — server actions.
+
+Ключевая деталь: `OfflineSyncBootstrap` находится не в корневом layout, а в dashboard layout. Offline-синк работает только в авторизованном контуре приложения.
+
+### `components/`
+
+Слой UI-компонентов.
+
+- `tasks/` — формы, карточки, списки, фильтры, offline-aware status/comment UI;
+- `ppr/` — dashboard, каталоги, календарь, QR, карточки ППР-заявок;
+- `dashboard/` — навигация;
+- `ui/` — базовые примитивы;
+- `pwa/` — регистрация service worker и push-подписки;
+- `offline/` — bootstrap синка очереди.
+
+### `lib/`
+
+Главный слой прикладной логики.
+
+- `auth.ts` — получение профиля, role guards, базовые capability-функции;
+- `api-auth.ts` — унифицированное получение `{ user, profile, supabase }` для API routes;
+- `tasks.ts` — списки и чтение задач;
+- `task-permissions.ts` — матрица доступа и допустимых переходов по обычным задачам;
+- `ppr/queries.ts` — основной query-layer ППР;
+- `ppr/permissions.ts` — права доступа по слоям ППР;
+- `ppr/task-lifecycle.ts` — lifecycle ППР-заявок;
+- `ppr/scheduler.ts` — генерация и cron-оркестрация планирования;
+- `offline/queue.ts` — IndexedDB/localforage очередь.
+
+### `supabase/`
+
+Содержит SQL-миграции и seed.
+
+Важно: фактический набор миграций уже включает не только базовые задачи, но и большой пакет миграций ППР вплоть до `0020_ppr_cleanup_legacy_structure.sql`.
+
+### `public/`
+
+PWA-ассеты:
+
+- `manifest.webmanifest`;
+- `sw.js`;
+- `icon.svg`.
+
+### `docs/`
+
+Текущие проектные документы. `README.md` даёт общий обзор, а этот файл фиксирует более прикладную архитектурную модель.
+
+## 4. Реально используемые контуры
+
+### Контур 1. Обычные задачи
+
+Главные страницы:
+
+- `/my`
+- `/new`
+- `/archive`
+- `/tasks/create`
+- `/tasks/[id]`
+
+Данные и права обслуживаются через `lib/tasks.ts` и `lib/task-permissions.ts`.
+
+### Контур 2. ППР
+
+Главные подмодули:
+
+- структура: `/ppr/system-groups`, `/ppr/systems`, `/ppr/rooms`, `/ppr/equipment`;
+- планирование: `/ppr/templates`, `/ppr/assignments`, `/ppr/calendar`;
+- исполнение: `/ppr/tasks`, `/ppr/my`, `/ppr/archive`, `/ppr/tasks/[id]`;
+- QR-entry: `/ppr/qr/[token]`.
+
+Этот контур использует свой доменный пакет `lib/ppr/*`, свои API routes и собственную модель таблиц/миграций.
+
+### Контур 3. Справочники и администрирование
+
+- `/users`
+- `/objects`
+- `/audit`
+- `/profile`
+
+Это не отдельный домен, а обслуживающий контур вокруг двух основных модулей.
+
+## 5. Где есть дублирование логики
+
+### Обычные задачи
+
+Для обычных задач существует двойной путь записи:
+
+- `server actions` в `app/actions/task-actions.ts`;
+- `API routes` в `app/api/tasks/*`.
+
+На практике:
+
+- формы создания и часть административных сценариев опираются на `server actions`;
+- интерактивные и offline-aware действия клиента чаще идут через `API routes`;
+- статус, комментарии и часть team-операций существуют в обоих представлениях.
+
+Следствие: документация и изменения должны учитывать, что часть правил поддерживается в двух местах.
+
+### ППР
+
+У ППР разделение более выражено:
+
+- справочники, шаблоны, назначения и часть календаря идут через `server actions`;
+- lifecycle ППР-заявок в основном живёт в `app/api/ppr/tasks/*`;
+- закрытие ППР-заявки осталось `server action` (`closePprTaskAction`).
+
+То есть ППР не полностью “API-first” и не полностью “actions-first”.
+
+### Права
+
+Права частично распределены между:
+
+- `lib/auth.ts`;
+- `lib/task-permissions.ts`;
+- `lib/ppr/permissions.ts`;
+- `lib/ppr/queries.ts` с access-gates на уровне выборок;
+- RLS-политиками в Supabase.
+
+Это осознанное многослойное ограничение, но из-за него важно синхронно обновлять код и документацию.
+
+## 6. Связи между слоями
+
+### Страница -> данные
+
+Типичный путь чтения:
+
+1. Страница вызывает `requireProfile()`.
+2. Получает серверный Supabase client.
+3. Вызывает query-layer из `lib/*`.
+4. Передаёт данные в `components/*`.
+
+### Клиентский UI -> запись
+
+Есть два варианта:
+
+1. Через `server action` из формы.
+2. Через `fetch` в `app/api/*`.
+
+Для интерактивных операций второй вариант используется чаще, особенно там, где нужен offline fallback или немедленный JSON-ответ.
+
+### API routes / actions -> Supabase
+
+Handlers используют:
+
+- `getApiSession()` для API routes;
+- `requireProfile()` + `createSupabaseServerClient()` для server actions.
+
+Дальше вызывается:
+
+- либо query/permission-логика из `lib/*`;
+- либо прямой запрос к таблицам/RPC с локальной проверкой условий.
+
+### Файлы
+
+Для файлов путь такой:
+
+1. Клиент отправляет `FormData`.
+2. Handler валидирует тип/размер/количество.
+3. Файл уходит в приватный bucket.
+4. Метаданные пишутся в таблицу.
+5. На чтении пользователю выдаётся signed URL.
+
+Buckets:
+
+- `task-attachments` — обычные задачи;
+- `ppr-files` — ППР.
+
+### Offline и PWA
+
+`RegisterSW` включён глобально, а offline queue подключается только в dashboard layout.
+
+Итог:
+
+- PWA-обвязка доступна всему приложению;
+- offline sync фактически относится к авторизованному контуру обычных задач.
+
+## 7. Ключевые сквозные процессы
+
+### 7.1 Смена статуса обычной задачи
+
+Основной интерактивный путь:
+
+1. `StatusControl` или `TaskActionMenu`.
+2. Если сети нет, действие ставится в `offline/queue.ts`.
+3. Если сеть есть, вызывается `POST /api/tasks/[id]/status`.
+4. API route проверяет сессию, читает задачу, сверяет права через `canChangeStatus`.
+5. Проверяет допустимость перехода через `canTransitionTaskStatus`.
+6. Обновляет `tasks`, пишет `audit_log`.
+
+Отдельная ветка:
+
+- переход в `paused` идёт не через `/status`, а через `/pause`;
+- переход `new -> accepted` также существует как `takeTaskInWork` server action.
+
+Вывод: lifecycle обычных задач размазан между несколькими entry points.
+
+### 7.2 Комментарий к обычной задаче
+
+Основной путь:
+
+1. `CommentForm`.
+2. При офлайне — `enqueueAction(type: "add_comment")`.
+3. При онлайне — `POST /api/tasks/[id]/comments`.
+4. Route проверяет право чтения задачи.
+5. Вставляет комментарий, пишет audit, запускает push наблюдателям.
+6. Вложения при наличии отправляются отдельным запросом в `/attachments`.
+
+Замечание: комментарий может быть создан без текста только в составе API-схемы? Нет. Для обычных задач API сейчас принимает `body` как строку и затем `trim()`, поэтому бизнес-ожидание “комментарий только с фото” зависит от текущего поведения формы и обработчика вложений, а не от отдельной доменной модели комментария.
+
+### 7.3 Смена статуса ППР-заявки
+
+Путь:
+
+1. Клиент вызывает `POST /api/ppr/tasks/[id]/status`.
+2. Route получает задачу через `getPprTaskByIdForProfile`.
+3. Формируется PPR-actor через `buildPprTaskActor`.
+4. Проверяются `canStartPprTask` или `canCompletePprTask`.
+5. При переходе в `done` дополнительно проверяются evidence: минимум 1 комментарий и 1 фото.
+6. Обновляется `ppr_tasks`, пишется audit.
+
+### 7.4 Закрытие и отмена ППР-заявки
+
+- отмена идёт через `POST /api/ppr/tasks/[id]/cancel`;
+- закрытие идёт через `closePprTaskAction`.
+
+Обе операции синхронизируют статусы с `ppr_month_plan_items`.
+
+Это важная архитектурная особенность: финализация ППР lifecycle не сосредоточена в одном transport-слое.
+
+### 7.5 Права доступа
+
+Проверки идут в несколько слоёв:
+
+1. `middleware.ts` защищает часть dashboard-маршрутов по cookie.
+2. Страницы вызывают `requireProfile()` и дополнительно фильтруют доступ.
+3. API routes вызывают `getApiSession()`.
+4. Доменный слой применяет `can*`-проверки.
+5. На данных работает RLS.
+
+Критичная деталь:
+
+- `middleware.ts` не включает `/ppr` в `matcher`;
+- доступ к ППР обеспечивается не middleware, а server-side проверками в страницах, API и actions.
+
+### 7.6 Offline sync
+
+Сейчас offline queue покрывает только:
+
+- `update_status` обычных задач;
+- `add_comment` обычных задач.
+
+`OfflineSyncBootstrap`:
+
+- запускает `flushQueue()` при mount;
+- слушает событие `online`;
+- повторно отправляет отложенные запросы.
+
+Очередь не покрывает:
+
+- ППР;
+- файлы;
+- паузу;
+- team management;
+- справочники;
+- админские операции.
+
+### 7.7 PWA и push
+
+Путь push-подписки:
+
+1. `RegisterSW` регистрирует `sw.js`.
+2. При наличии VAPID-ключа запрашивает push subscription.
+3. Отправляет подписку в `/api/push/subscribe`.
+4. Route сохраняет её в `push_subscriptions`.
+
+Путь отправки push:
+
+1. Код вызывает `sendPushToUser`.
+2. Используется admin client.
+3. `web-push` отправляет уведомления по подпискам.
+4. `sw.js` показывает notification и открывает URL.
+
+Push сейчас реально используются в контуре обычных задач. Для ППР выделенных push-сценариев нет.
+
+## 8. API routes и server actions
+
+### Основные API routes
+
+Обычные задачи:
+
+- `/api/tasks/[id]/status`
+- `/api/tasks/[id]/pause`
+- `/api/tasks/[id]/comments`
+- `/api/tasks/[id]/history`
+- `/api/tasks/[id]/team`
+- `/api/tasks/[id]/attachments`
+- `/api/tasks/[id]/archive`
+
+Push и cron:
+
+- `/api/push/subscribe`
+- `/api/push/test`
+- `/api/push/send-assignment`
+- `/api/cron/archive`
+
+ППР:
+
+- `/api/ppr/tasks/[id]/status`
+- `/api/ppr/tasks/[id]/assign`
+- `/api/ppr/tasks/[id]/cancel`
+- `/api/ppr/tasks/[id]/comments`
+- `/api/ppr/tasks/[id]/attachments`
+- `/api/ppr/tasks/[id]/reschedule`
+- `/api/ppr/qr/[token]`
+- `/api/ppr/cron/run`
+
+### Основные server actions
+
+Обычные задачи:
+
+- `takeTaskInWork`
+- `updateTaskStatus`
+- `pauseTask`
+- `addTaskComment`
+- `createTaskAction`
+- `addTaskTeamMemberAction`
+- `removeTaskTeamMemberAction`
+
+Справочники и auth:
+
+- `signOutAction`
+- user/object actions
+
+ППР:
+
+- directory actions;
+- template actions;
+- calendar actions;
+- `closePprTaskAction`.
+
+## 9. Модель данных на уровне доменов
+
+### Общий контур
+
+Базовые сущности:
+
+- `profiles`
+- `objects`
+- `user_objects`
+- `tasks`
+- `task_team_members`
+- `task_comments`
+- `task_attachments`
+- `audit_log`
+- `push_subscriptions`
+
+### ППР-контур
+
+Ключевые сущности по миграциям и query-layer:
+
+- `ppr_system_groups`
+- `ppr_systems`
+- `object_rooms`
+- `ppr_equipment`
+- `ppr_equipment_qr_codes`
+- `ppr_work_templates`
+- `ppr_work_checklist_items`
+- `ppr_equipment_work_assignments`
+- `ppr_month_plans`
+- `ppr_month_plan_items`
+- `ppr_tasks`
+- `ppr_task_work_items`
+- `ppr_task_comments`
+- `ppr_task_attachments`
+
+Отдельно есть file-слой ППР через bucket `ppr-files` и таблицы вложений для оборудования, шаблонов и ППР-задач, но в текущем UI наиболее явно задействованы именно вложения ППР-заявок.
+
+## 10. Ограничения текущей архитектуры
+
+- Обычные задачи и ППР используют похожие концепции, но реализованы разными контурами без общего абстрактного доменного слоя.
+- Часть прикладных операций дублируется между `API routes` и `server actions`.
+- `middleware.ts` защищает только часть приложения и не является универсальным gatekeeper для всех авторизованных экранов.
+- Offline-поддержка ограничена только частью обычного task-flow.
+- `service worker` не делает приложение fully-offline и в основном кэширует статику.
+- Права доступа распределены между UI, handlers, `lib/*` и RLS, поэтому изменение одной точки без остальных может привести к рассинхрону.
+
+## 11. Практические правила для изменений
+
+- Для UI-форм с полноценным submit и revalidate естественнее использовать `server actions`.
+- Для интерактивных операций, offline fallback и JSON-ответов естественнее использовать `API routes`.
+- Любое изменение прав нужно проверять минимум в `lib/auth.ts`, `lib/task-permissions.ts` или `lib/ppr/permissions.ts`, а также в реальных entry points.
+- Изменения в lifecycle задач и ППР нужно смотреть не только в transport-слое, но и в query/permission/helpers.
+- Для PPR-изменений важно учитывать связь с `ppr_month_plan_items`, календарём и cron-оркестрацией.
