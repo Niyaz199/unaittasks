@@ -113,6 +113,7 @@ UI строится вокруг server-first подхода:
 
 - `auth.ts` — получение профиля, role guards, базовые capability-функции;
 - `api-auth.ts` — унифицированное получение `{ user, profile, supabase }` для API routes;
+- `floors.ts`, `room-types.ts`, `object-rooms.ts` — глобальные справочники этажей, типов помещений и модель помещений объектов;
 - `tasks.ts` — списки и чтение задач;
 - `task-permissions.ts` — матрица доступа и допустимых переходов по обычным задачам;
 - `ppr/queries.ts` — основной query-layer ППР;
@@ -125,7 +126,7 @@ UI строится вокруг server-first подхода:
 
 Содержит SQL-миграции и seed.
 
-Важно: фактический набор миграций уже включает не только базовые задачи, но и большой пакет миграций ППР вплоть до `0020_ppr_cleanup_legacy_structure.sql`.
+Важно: фактический набор миграций уже включает не только базовые задачи, но и большой пакет миграций ППР и глобальных справочников вплоть до `0021_global_room_directories.sql`.
 
 ### `public/`
 
@@ -157,6 +158,7 @@ PWA-ассеты:
 
 Главные подмодули:
 
+- глобально переиспользуемая структура помещений: `/directories/floors`, `/directories/room-types`;
 - структура: `/ppr/system-groups`, `/ppr/systems`, `/ppr/rooms`, `/ppr/equipment`;
 - планирование: `/ppr/templates`, `/ppr/assignments`, `/ppr/calendar`;
 - исполнение: `/ppr/tasks`, `/ppr/my`, `/ppr/archive`, `/ppr/tasks/[id]`;
@@ -164,10 +166,22 @@ PWA-ассеты:
 
 Этот контур использует свой доменный пакет `lib/ppr/*`, свои API routes и собственную модель таблиц/миграций.
 
-### Контур 3. Справочники и администрирование
+### Контур 3. Обходы
+
+Главные подмодули:
+
+- scanner flow: `/rounds/scan` и deep-link `/rounds/scan?token=...`;
+- контроль исполнения: `/rounds/today`, `/rounds/archive`;
+- конфигурация: `/rounds/config`, `/rounds/qr`.
+
+Этот контур использует общий справочник `object_rooms`, отдельный доменный пакет `lib/rounds/*`, свои API routes `app/api/rounds/*` и отдельную offline-очередь `lib/offline/rounds-queue.ts`.
+
+### Контур 4. Справочники и администрирование
 
 - `/users`
 - `/objects`
+- `/directories/floors`
+- `/directories/room-types`
 - `/audit`
 - `/profile`
 
@@ -338,10 +352,11 @@ Buckets:
 
 ### 7.6 Offline sync
 
-Сейчас offline queue покрывает только:
+Сейчас offline queue покрывает:
 
 - `update_status` обычных задач;
 - `add_comment` обычных задач.
+- `rounds_checkin` в модуле обходов, включая фото.
 
 `OfflineSyncBootstrap`:
 
@@ -408,6 +423,15 @@ Push и cron:
 - `/api/ppr/qr/[token]`
 - `/api/ppr/cron/run`
 
+Обходы:
+
+- `/api/rounds/config`
+- `/api/rounds/today`
+- `/api/rounds/archive`
+- `/api/rounds/checkins`
+- `/api/rounds/qr/[token]`
+- `/api/rounds/qr/generate`
+
 ### Основные server actions
 
 Обычные задачи:
@@ -452,6 +476,8 @@ Push и cron:
 
 Ключевые сущности по миграциям и query-layer:
 
+- `floors`
+- `room_types`
 - `ppr_system_groups`
 - `ppr_systems`
 - `object_rooms`
@@ -467,15 +493,29 @@ Push и cron:
 - `ppr_task_comments`
 - `ppr_task_attachments`
 
+### Контур обходов
+
+Ключевые сущности:
+
+- расширение `object_rooms` полями `rounds_enabled`, `rounds_qr_token`, `rounds_qr_generated_at`
+- `rounds_checkins`
+- bucket `rounds-files`
+
 Отдельно есть file-слой ППР через bucket `ppr-files` и таблицы вложений для оборудования, шаблонов и ППР-задач, но в текущем UI наиболее явно задействованы именно вложения ППР-заявок.
+
+Дополнение по помещениям:
+
+- `object_rooms` теперь использует `floor_id` и `room_type_id` как основные связи;
+- legacy-поле `object_rooms.floor` временно сохранено для безопасной миграции и fallback-отображения старых данных;
+- глобальные справочники `floors` и `room_types` архитектурно вынесены из ППР, но уже используются в `/ppr/rooms`, `/ppr/equipment` и календарных выборках.
 
 ## 10. Ограничения текущей архитектуры
 
 - Обычные задачи и ППР используют похожие концепции, но реализованы разными контурами без общего абстрактного доменного слоя.
 - Часть прикладных операций дублируется между `API routes` и `server actions`.
 - `middleware.ts` защищает только часть приложения и не является универсальным gatekeeper для всех авторизованных экранов.
-- Offline-поддержка ограничена только частью обычного task-flow.
-- `service worker` не делает приложение fully-offline и в основном кэширует статику.
+- Offline-поддержка теперь охватывает часть task-flow и модуль обходов, но не является универсальной для всех доменов.
+- `service worker` по-прежнему не делает приложение fully-offline, хотя дополнительно кэширует shell обходов и fallback-навигацию для scanner flow.
 - Права доступа распределены между UI, handlers, `lib/*` и RLS, поэтому изменение одной точки без остальных может привести к рассинхрону.
 
 ## 11. Практические правила для изменений

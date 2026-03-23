@@ -45,7 +45,12 @@ type MonthPlanRow = {
   system: { name: string } | Array<{ name: string }> | null;
 };
 
-type RoomRelation = { name: string; floor: string | null };
+type RoomRelation = {
+  name: string;
+  floor: string | null;
+  floor_ref: { name: string; sort_order: number } | Array<{ name: string; sort_order: number }> | null;
+  room_type: { name: string } | Array<{ name: string }> | null;
+};
 
 type EquipmentRelation = {
   name: string;
@@ -143,11 +148,12 @@ function resolveEquipmentInfo(raw: EquipmentRelation | Array<EquipmentRelation> 
   const equipment = resolveRelation(raw);
   const room = resolveRelation(equipment?.room);
   const inventoryNo = equipment?.inventory_no?.trim() || "без инв.";
+  const floorRelation = resolveRelation(room?.floor_ref);
   return {
     equipmentName: equipment?.name ?? "—",
     inventoryNo,
     roomName: room?.name ?? "—",
-    roomFloor: room?.floor ?? null,
+    roomFloor: floorRelation?.name ?? room?.floor ?? null,
   };
 }
 

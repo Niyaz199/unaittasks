@@ -41,12 +41,21 @@ function monthDiff(from: Date, to: Date) {
   return (to.getUTCFullYear() - from.getUTCFullYear()) * 12 + (to.getUTCMonth() - from.getUTCMonth());
 }
 
-export function normalizePlanMonth(value: string) {
-  const parsed = new Date(`${value}-01T00:00:00.000Z`);
+function parsePlanMonth(value: string) {
+  const normalized = value.trim();
+  const parsed = /^\d{4}-\d{2}$/.test(normalized)
+    ? new Date(`${normalized}-01T00:00:00.000Z`)
+    : /^\d{4}-\d{2}-\d{2}$/.test(normalized)
+      ? new Date(`${normalized}T00:00:00.000Z`)
+      : new Date(Number.NaN);
   if (Number.isNaN(parsed.getTime())) {
     throw new Error("Некорректный месяц плана");
   }
-  return toDateOnly(firstDayOfMonth(parsed));
+  return firstDayOfMonth(parsed);
+}
+
+export function normalizePlanMonth(value: string) {
+  return toDateOnly(parsePlanMonth(value));
 }
 
 export function defaultPlannedFor(planMonth: string) {
@@ -74,6 +83,7 @@ export async function generateMonthPlanForSystem(
   input: { systemId: string; planMonth: string }
 ) {
   const normalizedPlanMonth = normalizePlanMonth(input.planMonth);
+  const planMonthKey = normalizedPlanMonth.slice(0, 7);
 
   const { data: system, error: systemError } = await supabase
     .from("ppr_systems")
@@ -124,7 +134,7 @@ export async function generateMonthPlanForSystem(
 
   const insertRows = rows
     .map((assignment) => {
-      const dueDate = calculateAssignmentDueDateForPlanMonth(assignment.start_date, assignment.period_months, normalizedPlanMonth);
+      const dueDate = calculateAssignmentDueDateForPlanMonth(assignment.start_date, assignment.period_months, planMonthKey);
       if (!dueDate) return null;
 
       const equipment = Array.isArray(assignment.equipment) ? assignment.equipment[0] : assignment.equipment;

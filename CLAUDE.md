@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **zadachnik** (927 symbols, 2738 relationships, 67 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **zadachnik** (927 symbols, 2745 relationships, 67 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -97,22 +97,5 @@ To check whether embeddings exist, inspect `.gitnexus/meta.json` — the `stats.
 | Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
 | Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
-| Work in the Ppr area (144 symbols) | `.claude/skills/generated/ppr/SKILL.md` |
-| Work in the Actions area (102 symbols) | `.claude/skills/generated/actions/SKILL.md` |
-| Work in the Calendar area (72 symbols) | `.claude/skills/generated/calendar/SKILL.md` |
-| Work in the Tasks area (51 symbols) | `.claude/skills/generated/tasks/SKILL.md` |
-| Work in the [id] area (10 symbols) | `.claude/skills/generated/id/SKILL.md` |
-| Work in the Offline area (9 symbols) | `.claude/skills/generated/offline/SKILL.md` |
-| Work in the Attachments area (8 symbols) | `.claude/skills/generated/attachments/SKILL.md` |
-| Work in the Templates area (7 symbols) | `.claude/skills/generated/templates/SKILL.md` |
-| Work in the Status area (6 symbols) | `.claude/skills/generated/status/SKILL.md` |
-| Work in the Comments area (6 symbols) | `.claude/skills/generated/comments/SKILL.md` |
-| Work in the Ui area (6 symbols) | `.claude/skills/generated/ui/SKILL.md` |
-| Work in the App area (5 symbols) | `.claude/skills/generated/app/SKILL.md` |
-| Work in the Dictionaries area (5 symbols) | `.claude/skills/generated/dictionaries/SKILL.md` |
-| Work in the Pwa area (4 symbols) | `.claude/skills/generated/pwa/SKILL.md` |
-| Work in the Systems area (4 symbols) | `.claude/skills/generated/systems/SKILL.md` |
-| Work in the Assignments area (4 symbols) | `.claude/skills/generated/assignments/SKILL.md` |
-| Work in the Equipment area (4 symbols) | `.claude/skills/generated/equipment/SKILL.md` |
 
 <!-- gitnexus:end -->

@@ -7,10 +7,10 @@
   --line-strong: #384865;
   --text: #e6edf8;
   --text-soft: #9fb0ce;
-  --accent: #fd4a5e;
-  --accent-soft: #e43f53;
-  --brand-grad-start: #fd238a;
-  --brand-grad-end: #ff8519;
+  --accent: #3b82f6;
+  --accent-soft: #2563eb;
+  --brand-grad-start: #3b82f6;
+  --brand-grad-end: #6366f1;
   --success: #22c55e;
   --warning: #f59e0b;
   --danger: #ef4444;
@@ -100,11 +100,11 @@ a {
 
 .topbar-user-name {
   font-size: 1.05rem;
-  background: linear-gradient(135deg, #ffd4da, #ffe2c7);
+  background: linear-gradient(135deg, #bfdbfe, #dbeafe);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  text-shadow: 0 0 20px rgba(253, 74, 94, 0.16);
+  text-shadow: 0 0 20px rgba(59, 130, 246, 0.16);
 }
 
 .sidebar-user-role,
@@ -149,7 +149,7 @@ a {
 }
 
 .side-nav-link.active {
-  color: #ffe9ec;
+  color: #eff6ff;
   border-color: color-mix(in srgb, var(--accent) 55%, #ffffff 8%);
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--brand-grad-start) 24%, transparent), color-mix(in srgb, var(--brand-grad-end) 24%, transparent)),
@@ -226,8 +226,8 @@ a {
 .btn-accent {
   background: linear-gradient(135deg, var(--brand-grad-start), var(--brand-grad-end));
   border-color: color-mix(in srgb, var(--accent) 74%, #ffffff 20%);
-  color: #fff7f8;
-  box-shadow: 0 10px 22px rgba(253, 74, 94, 0.28);
+  color: #eff6ff;
+  box-shadow: 0 10px 22px rgba(59, 130, 246, 0.28);
 }
 
 .btn-danger {
@@ -472,7 +472,7 @@ textarea {
   display: grid;
   place-items: center;
   font-size: 1.05rem;
-  color: #ffdfe4;
+  color: #eff6ff;
   background: linear-gradient(
     135deg,
     color-mix(in srgb, var(--brand-grad-start) 36%, transparent),
@@ -550,7 +550,7 @@ textarea {
 }
 
 .mobile-tab.active {
-  color: #fff0f2;
+  color: #eff6ff;
   border-color: color-mix(in srgb, var(--accent) 62%, #ffffff 16%);
   background: linear-gradient(135deg, color-mix(in srgb, var(--brand-grad-start) 24%, transparent), color-mix(in srgb, var(--brand-grad-end) 22%, transparent));
 }
@@ -589,13 +589,13 @@ textarea {
 }
 
 .filter-chip.active {
-  color: #fff2f4;
+  color: #eff6ff;
   background: linear-gradient(
     135deg,
     color-mix(in srgb, var(--brand-grad-start) 38%, transparent),
     color-mix(in srgb, var(--brand-grad-end) 38%, transparent)
   );
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, #ffd4da 34%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #bfdbfe 34%, transparent);
 }
 
 .filters-overlay {
@@ -725,9 +725,9 @@ textarea {
   place-items: center;
   font-size: 0.62rem;
   font-weight: 700;
-  color: #ffeef1;
-  background: linear-gradient(135deg, #c73863, #ff7b2f);
-  box-shadow: 0 5px 12px rgba(253, 74, 94, 0.24);
+  color: #eff6ff;
+  background: linear-gradient(135deg, #2563eb, #8b5cf6);
+  box-shadow: 0 5px 12px rgba(59, 130, 246, 0.24);
 }
 
 .task-row-right {
@@ -970,8 +970,8 @@ textarea {
   font-weight: 700;
   background: linear-gradient(135deg, var(--brand-grad-start), var(--brand-grad-end));
   box-shadow:
-    0 4px 14px rgba(253, 74, 94, 0.28),
-    inset 0 0 0 1px color-mix(in srgb, #ffd4da 40%, transparent);
+    0 4px 14px rgba(59, 130, 246, 0.28),
+    inset 0 0 0 1px color-mix(in srgb, #bfdbfe 40%, transparent);
 }
 
 .task-details-head .badge {
@@ -1006,8 +1006,8 @@ textarea {
   color: #fff;
   background: linear-gradient(135deg, var(--brand-grad-start), var(--brand-grad-end));
   box-shadow:
-    0 6px 18px rgba(253, 74, 94, 0.32),
-    inset 0 0 0 1px color-mix(in srgb, #ffd4da 40%, transparent);
+    0 6px 18px rgba(59, 130, 246, 0.32),
+    inset 0 0 0 1px color-mix(in srgb, #bfdbfe 40%, transparent);
   font-weight: 600;
 }
 
@@ -1261,7 +1261,7 @@ textarea {
   font-size: 0.68rem;
   font-weight: 700;
   background: color-mix(in srgb, var(--brand-grad-start) 30%, transparent);
-  color: #ffd4da;
+  color: #bfdbfe;
   padding: 0 0.28rem;
   margin-left: 0.3rem;
 }
@@ -1328,11 +1328,11 @@ textarea {
 .cf-send-btn--active {
   background: linear-gradient(135deg, var(--brand-grad-start), var(--brand-grad-end));
   color: #fff !important;
-  box-shadow: 0 6px 18px rgba(253, 35, 138, 0.28);
+  box-shadow: 0 6px 18px rgba(59, 130, 246, 0.28);
 }
 
 .cf-send-btn--active:hover {
-  box-shadow: 0 8px 22px rgba(253, 35, 138, 0.38);
+  box-shadow: 0 8px 22px rgba(59, 130, 246, 0.38);
 }
 
 @keyframes cf-spin {
@@ -1427,7 +1427,7 @@ textarea {
   margin: 0;
   font-size: 0.93rem;
   letter-spacing: 0.02em;
-  color: #f4d7dc;
+  color: #bfdbfe;
 }
 
 .form-section-description {
@@ -1703,13 +1703,13 @@ textarea {
   transition: background 0.13s ease, color 0.13s ease;
 }
 .tl-chip--active {
-  color: #fff2f4;
+  color: #eff6ff;
   background: linear-gradient(
     135deg,
     color-mix(in srgb, var(--brand-grad-start) 44%, transparent),
     color-mix(in srgb, var(--brand-grad-end) 44%, transparent)
   );
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, #ffd4da 34%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #bfdbfe 34%, transparent);
 }
 
 /* Task list */
@@ -1844,8 +1844,8 @@ textarea {
   place-items: center;
   font-size: 0.58rem;
   font-weight: 700;
-  color: #ffeef1;
-  background: linear-gradient(135deg, #c73863, #ff7b2f);
+  color: #eff6ff;
+  background: linear-gradient(135deg, #2563eb, #8b5cf6);
   flex-shrink: 0;
 }
 
@@ -2181,7 +2181,7 @@ textarea {
     background: linear-gradient(135deg, var(--brand-grad-start), var(--brand-grad-end));
     color: #fff;
     box-shadow:
-      0 8px 24px rgba(253, 35, 138, 0.4),
+      0 8px 24px rgba(59, 130, 246, 0.4),
       0 2px 8px rgba(0,0,0,0.3);
     z-index: 50;
     transition: transform 0.15s ease, box-shadow 0.15s ease;
@@ -2189,7 +2189,7 @@ textarea {
   }
   .tl-fab:active {
     transform: scale(0.93);
-    box-shadow: 0 4px 14px rgba(253, 35, 138, 0.35);
+    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35);
   }
 
   /* Кнопку "+ Задача" в toolbar скрываем на мобиле — есть FAB */
@@ -2738,9 +2738,9 @@ textarea {
   font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.04em;
-  color: #fff7f8;
+  color: #eff6ff;
   background: linear-gradient(135deg, var(--brand-grad-start), var(--brand-grad-end));
-  box-shadow: 0 10px 24px rgba(253, 74, 94, 0.28);
+  box-shadow: 0 10px 24px rgba(59, 130, 246, 0.28);
 }
 
 .ppr-intro-title {
@@ -2810,7 +2810,7 @@ textarea {
   display: grid;
   place-items: center;
   font-size: 1rem;
-  color: #ffdfe4;
+  color: #eff6ff;
   background: linear-gradient(
     135deg,
     color-mix(in srgb, var(--brand-grad-start) 30%, transparent),

@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { canAccessPprTaskScreens, listPprTasksForProfile } from "@/lib/ppr/queries";
 import { PageHeader } from "@/components/ui/page-header";
 import { BackButton } from "@/components/ui/back-button";
-import { PprTaskList } from "@/components/ppr/tasks/ppr-task-list";
+import { PprTasksAdmin } from "@/components/ppr/tasks/ppr-tasks-admin";
 
 export default async function PprArchivePage() {
   const { profile } = await requireProfile();
@@ -27,7 +27,7 @@ export default async function PprArchivePage() {
         description="Здесь доступны завершенные архивные ППР-заявки со статусами `closed` и `cancelled`."
         actions={<BackButton fallback="/ppr" label="← Назад к ППР" />}
       />
-      <PprTaskList
+      <PprTasksAdmin
         tasks={tasks}
         emptyMessage="Архив ППР пока пуст"
         emptyHint="После закрытия или отмены заявки она перейдет в этот раздел."

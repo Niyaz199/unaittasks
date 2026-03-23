@@ -1,7 +1,20 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { Profile, Role } from "@/lib/types";
+import type { Profile } from "@/lib/types";
+export {
+  canAccessDirectories,
+  canEditTasks,
+  canManageFloorsDirectory,
+  canManageObjects,
+  canManageRoomTypesDirectory,
+  canManageTaskTeam,
+  canManageUsers,
+  canReadFloorsDirectory,
+  canReadRoomTypesDirectory,
+  canViewAudit,
+  isSuperuser,
+} from "@/lib/capabilities";
 
 const getProfileByUserId = cache(async (userId: string) => {
   const supabase = await createSupabaseServerClient();
@@ -53,28 +66,4 @@ export async function requireProfile() {
     redirect("/login?error=profile_missing");
   }
   return { user, profile };
-}
-
-export function canViewAudit(role: Role) {
-  return role === "admin" || role === "chief";
-}
-
-export function canManageObjects(role: Role) {
-  return role === "admin" || role === "chief";
-}
-
-export function canManageUsers(role: Role) {
-  return role === "admin" || role === "chief";
-}
-
-export function canEditTasks(role: Role) {
-  return role === "admin" || role === "chief" || role === "lead" || role === "engineer" || role === "object_engineer";
-}
-
-export function canManageTaskTeam(role: Role) {
-  return role === "admin" || role === "chief" || role === "lead" || role === "engineer" || role === "object_engineer";
-}
-
-export function isSuperuser(role: Role) {
-  return role === "admin";
 }

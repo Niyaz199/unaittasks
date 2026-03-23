@@ -2,10 +2,11 @@
 
 ## 1. О проекте
 
-`Задачник эксплуатации` — это приложение на `Next.js` и `Supabase` для двух связанных сценариев:
+`Задачник эксплуатации` — это приложение на `Next.js` и `Supabase` для трёх связанных сценариев:
 
 - оперативные эксплуатационные задачи;
 - планово-предупредительные работы (ППР).
+- обходы помещений по QR.
 
 Проект использует `App Router`, серверные компоненты, `server actions`, `route handlers`, роли пользователей, `RLS` в Supabase, приватные storage-bucket'ы, `PWA`-обвязку и частичную offline-поддержку.
 
@@ -14,13 +15,15 @@
 ## 2. Основные возможности
 
 - Классический модуль задач: списки, фильтры, статусы, карточка задачи, команда, комментарии, история, вложения.
-- Справочники пользователей и объектов для эксплуатационного контура.
+- Глобальные справочники пользователей, объектов, этажей и типов помещений.
 - Журнал действий (`audit_log`) для административного контроля.
 - Модуль ППР: структура объектов, системы, помещения, оборудование, шаблоны работ, назначения, календарь, lifecycle ППР-заявок.
+- Модуль обходов: QR-помещения, мобильный scanner flow, страница `Сегодня`, архив и конфигуратор помещений.
 - QR-вход в ППР для оборудования и активных ППР-заявок.
+- QR-вход в обходы помещений через `/rounds/scan?token=...` и `/api/rounds/qr/[token]`.
 - Web Push для назначений в обычном модуле задач.
 - PWA-режим с `manifest`, `service worker` и установкой на устройство.
-- Частичный offline-режим через очередь действий в `localforage`.
+- Offline-очереди в `localforage` для части задач и для модуля обходов, включая офлайн-отметки с фото.
 
 ## 3. Модуль задач
 
@@ -51,9 +54,11 @@
 
 ### Структура и справочники
 
+- `/directories/floors` — глобальный справочник этажей, привязанных к объектам.
+- `/directories/room-types` — глобальный справочник типов помещений.
 - `/ppr/system-groups` — глобальный справочник групп систем.
 - `/ppr/systems` — системы ППР с объектом, группой и ответственным.
-- `/ppr/rooms` — общий справочник помещений объектов.
+- `/ppr/rooms` — общий справочник помещений объектов с выбором этажа и типа помещения из глобальных справочников.
 - `/ppr/equipment` и `/ppr/equipment/[id]` — оборудование, карточка оборудования и QR-код.
 
 ### Планирование
@@ -101,7 +106,29 @@ Lifecycle ППР-заявки:
 
 Примечание: инфраструктура `ppr-files` и миграции предусматривают хранение файлов ППР шире, чем только задачи, но в текущем UI явно задействованы именно фото-вложения ППР-заявок.
 
-## 5. Роли и права
+## 5. Модуль обходов
+
+Модуль обходов расположен под `/rounds`.
+
+Реализованы:
+
+- `/rounds/scan` — mobile-first сценарий техника;
+- `/rounds/today` — статус обходов по помещениям за текущую операционную дату;
+- `/rounds/archive` — архив исторических отметок;
+- `/rounds/config` — массовый конфигуратор включения помещений в обходы;
+- `/rounds/qr` — печать и выгрузка QR помещений.
+
+Бизнес-правила:
+
+- используется общий справочник `object_rooms`;
+- помещение включается в обходы через `object_rooms.rounds_enabled`;
+- QR хранится в `object_rooms.rounds_qr_token` и `object_rooms.rounds_qr_generated_at`;
+- факт обхода хранится в `rounds_checkins`;
+- повторный check-in за день заменяет предыдущий только если `incoming.scanned_at_device >= existing.scanned_at_device`;
+- для техников есть отдельный scanner read-model через RPC `rounds_list_scanner_config` и `rounds_resolve_room_qr_token`;
+- offline flow модуля обходов хранит локальную очередь отметок и фото в `localforage`, а синхронизацию запускает при старте, `online`, возврате вкладки в фокус и вручную.
+
+## 6. Роли и права
 
 Общие роли в системе:
 
@@ -137,10 +164,23 @@ Lifecycle ППР-заявки:
 Отдельно:
 
 - `audit`, пользователи и объекты доступны только `admin/chief`;
+- типы помещений доступны на чтение `admin/chief/lead/object_engineer`, а управляются `admin/chief`;
+- этажи доступны `admin/chief/lead/object_engineer`, управление этажами ограничено объектным скоупом;
 - группы систем ППР доступны `admin/chief/lead`;
 - структура ППР доступна `admin/chief/lead/object_engineer`;
 - шаблоны и назначения ППР доступны `admin/chief/lead/object_engineer`;
 - календарь ППР доступен `admin/chief/lead/object_engineer`, а для `engineer` ограничен ответственностью по системе.
+
+### Модуль обходов
+
+| Роль | Права в обходах |
+|------|------------------|
+| `admin` | полный доступ ко всем экранам и QR |
+| `chief` | полный доступ ко всем экранам и QR |
+| `lead` | today, archive, config, QR в доступных объектах |
+| `engineer` | today, archive, config, QR в доступных объектах |
+| `object_engineer` | today, archive, config, QR в доступных объектах |
+| `tech` | только scanner flow и сохранение собственных отметок |
 
 ## 6. Архитектура проекта
 
@@ -150,29 +190,32 @@ Lifecycle ППР-заявки:
 
 - `app/` содержит страницы `App Router`, `route handlers` и `server actions`;
 - `app/(dashboard)` — основной авторизованный shell;
-- `app/api/tasks/*` и `app/api/ppr/*` — HTTP API для операций из клиентских компонентов;
+- `app/api/tasks/*`, `app/api/ppr/*`, `app/api/rounds/*` — HTTP API для операций из клиентских компонентов;
 - `app/actions/*` — серверные действия для форм и административных сценариев.
 
 ### Доменные компоненты
 
 - `components/tasks/*` — UI обычного модуля задач;
 - `components/ppr/*` — UI модуля ППР;
+- `components/rounds/*` — UI модуля обходов;
 - `components/dashboard/*`, `components/ui/*`, `components/pwa/*`, `components/offline/*` — общий shell и инфраструктурные компоненты.
 
 ### Бизнес-логика
 
 - `lib/auth.ts`, `lib/api-auth.ts` — получение профиля, сессии и базовых проверок доступа;
+- `lib/floors.ts`, `lib/room-types.ts`, `lib/object-rooms.ts` — глобальные справочники этажей, типов помещений и сами помещения;
 - `lib/tasks.ts`, `lib/task-permissions.ts`, `lib/task-sort.ts`, `lib/task-presentation.ts` — логика обычных задач;
 - `lib/ppr/*` — доменная модель ППР: выборки, права, lifecycle, scheduler, QR, presentation, validators;
+- `lib/rounds/*` — доменная модель обходов: права, QR, today/archive/config query-layer, файлы и date-логика;
 - `lib/audit.ts` — запись действий в журнал;
 - `lib/attachments.ts` и `lib/ppr/files.ts` — работа с storage и signed URLs;
-- `lib/offline/queue.ts` — offline-очередь.
+- `lib/offline/queue.ts`, `lib/offline/rounds-queue.ts` — offline-очереди.
 
 ### Данные и инфраструктура
 
 - `Supabase Auth` — аутентификация;
 - `Postgres + RLS` — основное хранилище и разграничение доступа;
-- `Supabase Storage` — вложения обычных задач и файлов ППР;
+- `Supabase Storage` — вложения обычных задач, файлов ППР и фото обходов;
 - `public/sw.js` + `public/manifest.webmanifest` — PWA-часть;
 - `Dockerfile`, `docker-compose.yml`, `Caddyfile` — контейнерный запуск и reverse proxy.
 
@@ -184,7 +227,7 @@ Lifecycle ППР-заявки:
 2. Доменный слой в `lib/*` проверяет права и формирует запросы к Supabase.
 3. Изменения пишутся в БД и при необходимости в `audit_log`.
 4. Для файлов используются приватные bucket'ы и signed URL.
-5. Для части операций обычных задач клиент умеет ставить действия в offline-очередь.
+5. Для части операций обычных задач и для обходов клиент умеет ставить действия в offline-очередь.
 
 ## 7. Структура каталогов
 
@@ -192,23 +235,30 @@ Lifecycle ППР-заявки:
 app/
   (dashboard)/
     my, new, archive, tasks, users, objects, audit, profile
+    directories/
+      floors, room-types
     ppr/
       system-groups, systems, rooms, equipment, templates
       assignments, calendar, tasks, my, archive, qr
+    rounds/
+      scan, today, archive, config, qr
   actions/
     auth-actions.ts
     task-actions.ts
     user-actions.ts
+    floor-actions.ts
     object-room-actions.ts
     ppr-directory-actions.ts
     ppr-template-actions.ts
     ppr-calendar-actions.ts
     ppr-task-actions.ts
+    room-type-actions.ts
   api/
     tasks/*
     push/*
     cron/archive
     ppr/*
+    rounds/*
 
 components/
   auth/
@@ -225,8 +275,10 @@ lib/
   api-auth.ts
   audit.ts
   attachments.ts
+  floors.ts
   objects.ts
   object-rooms.ts
+  room-types.ts
   tasks.ts
   task-permissions.ts
   task-sort.ts
@@ -319,7 +371,7 @@ npm run dev
 
 ### База данных
 
-Репозиторий содержит миграции `supabase/migrations/0001_init.sql` ... `0020_ppr_cleanup_legacy_structure.sql`.
+Репозиторий содержит миграции `supabase/migrations/0001_init.sql` ... `0021_global_room_directories.sql`.
 
 Рекомендуемый способ применения:
 
@@ -356,4 +408,5 @@ docker compose up --build
 - Push-уведомления заведены для обычного модуля задач; отдельных push-сценариев для ППР в коде сейчас нет.
 - В `middleware.ts` защищены маршруты обычного dashboard-контура, но `/ppr`-маршруты не входят в `matcher`; доступ к ППР всё равно проверяется на уровне страниц, API и server actions.
 - Для обычных вложений есть поле `cleanup_after`, но автоматическое физическое удаление файлов пока не реализовано.
-- Справочник помещений уже используется в ППР и явно подготовлен под будущий модуль обходов, которого в текущем репозитории ещё нет.
+- Справочник помещений уже использует глобальные `Этажи` и `Типы помещений` и явно подготовлен под будущий модуль обходов, которого в текущем репозитории ещё нет.
+- В `object_rooms` временно сохранено legacy-поле `floor` как fallback для безопасной миграции и обратной совместимости.

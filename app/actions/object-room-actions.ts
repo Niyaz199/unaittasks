@@ -36,7 +36,11 @@ async function assertRoomManageable(
   managedObjectIds: string[],
   roomId: string
 ) {
-  const { data: room, error } = await supabase.from("object_rooms").select("object_id").eq("id", roomId).single();
+  const { data: room, error } = await supabase
+    .from("object_rooms")
+    .select("object_id,floor_id,room_type_id")
+    .eq("id", roomId)
+    .single();
   if (error) throw error;
   if (!room) {
     throw new Error("Помещение не найдено");
@@ -44,6 +48,56 @@ async function assertRoomManageable(
   if (role !== "admin" && role !== "chief" && !managedObjectIds.includes(room.object_id)) {
     throw new Error("Помещение недоступно для изменения");
   }
+  return room;
+}
+
+async function resolveFloorSelection(
+  supabase: SupabaseServer,
+  floorId: string | null | undefined,
+  objectId: string,
+  currentFloorId?: string | null
+) {
+  if (!floorId) {
+    throw new Error("Выберите этаж");
+  }
+
+  const { data: floor, error } = await supabase
+    .from("floors")
+    .select("id,object_id,name,is_active")
+    .eq("id", floorId)
+    .single();
+  if (error) throw error;
+  if (!floor || floor.object_id !== objectId) {
+    throw new Error("Этаж должен принадлежать выбранному объекту");
+  }
+  if (!floor.is_active && floor.id !== currentFloorId) {
+    throw new Error("Нельзя выбрать неактивный этаж");
+  }
+  return floor;
+}
+
+async function resolveRoomTypeSelection(
+  supabase: SupabaseServer,
+  roomTypeId: string | null | undefined,
+  currentRoomTypeId?: string | null
+) {
+  if (!roomTypeId) {
+    throw new Error("Выберите тип помещения");
+  }
+
+  const { data: roomType, error } = await supabase
+    .from("room_types")
+    .select("id,name,is_active")
+    .eq("id", roomTypeId)
+    .single();
+  if (error) throw error;
+  if (!roomType) {
+    throw new Error("Тип помещения не найден");
+  }
+  if (!roomType.is_active && roomType.id !== currentRoomTypeId) {
+    throw new Error("Нельзя выбрать неактивный тип помещения");
+  }
+  return roomType;
 }
 
 export async function createObjectRoomAction(formData: FormData) {
@@ -51,19 +105,24 @@ export async function createObjectRoomAction(formData: FormData) {
   const payload = objectRoomFormSchema.parse({
     objectId: String(formData.get("object_id") ?? ""),
     name: String(formData.get("name") ?? ""),
-    floor: String(formData.get("floor") ?? "") || null,
+    floorId: String(formData.get("floor_id") ?? "") || null,
+    roomTypeId: String(formData.get("room_type_id") ?? "") || null,
     description: String(formData.get("description") ?? "") || null,
     isActive: formData.get("is_active") === "on",
   });
 
   assertObjectAllowed(profile.role, managedObjectIds, payload.objectId);
+  const floor = await resolveFloorSelection(supabase, payload.floorId, payload.objectId);
+  const roomType = await resolveRoomTypeSelection(supabase, payload.roomTypeId);
 
   const { data, error } = await supabase
     .from("object_rooms")
     .insert({
       object_id: payload.objectId,
       name: payload.name.trim(),
-      floor: payload.floor?.trim() || null,
+      floor: floor.name,
+      floor_id: floor.id,
+      room_type_id: roomType.id,
       description: payload.description?.trim() || null,
       is_active: payload.isActive,
     })
@@ -78,10 +137,14 @@ export async function createObjectRoomAction(formData: FormData) {
     entityId: data.id,
     meta: {
       object_id: payload.objectId,
-      floor: payload.floor?.trim() || null,
+      floor: floor.name,
+      floor_id: floor.id,
+      room_type_id: roomType.id,
     },
   });
 
+  revalidatePath("/directories/floors");
+  revalidatePath("/directories/room-types");
   revalidatePath("/ppr/rooms");
   revalidatePath("/ppr/equipment");
 }
@@ -92,20 +155,25 @@ export async function updateObjectRoomAction(formData: FormData) {
   const payload = objectRoomFormSchema.parse({
     objectId: String(formData.get("object_id") ?? ""),
     name: String(formData.get("name") ?? ""),
-    floor: String(formData.get("floor") ?? "") || null,
+    floorId: String(formData.get("floor_id") ?? "") || null,
+    roomTypeId: String(formData.get("room_type_id") ?? "") || null,
     description: String(formData.get("description") ?? "") || null,
     isActive: formData.get("is_active") === "on",
   });
 
   assertObjectAllowed(profile.role, managedObjectIds, payload.objectId);
-  await assertRoomManageable(supabase, profile.role, managedObjectIds, roomId);
+  const currentRoom = await assertRoomManageable(supabase, profile.role, managedObjectIds, roomId);
+  const floor = await resolveFloorSelection(supabase, payload.floorId, payload.objectId, currentRoom.floor_id);
+  const roomType = await resolveRoomTypeSelection(supabase, payload.roomTypeId, currentRoom.room_type_id);
 
   const { error } = await supabase
     .from("object_rooms")
     .update({
       object_id: payload.objectId,
       name: payload.name.trim(),
-      floor: payload.floor?.trim() || null,
+      floor: floor.name,
+      floor_id: floor.id,
+      room_type_id: roomType.id,
       description: payload.description?.trim() || null,
       is_active: payload.isActive,
     })
@@ -119,10 +187,14 @@ export async function updateObjectRoomAction(formData: FormData) {
     entityId: roomId,
     meta: {
       object_id: payload.objectId,
-      floor: payload.floor?.trim() || null,
+      floor: floor.name,
+      floor_id: floor.id,
+      room_type_id: roomType.id,
     },
   });
 
+  revalidatePath("/directories/floors");
+  revalidatePath("/directories/room-types");
   revalidatePath("/ppr/rooms");
   revalidatePath("/ppr/equipment");
 }

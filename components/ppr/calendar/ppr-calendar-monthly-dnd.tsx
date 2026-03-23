@@ -27,7 +27,12 @@ type MonthPlanRow = {
   system: { name: string } | Array<{ name: string }> | null;
 };
 
-type RoomRelation = { name: string; floor: string | null };
+type RoomRelation = {
+  name: string;
+  floor: string | null;
+  floor_ref: { name: string; sort_order: number } | Array<{ name: string; sort_order: number }> | null;
+  room_type: { name: string } | Array<{ name: string }> | null;
+};
 
 type EquipmentRelation = {
   name: string;
@@ -149,17 +154,33 @@ function resolveEquipmentInfo(raw: EquipmentRelation | Array<EquipmentRelation> 
   const equipment = resolveRelation(raw);
   const room = resolveRelation(equipment?.room);
   const inventoryNo = equipment?.inventory_no?.trim() || "без инв.";
+  const floorRelation = resolveRelation(room?.floor_ref);
   return {
     equipmentName: equipment?.name ?? "—",
     inventoryNo,
     roomName: room?.name ?? "—",
-    roomFloor: room?.floor ?? null,
+    roomFloor: floorRelation?.name ?? room?.floor ?? null,
   };
 }
 
+function parseMonthValue(value: string) {
+  const normalized = value.trim();
+  const parsed = /^\d{4}-\d{2}$/.test(normalized)
+    ? new Date(`${normalized}-01T00:00:00.000Z`)
+    : /^\d{4}-\d{2}-\d{2}$/.test(normalized)
+      ? new Date(`${normalized}T00:00:00.000Z`)
+      : new Date(Number.NaN);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 function formatMonthLabel(value: string, monthFormat: "long" | "short" = "long") {
-  return new Date(`${value}-01T00:00:00.000Z`).toLocaleDateString("ru-RU", {
+  const parsed = parseMonthValue(value);
+  if (!parsed) {
+    return "—";
+  }
+  return parsed.toLocaleDateString("ru-RU", {
     month: monthFormat,
+    timeZone: "UTC",
     year: monthFormat === "long" ? "numeric" : undefined,
   });
 }
@@ -212,10 +233,6 @@ function getDayTone(summary: DaySummary): BadgeTone {
   return "info";
 }
 
-function getItemTone(item: MonthPlanItemRow): BadgeTone {
-  const task = resolveTask(item.task);
-  return task ? pprTaskStatusMeta[task.status].tone : pprMonthPlanItemStatusMeta[item.status].tone;
-}
 
 function buildMonthDays(month: string) {
   const [yearValue, monthValue] = month.split("-").map(Number);

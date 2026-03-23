@@ -37,7 +37,14 @@ export default async function PprEquipmentPage() {
         equipment={equipment}
         objects={objects}
         systems={systems.map((item) => ({ id: item.id, object_id: item.object_id, name: item.name }))}
-        rooms={rooms.map((item) => ({ id: item.id, object_id: item.object_id, name: item.name }))}
+        rooms={rooms.map((item) => ({
+          id: item.id,
+          object_id: item.object_id,
+          name: item.name,
+          floor_name: Array.isArray(item.floor_ref) ? item.floor_ref[0]?.name ?? item.floor ?? null : item.floor_ref?.name ?? item.floor ?? null,
+          room_type_name: Array.isArray(item.room_type) ? item.room_type[0]?.name ?? null : item.room_type?.name ?? null,
+          is_active: item.is_active,
+        }))}
       />
     </section>
   );

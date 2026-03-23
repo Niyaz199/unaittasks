@@ -4,10 +4,8 @@ import type { Route } from "next";
 import { useEffect, useMemo, useState } from "react";
 import { createPprSystemAction, updatePprSystemAction } from "@/app/actions/ppr-directory-actions";
 import { DataTable } from "@/components/ui/data-table";
-import { EmptyState } from "@/components/ui/empty-state";
 import { PprModal, PprFormGroup } from "@/components/ppr/ui/ppr-modal";
-import { DirectoryToolbar } from "@/components/ppr/ui/directory-toolbar";
-import { DirectorySummary } from "@/components/ppr/ui/directory-summary";
+import { PprPageShell } from "@/components/ppr/ui/ppr-page-shell";
 import { StatusBadge } from "@/components/ppr/ui/status-badge";
 
 type SystemRow = {
@@ -172,141 +170,132 @@ export function PprSystemsAdmin({
     }
   }, [editObjectId, editResponsibleCandidates, editResponsibleUserId]);
 
-  if (!hasPrerequisites) {
-    return (
-      <EmptyState
-        message="Недостаточно данных для создания системы"
-        hint={
-          !objects.length
-            ? "Для начала нужен хотя бы один доступный объект."
-            : "Для начала нужна хотя бы одна группа систем ППР."
-        }
-        actionLabel={!systemGroups.length && canManageSystemGroups ? "Открыть справочник групп" : undefined}
-        actionHref={!systemGroups.length && canManageSystemGroups ? ("/ppr/system-groups" as Route) : undefined}
-      />
-    );
-  }
-
   return (
-    <div className="grid" style={{ gap: "1.5rem" }}>
-      <DirectorySummary metrics={metrics} />
-
-      <DirectoryToolbar onSearch={setSearchTerm} searchPlaceholder="Поиск по названию или группе...">
-        <select
-          className="select"
-          value={filterObjectId}
-          onChange={(e) => setFilterObjectId(e.target.value)}
-          style={{ maxWidth: "200px" }}
-        >
-          <option value="">Все объекты</option>
-          {objects.map((obj) => (
-            <option key={obj.id} value={obj.id}>
-              {obj.name}
-            </option>
-          ))}
-        </select>
-
-        <select
-          className="select"
-          value={filterGroupId}
-          onChange={(e) => setFilterGroupId(e.target.value)}
-          style={{ maxWidth: "200px" }}
-        >
-          <option value="">Все группы</option>
-          {systemGroups.map((group) => (
-            <option key={group.id} value={group.id}>
-              {group.name}
-            </option>
-          ))}
-        </select>
-
-        <select
-          className="select"
-          value={filterResponsibleId}
-          onChange={(e) => setFilterResponsibleId(e.target.value)}
-          style={{ maxWidth: "200px" }}
-        >
-          <option value="">Все ответственные</option>
-          {responsibleCandidates.map((resp) => (
-            <option key={resp.id} value={resp.id}>
-              {resp.full_name}
-            </option>
-          ))}
-        </select>
-
-        <select
-          className="select"
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value as any)}
-          style={{ maxWidth: "150px" }}
-        >
-          <option value="all">Все статусы</option>
-          <option value="active">Активные</option>
-          <option value="inactive">Неактивные</option>
-        </select>
-
-        <button className="btn btn-accent" type="button" onClick={() => setIsCreateOpen(true)}>
-          + Добавить
-        </button>
-      </DirectoryToolbar>
-
-      {!filteredSystems.length ? (
-        <EmptyState 
-          message="Системы не найдены" 
-          hint={systems.length ? "Попробуйте изменить параметры фильтрации." : "Создайте первую систему ППР для доступного объекта."} 
-        />
-      ) : (
-        <>
-          <div className="desktop-only">
-            <DataTable
-              columns={[
-                { key: "name", label: "Система" },
-                { key: "object", label: "Объект" },
-                { key: "group", label: "Группа" },
-                { key: "responsible", label: "Ответственный" },
-                { key: "status", label: "Статус" },
-                { key: "actions", label: "Действия" },
-              ]}
+    <>
+      <PprPageShell
+        metrics={metrics}
+        onSearch={setSearchTerm}
+        searchPlaceholder="Поиск по названию или группе..."
+        isEmpty={!hasPrerequisites || systems.length === 0}
+        emptyState={{
+          message: !hasPrerequisites ? "Недостаточно данных для создания системы" : "Системы не найдены",
+          hint: !hasPrerequisites 
+            ? (!objects.length ? "Для начала нужен хотя бы один доступный объект." : "Для начала нужна хотя бы одна группа систем ППР.")
+            : "Создайте первую систему ППР для доступного объекта.",
+          actionLabel: !hasPrerequisites && !systemGroups.length && canManageSystemGroups ? "Открыть справочник групп" : undefined,
+          actionHref: !hasPrerequisites && !systemGroups.length && canManageSystemGroups ? ("/ppr/system-groups" as Route) : undefined,
+        }}
+        isFilteredEmpty={filteredSystems.length === 0}
+        filters={
+          <>
+            <select
+              className="select"
+              value={filterObjectId}
+              onChange={(e) => setFilterObjectId(e.target.value)}
+              style={{ maxWidth: "200px" }}
             >
-              {filteredSystems.map((system) => (
-                <tr key={system.id}>
-                  <td style={{ fontWeight: 600 }}>{system.name}</td>
-                  <td>{resolveName(system.object)}</td>
-                  <td>{resolveName(system.system_group)}</td>
-                  <td>{resolveResponsible(system.responsible)}</td>
-                  <td><StatusBadge isActive={system.is_active} /></td>
-                  <td>
-                    <div className="ppr-table-actions">
-                      <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(system.id)}>
-                        Изменить
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+              <option value="">Все объекты</option>
+              {objects.map((obj) => (
+                <option key={obj.id} value={obj.id}>
+                  {obj.name}
+                </option>
               ))}
-            </DataTable>
-          </div>
+            </select>
 
-          <div className="mobile-cards mobile-only">
+            <select
+              className="select"
+              value={filterGroupId}
+              onChange={(e) => setFilterGroupId(e.target.value)}
+              style={{ maxWidth: "200px" }}
+            >
+              <option value="">Все группы</option>
+              {systemGroups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="select"
+              value={filterResponsibleId}
+              onChange={(e) => setFilterResponsibleId(e.target.value)}
+              style={{ maxWidth: "200px" }}
+            >
+              <option value="">Все ответственные</option>
+              {responsibleCandidates.map((resp) => (
+                <option key={resp.id} value={resp.id}>
+                  {resp.full_name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="select"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as "all" | "active" | "inactive")}
+              style={{ maxWidth: "150px" }}
+            >
+              <option value="all">Все статусы</option>
+              <option value="active">Активные</option>
+              <option value="inactive">Неактивные</option>
+            </select>
+
+            <button className="btn btn-accent" type="button" onClick={() => setIsCreateOpen(true)} disabled={!hasPrerequisites}>
+              + Добавить
+            </button>
+          </>
+        }
+      >
+        <div className="desktop-only">
+          <DataTable
+            columns={[
+              { key: "name", label: "Система" },
+              { key: "object", label: "Объект" },
+              { key: "group", label: "Группа" },
+              { key: "responsible", label: "Ответственный" },
+              { key: "status", label: "Статус" },
+              { key: "actions", label: "Действия" },
+            ]}
+          >
             {filteredSystems.map((system) => (
-              <div key={system.id} className="section-card mobile-card">
-                <div className="grid" style={{ gap: "0.45rem" }}>
-                  <div style={{ fontWeight: 600 }}>{system.name}</div>
-                  <div className="text-soft">Объект: {resolveName(system.object)}</div>
-                  <div className="text-soft">Группа: {resolveName(system.system_group)}</div>
-                  <div className="text-soft">Ответственный: {resolveResponsible(system.responsible)}</div>
-                  <div><StatusBadge isActive={system.is_active} /></div>
+              <tr key={system.id}>
+                <td style={{ fontWeight: 600 }}>{system.name}</td>
+                <td>{resolveName(system.object)}</td>
+                <td>{resolveName(system.system_group)}</td>
+                <td>{resolveResponsible(system.responsible)}</td>
+                <td><StatusBadge isActive={system.is_active} /></td>
+                <td>
                   <div className="ppr-table-actions">
                     <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(system.id)}>
                       Изменить
                     </button>
                   </div>
+                </td>
+              </tr>
+            ))}
+          </DataTable>
+        </div>
+
+        <div className="mobile-cards mobile-only">
+          {filteredSystems.map((system) => (
+            <div key={system.id} className="section-card mobile-card">
+              <div className="grid" style={{ gap: "0.45rem" }}>
+                <div style={{ fontWeight: 600 }}>{system.name}</div>
+                <div className="text-soft">Объект: {resolveName(system.object)}</div>
+                <div className="text-soft">Группа: {resolveName(system.system_group)}</div>
+                <div className="text-soft">Ответственный: {resolveResponsible(system.responsible)}</div>
+                <div><StatusBadge isActive={system.is_active} /></div>
+                <div className="ppr-table-actions">
+                  <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(system.id)}>
+                    Изменить
+                  </button>
                 </div>
               </div>
-            ))}
-          </div>
-        </>
-      )}
+            </div>
+          ))}
+        </div>
+      </PprPageShell>
 
       <PprModal open={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Новая система ППР" isDirty={isDirty}>
         <form action={createPprSystemAction} onSubmit={() => setIsCreateOpen(false)} onChange={() => setIsDirty(true)} className="ppr-modal-content">
@@ -436,6 +425,6 @@ export function PprSystemsAdmin({
           </form>
         ) : null}
       </PprModal>
-    </div>
+    </>
   );
 }

@@ -6,7 +6,7 @@ import { canAccessPprTaskScreens, listPprTasksForProfile } from "@/lib/ppr/queri
 import { pprTaskViewMeta } from "@/lib/ppr/presentation";
 import { PageHeader } from "@/components/ui/page-header";
 import { BackButton } from "@/components/ui/back-button";
-import { PprTaskList } from "@/components/ppr/tasks/ppr-task-list";
+import { PprTasksAdmin } from "@/components/ppr/tasks/ppr-tasks-admin";
 
 type Search = Record<string, string | string[] | undefined>;
 
@@ -57,7 +57,7 @@ export default async function PprTasksPage({ searchParams }: { searchParams: Pro
           </>
         }
       />
-      <PprTaskList
+      <PprTasksAdmin
         tasks={tasks}
         emptyMessage={view === "review" ? "Заявок на ознакомлении нет" : "Активных ППР-заявок нет"}
         emptyHint={

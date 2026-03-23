@@ -6,7 +6,14 @@ import { PprFormGroup, PprFormSection } from "@/components/ppr/ui/ppr-modal";
 
 type ObjectOption = { id: string; name: string };
 type SystemOption = { id: string; object_id: string; name: string };
-type RoomOption = { id: string; object_id: string; name: string };
+type RoomOption = {
+  id: string;
+  object_id: string;
+  name: string;
+  floor_name: string | null;
+  room_type_name: string | null;
+  is_active: boolean;
+};
 
 type EquipmentFormValues = {
   object_id: string;
@@ -73,8 +80,8 @@ export function PprEquipmentForm({
     [selectedObjectId, systems]
   );
   const filteredRooms = useMemo(
-    () => rooms.filter((room) => !selectedObjectId || room.object_id === selectedObjectId),
-    [selectedObjectId, rooms]
+    () => rooms.filter((room) => (!selectedObjectId || room.object_id === selectedObjectId) && (room.is_active || room.id === selectedRoomId)),
+    [selectedObjectId, selectedRoomId, rooms]
   );
 
   useEffect(() => {
@@ -129,7 +136,12 @@ export function PprEquipmentForm({
             <select className="select" name="room_id" required value={selectedRoomId} onChange={(event) => setSelectedRoomId(event.target.value)}>
               <option value="" disabled>Выберите помещение</option>
               {filteredRooms.map((room) => (
-                <option key={room.id} value={room.id}>{room.name}</option>
+                <option key={room.id} value={room.id}>
+                  {room.name}
+                  {room.floor_name ? ` • ${room.floor_name}` : ""}
+                  {room.room_type_name ? ` • ${room.room_type_name}` : ""}
+                  {room.is_active ? "" : " (неактивно)"}
+                </option>
               ))}
             </select>
           </PprFormGroup>

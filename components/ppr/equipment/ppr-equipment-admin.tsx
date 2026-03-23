@@ -5,12 +5,10 @@ import type { Route } from "next";
 import { useMemo, useState } from "react";
 import { createPprEquipmentAction, updatePprEquipmentAction } from "@/app/actions/ppr-directory-actions";
 import { DataTable } from "@/components/ui/data-table";
-import { EmptyState } from "@/components/ui/empty-state";
 import { PprModal } from "@/components/ppr/ui/ppr-modal";
 import { pprEquipmentStatusMeta } from "@/lib/ppr/presentation";
 import { PprEquipmentForm } from "@/components/ppr/equipment/ppr-equipment-form";
-import { DirectoryToolbar } from "@/components/ppr/ui/directory-toolbar";
-import { DirectorySummary } from "@/components/ppr/ui/directory-summary";
+import { PprPageShell } from "@/components/ppr/ui/ppr-page-shell";
 import { StatusBadge } from "@/components/ppr/ui/status-badge";
 
 type EquipmentRow = {
@@ -31,16 +29,60 @@ type EquipmentRow = {
   created_at: string;
   object: { name: string } | Array<{ name: string }> | null;
   system: { name: string } | Array<{ name: string }> | null;
-  room: { name: string } | Array<{ name: string }> | null;
+  room:
+    | {
+        name: string;
+        floor: string | null;
+        floor_ref: { name: string } | Array<{ name: string }> | null;
+        room_type: { name: string } | Array<{ name: string }> | null;
+      }
+    | Array<{
+        name: string;
+        floor: string | null;
+        floor_ref: { name: string } | Array<{ name: string }> | null;
+        room_type: { name: string } | Array<{ name: string }> | null;
+      }>
+    | null;
 };
 
 type ObjectOption = { id: string; name: string };
 type SystemOption = { id: string; object_id: string; name: string };
-type RoomOption = { id: string; object_id: string; name: string };
+type RoomOption = {
+  id: string;
+  object_id: string;
+  name: string;
+  floor_name: string | null;
+  room_type_name: string | null;
+  is_active: boolean;
+};
 
 function resolveName(raw: { name: string } | Array<{ name: string }> | null | undefined) {
   if (Array.isArray(raw)) return raw[0]?.name ?? "—";
   return raw?.name ?? "—";
+}
+
+function resolveRoomLabel(
+  raw:
+    | {
+        name: string;
+        floor: string | null;
+        floor_ref: { name: string } | Array<{ name: string }> | null;
+        room_type: { name: string } | Array<{ name: string }> | null;
+      }
+    | Array<{
+        name: string;
+        floor: string | null;
+        floor_ref: { name: string } | Array<{ name: string }> | null;
+        room_type: { name: string } | Array<{ name: string }> | null;
+      }>
+    | null
+    | undefined
+) {
+  const room = Array.isArray(raw) ? raw[0] : raw;
+  if (!room) return "—";
+  const floor = resolveName(room.floor_ref) !== "—" ? resolveName(room.floor_ref) : (room.floor ?? null);
+  const roomType = resolveName(room.room_type);
+  return [room.name, floor, roomType !== "—" ? roomType : null].filter(Boolean).join(" • ");
 }
 
 const EQUIPMENT_LABELS = {
@@ -118,146 +160,112 @@ export function PprEquipmentAdmin({
     ];
   }, [equipment]);
 
-  if (!hasPrerequisites) {
-    return (
-      <EmptyState
-        message="Недостаточно структуры для создания оборудования"
-        hint="Для создания оборудования нужны объект, система и помещение."
-      />
-    );
-  }
-
   return (
-    <div className="grid" style={{ gap: "1.5rem" }}>
-      <DirectorySummary metrics={metrics} />
-
-      <DirectoryToolbar onSearch={setSearchTerm} searchPlaceholder="Поиск по названию или инв. номеру...">
-        <select
-          className="select"
-          value={filterObjectId}
-          onChange={(e) => {
-            setFilterObjectId(e.target.value);
-            setFilterSystemId("");
-            setFilterRoomId("");
-          }}
-          style={{ maxWidth: "200px" }}
-        >
-          <option value="">Все объекты</option>
-          {objects.map((obj) => (
-            <option key={obj.id} value={obj.id}>
-              {obj.name}
-            </option>
-          ))}
-        </select>
-
-        <select
-          className="select"
-          value={filterSystemId}
-          onChange={(e) => setFilterSystemId(e.target.value)}
-          style={{ maxWidth: "200px" }}
-        >
-          <option value="">Все системы</option>
-          {availableSystems.map((sys) => (
-            <option key={sys.id} value={sys.id}>
-              {sys.name}
-            </option>
-          ))}
-        </select>
-
-        <select
-          className="select"
-          value={filterRoomId}
-          onChange={(e) => setFilterRoomId(e.target.value)}
-          style={{ maxWidth: "200px" }}
-        >
-          <option value="">Все помещения</option>
-          {availableRooms.map((room) => (
-            <option key={room.id} value={room.id}>
-              {room.name}
-            </option>
-          ))}
-        </select>
-
-        <select
-          className="select"
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          style={{ maxWidth: "150px" }}
-        >
-          <option value="">Все статусы</option>
-          {Object.entries(pprEquipmentStatusMeta).map(([key, meta]) => (
-            <option key={key} value={key}>
-              {meta.label}
-            </option>
-          ))}
-        </select>
-
-        <button className="btn btn-accent" type="button" onClick={() => setIsCreateOpen(true)} disabled={!hasPrerequisites}>
-          + Добавить
-        </button>
-      </DirectoryToolbar>
-
-      {!equipment.length ? (
-        <EmptyState message="Оборудование ППР пока не создано" hint="Добавьте первую единицу оборудования для доступного объекта." />
-      ) : !filteredEquipment.length ? (
-        <EmptyState 
-          message="Оборудование не найдено" 
-          hint="Попробуйте изменить параметры фильтрации." 
-        />
-      ) : (
-        <>
-          <div className="desktop-only">
-            <DataTable
-              columns={[
-                { key: "inventory", label: "Инв. номер" },
-                { key: "name", label: "Оборудование" },
-                { key: "object", label: "Объект" },
-                { key: "system", label: "Система" },
-                { key: "room", label: "Помещение" },
-                { key: "status", label: "Статус" },
-                { key: "actions", label: "Действия" },
-              ]}
+    <>
+      <PprPageShell
+        metrics={metrics}
+        onSearch={setSearchTerm}
+        searchPlaceholder="Поиск по названию или инв. номеру..."
+        isEmpty={!hasPrerequisites || equipment.length === 0}
+        emptyState={{
+          message: !hasPrerequisites ? "Недостаточно структуры для создания оборудования" : "Оборудование ППР пока не создано",
+          hint: !hasPrerequisites ? "Для создания оборудования нужны объект, система и помещение." : "Добавьте первую единицу оборудования для доступного объекта.",
+        }}
+        isFilteredEmpty={filteredEquipment.length === 0}
+        filters={
+          <>
+            <select
+              className="select"
+              value={filterObjectId}
+              onChange={(e) => {
+                setFilterObjectId(e.target.value);
+                setFilterSystemId("");
+                setFilterRoomId("");
+              }}
+              style={{ maxWidth: "200px" }}
             >
-              {filteredEquipment.map((item) => (
-                <tr key={item.id}>
-                  <td style={{ fontFamily: "monospace", fontSize: "0.9em" }}>{item.inventory_no}</td>
-                  <td>
-                    <div style={{ fontWeight: 600 }}>{item.name}</div>
-                    <div className="text-soft" style={{ fontSize: "0.85em" }}>{item.dispatch_name}</div>
-                  </td>
-                  <td>{resolveName(item.object)}</td>
-                  <td>{resolveName(item.system)}</td>
-                  <td>{resolveName(item.room)}</td>
-                  <td>
-                    <StatusBadge status={item.status} labels={EQUIPMENT_LABELS} />
-                  </td>
-                  <td>
-                    <div className="ppr-table-actions">
-                      <Link className="btn btn-ghost ppr-action-btn" href={`/ppr/equipment/${item.id}` as Route}>
-                        Карточка
-                      </Link>
-                      <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(item.id)}>
-                        Изменить
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+              <option value="">Все объекты</option>
+              {objects.map((obj) => (
+                <option key={obj.id} value={obj.id}>
+                  {obj.name}
+                </option>
               ))}
-            </DataTable>
-          </div>
+            </select>
 
-          <div className="mobile-cards mobile-only">
+            <select
+              className="select"
+              value={filterSystemId}
+              onChange={(e) => setFilterSystemId(e.target.value)}
+              style={{ maxWidth: "200px" }}
+            >
+              <option value="">Все системы</option>
+              {availableSystems.map((sys) => (
+                <option key={sys.id} value={sys.id}>
+                  {sys.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="select"
+              value={filterRoomId}
+              onChange={(e) => setFilterRoomId(e.target.value)}
+              style={{ maxWidth: "200px" }}
+            >
+              <option value="">Все помещения</option>
+              {availableRooms.map((room) => (
+                <option key={room.id} value={room.id}>
+                  {room.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="select"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              style={{ maxWidth: "150px" }}
+            >
+              <option value="">Все статусы</option>
+              {Object.entries(pprEquipmentStatusMeta).map(([key, meta]) => (
+                <option key={key} value={key}>
+                  {meta.label}
+                </option>
+              ))}
+            </select>
+
+            <button className="btn btn-accent" type="button" onClick={() => setIsCreateOpen(true)} disabled={!hasPrerequisites}>
+              + Добавить
+            </button>
+          </>
+        }
+      >
+        <div className="desktop-only">
+          <DataTable
+            columns={[
+              { key: "inventory", label: "Инв. номер" },
+              { key: "name", label: "Оборудование" },
+              { key: "object", label: "Объект" },
+              { key: "system", label: "Система" },
+              { key: "room", label: "Помещение" },
+              { key: "status", label: "Статус" },
+              { key: "actions", label: "Действия" },
+            ]}
+          >
             {filteredEquipment.map((item) => (
-              <div key={item.id} className="section-card mobile-card">
-                <div className="grid" style={{ gap: "0.45rem" }}>
+              <tr key={item.id}>
+                <td style={{ fontFamily: "monospace", fontSize: "0.9em" }}>{item.inventory_no}</td>
+                <td>
                   <div style={{ fontWeight: 600 }}>{item.name}</div>
-                  <div className="text-soft">Инв. номер: {item.inventory_no}</div>
-                  <div className="text-soft">Объект: {resolveName(item.object)}</div>
-                  <div className="text-soft">Система: {resolveName(item.system)}</div>
-                  <div className="text-soft">Помещение: {resolveName(item.room)}</div>
-                  <div>
-                    <StatusBadge status={item.status} labels={EQUIPMENT_LABELS} />
-                  </div>
+                  <div className="text-soft" style={{ fontSize: "0.85em" }}>{item.dispatch_name}</div>
+                </td>
+                <td>{resolveName(item.object)}</td>
+                <td>{resolveName(item.system)}</td>
+                <td>{resolveRoomLabel(item.room)}</td>
+                <td>
+                  <StatusBadge status={item.status} labels={EQUIPMENT_LABELS} />
+                </td>
+                <td>
                   <div className="ppr-table-actions">
                     <Link className="btn btn-ghost ppr-action-btn" href={`/ppr/equipment/${item.id}` as Route}>
                       Карточка
@@ -266,12 +274,37 @@ export function PprEquipmentAdmin({
                       Изменить
                     </button>
                   </div>
+                </td>
+              </tr>
+            ))}
+          </DataTable>
+        </div>
+
+        <div className="mobile-cards mobile-only">
+          {filteredEquipment.map((item) => (
+            <div key={item.id} className="section-card mobile-card">
+              <div className="grid" style={{ gap: "0.45rem" }}>
+                <div style={{ fontWeight: 600 }}>{item.name}</div>
+                <div className="text-soft">Инв. номер: {item.inventory_no}</div>
+                <div className="text-soft">Объект: {resolveName(item.object)}</div>
+                <div className="text-soft">Система: {resolveName(item.system)}</div>
+                <div className="text-soft">Помещение: {resolveRoomLabel(item.room)}</div>
+                <div>
+                  <StatusBadge status={item.status} labels={EQUIPMENT_LABELS} />
+                </div>
+                <div className="ppr-table-actions">
+                  <Link className="btn btn-ghost ppr-action-btn" href={`/ppr/equipment/${item.id}` as Route}>
+                    Карточка
+                  </Link>
+                  <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(item.id)}>
+                    Изменить
+                  </button>
                 </div>
               </div>
-            ))}
-          </div>
-        </>
-      )}
+            </div>
+          ))}
+        </div>
+      </PprPageShell>
 
       <PprModal open={isCreateOpen} onClose={() => { setIsCreateOpen(false); setIsDirty(false); }} title="Новое оборудование ППР" isDirty={isDirty}>
         <PprEquipmentForm
@@ -314,6 +347,6 @@ export function PprEquipmentAdmin({
           />
         ) : null}
       </PprModal>
-    </div>
+    </>
   );
 }

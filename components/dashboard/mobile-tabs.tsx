@@ -4,15 +4,19 @@ import Link from "next/link";
 import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import type { Role } from "@/lib/types";
+import { canAccessDirectories, canManageUsers } from "@/lib/capabilities";
+import { canAccessRoundsModule } from "@/lib/rounds/permissions";
 
 export function MobileTabs({ role }: { role: Role }) {
   const pathname = usePathname();
-  const canManageDirectories = role === "admin" || role === "chief";
+  const directoryHref: Route = canManageUsers(role) ? "/users" : "/directories/floors";
+  const canOpenDirectories = canAccessDirectories(role);
   const tabs: Array<{ href: Route; label: string }> = [
     { href: "/my", label: "Мои" },
     { href: "/new", label: "Новые" },
+    ...(canAccessRoundsModule(role) ? [{ href: "/rounds" as Route, label: "Обходы" }] : []),
     { href: "/archive", label: "Архив" },
-    canManageDirectories ? { href: "/users", label: "Справ." } : { href: "/profile", label: "Профиль" }
+    canOpenDirectories ? { href: directoryHref, label: "Справ." } : { href: "/profile", label: "Профиль" }
   ];
 
   return (

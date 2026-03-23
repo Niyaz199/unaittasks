@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createPprSystemGroupAction, updatePprSystemGroupAction } from "@/app/actions/ppr-directory-actions";
 import { DataTable } from "@/components/ui/data-table";
-import { EmptyState } from "@/components/ui/empty-state";
 import { PprModal, PprFormGroup } from "@/components/ppr/ui/ppr-modal";
+import { PprPageShell } from "@/components/ppr/ui/ppr-page-shell";
+import { StatusBadge } from "@/components/ppr/ui/status-badge";
 
 type SystemGroupRow = {
   id: string;
@@ -18,68 +19,107 @@ export function PprSystemGroupsAdmin({ groups }: { groups: SystemGroupRow[] }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
 
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterStatus, setFilterStatus] = useState<"all" | "active" | "inactive">("all");
+
   const editingGroup = editingId ? groups.find((item) => item.id === editingId) ?? null : null;
+
+  const filteredGroups = useMemo(() => {
+    return groups.filter((group) => {
+      const matchesSearch =
+        searchTerm === "" ||
+        group.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        group.code.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesStatus =
+        filterStatus === "all" ||
+        (filterStatus === "active" && group.is_active) ||
+        (filterStatus === "inactive" && !group.is_active);
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [groups, searchTerm, filterStatus]);
+
+  const metrics = useMemo(() => {
+    return [
+      { label: "Всего групп", value: groups.length, tone: "neutral" as const },
+      { label: "Активных", value: groups.filter((g) => g.is_active).length, tone: "success" as const },
+    ];
+  }, [groups]);
 
   return (
     <>
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-        <div className="text-soft">Глобальный справочник групп систем ППР для последующего выбора в карточке системы.</div>
-        <button className="btn btn-accent" type="button" onClick={() => setIsCreateOpen(true)}>
-          + Добавить группу
-        </button>
-      </div>
-
-      {!groups.length ? (
-        <EmptyState
-          message="Справочник групп систем ППР пуст"
-          hint="Создайте первую группу, чтобы на странице `/ppr/systems` можно было добавлять системы без ручного SQL."
-        />
-      ) : (
-        <>
-          <div className="desktop-only">
-            <DataTable
-              columns={[
-                { key: "name", label: "Название" },
-                { key: "code", label: "Код" },
-                { key: "status", label: "Статус" },
-                { key: "actions", label: "Действия" },
-              ]}
+      <PprPageShell
+        metrics={metrics}
+        onSearch={setSearchTerm}
+        searchPlaceholder="Поиск по названию или коду..."
+        isEmpty={groups.length === 0}
+        emptyState={{
+          message: "Справочник групп систем ППР пуст",
+          hint: "Создайте первую группу, чтобы на странице `/ppr/systems` можно было добавлять системы без ручного SQL.",
+        }}
+        isFilteredEmpty={filteredGroups.length === 0}
+        filters={
+          <>
+            <select
+              className="select"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as "all" | "active" | "inactive")}
+              style={{ maxWidth: "150px" }}
             >
-              {groups.map((group) => (
-                <tr key={group.id}>
-                  <td>{group.name}</td>
-                  <td>{group.code}</td>
-                  <td>{group.is_active ? "Активна" : "Отключена"}</td>
-                  <td>
-                    <div className="ppr-table-actions">
-                      <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(group.id)}>
-                        Изменить
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
-          </div>
-
-          <div className="mobile-cards mobile-only">
-            {groups.map((group) => (
-              <div key={group.id} className="section-card mobile-card">
-                <div className="grid" style={{ gap: "0.45rem" }}>
-                  <div>{group.name}</div>
-                  <div className="text-soft">Код: {group.code}</div>
-                  <div className="text-soft">{group.is_active ? "Активна" : "Отключена"}</div>
+              <option value="all">Все статусы</option>
+              <option value="active">Активные</option>
+              <option value="inactive">Неактивные</option>
+            </select>
+            <button className="btn btn-accent" type="button" onClick={() => setIsCreateOpen(true)}>
+              + Добавить
+            </button>
+          </>
+        }
+      >
+        <div className="desktop-only">
+          <DataTable
+            columns={[
+              { key: "name", label: "Название" },
+              { key: "code", label: "Код" },
+              { key: "status", label: "Статус" },
+              { key: "actions", label: "Действия" },
+            ]}
+          >
+            {filteredGroups.map((group) => (
+              <tr key={group.id}>
+                <td style={{ fontWeight: 600 }}>{group.name}</td>
+                <td>{group.code}</td>
+                <td><StatusBadge isActive={group.is_active} /></td>
+                <td>
                   <div className="ppr-table-actions">
                     <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(group.id)}>
                       Изменить
                     </button>
                   </div>
+                </td>
+              </tr>
+            ))}
+          </DataTable>
+        </div>
+
+        <div className="mobile-cards mobile-only">
+          {filteredGroups.map((group) => (
+            <div key={group.id} className="section-card mobile-card">
+              <div className="grid" style={{ gap: "0.45rem" }}>
+                <div style={{ fontWeight: 600 }}>{group.name}</div>
+                <div className="text-soft">Код: {group.code}</div>
+                <div><StatusBadge isActive={group.is_active} /></div>
+                <div className="ppr-table-actions">
+                  <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(group.id)}>
+                    Изменить
+                  </button>
                 </div>
               </div>
-            ))}
-          </div>
-        </>
-      )}
+            </div>
+          ))}
+        </div>
+      </PprPageShell>
 
       <PprModal open={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Новая группа систем ППР" isDirty={isDirty}>
         <form action={createPprSystemGroupAction} onSubmit={() => { setIsCreateOpen(false); setIsDirty(false); }} onChange={() => setIsDirty(true)} className="ppr-modal-content">

@@ -1,0 +1,199 @@
+"use client";
+
+import localforage from "localforage";
+
+export type OfflineRoundsPhoto = {
+  blob: Blob;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+};
+
+export type PendingRoundsCheckin = {
+  id: string;
+  type: "rounds_checkin";
+  clientEventId: string;
+  roomId: string;
+  objectId: string;
+  roomQrToken: string;
+  scannedAtDevice: string;
+  operationalDate: string;
+  userId: string;
+  comment: string;
+  photo: OfflineRoundsPhoto | null;
+  syncStatus: "pending" | "syncing" | "synced" | "error";
+  syncError: string | null;
+  createdAt: string;
+  syncedAt: string | null;
+};
+
+export type RoundsScannerSnapshot = {
+  projectTimeZone: string;
+  objects: Array<{ id: string; name: string }>;
+  rooms: Array<{
+    room_id: string;
+    object_id: string;
+    object_name: string;
+    room_name: string;
+    floor_name: string;
+    qr_token: string;
+  }>;
+  updatedAt: string;
+};
+
+type QueueMeta = {
+  lastSyncedAt: string | null;
+};
+
+const queueStorage = localforage.createInstance({
+  name: "ops-tasker",
+  storeName: "rounds_pending_checkins",
+});
+
+const snapshotStorage = localforage.createInstance({
+  name: "ops-tasker",
+  storeName: "rounds_snapshot",
+});
+
+function emitRoundsQueueChanged() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("rounds-queue-changed"));
+  }
+}
+
+async function getQueue() {
+  return (await queueStorage.getItem<PendingRoundsCheckin[]>("queue")) ?? [];
+}
+
+async function setQueue(queue: PendingRoundsCheckin[]) {
+  await queueStorage.setItem("queue", queue);
+  emitRoundsQueueChanged();
+}
+
+async function getMeta(): Promise<QueueMeta> {
+  return (await queueStorage.getItem<QueueMeta>("meta")) ?? { lastSyncedAt: null };
+}
+
+async function setMeta(meta: QueueMeta) {
+  await queueStorage.setItem("meta", meta);
+  emitRoundsQueueChanged();
+}
+
+function buildCheckinFormData(entry: PendingRoundsCheckin) {
+  const formData = new FormData();
+  formData.set("room_id", entry.roomId);
+  formData.set("client_event_id", entry.clientEventId);
+  formData.set("scanned_at_device", entry.scannedAtDevice);
+  formData.set("comment", entry.comment);
+  formData.set("source", "pwa-offline");
+  if (entry.photo) {
+    formData.append("photo", entry.photo.blob, entry.photo.fileName);
+  }
+  return formData;
+}
+
+export async function enqueueRoundsCheckin(
+  entry: Omit<PendingRoundsCheckin, "id" | "type" | "syncStatus" | "syncError" | "createdAt" | "syncedAt">
+) {
+  const queue = await getQueue();
+  queue.push({
+    id: crypto.randomUUID(),
+    type: "rounds_checkin",
+    syncStatus: "pending",
+    syncError: null,
+    createdAt: new Date().toISOString(),
+    syncedAt: null,
+    ...entry,
+  });
+  await setQueue(queue);
+}
+
+export async function getRoundsQueueItems() {
+  return getQueue();
+}
+
+export async function getRoundsQueueSummary() {
+  const [queue, meta] = await Promise.all([getQueue(), getMeta()]);
+  return {
+    pendingCount: queue.filter((item) => item.syncStatus === "pending" || item.syncStatus === "syncing" || item.syncStatus === "error").length,
+    errorCount: queue.filter((item) => item.syncStatus === "error").length,
+    lastSyncedAt: meta.lastSyncedAt,
+  };
+}
+
+export async function flushRoundsQueue() {
+  if (!navigator.onLine) return;
+
+  const queue = await getQueue();
+  let changed = false;
+
+  for (const entry of queue) {
+    if (entry.syncStatus === "synced") continue;
+
+    entry.syncStatus = "syncing";
+    entry.syncError = null;
+    changed = true;
+    await setQueue([...queue]);
+
+    try {
+      const response = await fetch("/api/rounds/checkins", {
+        method: "POST",
+        body: buildCheckinFormData(entry),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(payload.error ?? "Sync failed");
+      }
+
+      entry.syncStatus = "synced";
+      entry.syncError = null;
+      entry.syncedAt = new Date().toISOString();
+      changed = true;
+    } catch (error) {
+      entry.syncStatus = "error";
+      entry.syncError = error instanceof Error ? error.message : "Sync failed";
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    await setQueue([...queue]);
+  }
+
+  const hasPending = queue.some((item) => item.syncStatus !== "synced");
+  if (!hasPending) {
+    await setMeta({ lastSyncedAt: new Date().toISOString() });
+  }
+}
+
+export async function retryErroredRoundsCheckins() {
+  const queue = await getQueue();
+  for (const entry of queue) {
+    if (entry.syncStatus === "error") {
+      entry.syncStatus = "pending";
+      entry.syncError = null;
+    }
+  }
+  await setQueue(queue);
+}
+
+export async function pruneSyncedRoundsCheckins() {
+  const queue = await getQueue();
+  const threshold = Date.now() - 1000 * 60 * 60 * 24;
+  const next = queue.filter((item) => {
+    if (item.syncStatus !== "synced" || !item.syncedAt) return true;
+    return new Date(item.syncedAt).getTime() >= threshold;
+  });
+  if (next.length !== queue.length) {
+    await setQueue(next);
+  }
+}
+
+export async function saveRoundsScannerSnapshot(snapshot: RoundsScannerSnapshot) {
+  await snapshotStorage.setItem("scanner_snapshot", snapshot);
+}
+
+export async function loadRoundsScannerSnapshot() {
+  return (await snapshotStorage.getItem<RoundsScannerSnapshot>("scanner_snapshot")) ?? null;
+}

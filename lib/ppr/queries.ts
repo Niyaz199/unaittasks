@@ -288,7 +288,7 @@ export async function listPprEquipmentForProfile(supabase: SupabaseClient, profi
   const query = supabase
     .from("ppr_equipment")
     .select(
-      "id,object_id,system_id,room_id,inventory_no,name,dispatch_name,service_start_date,status,serial_no,manufacturer,model,description,comment,created_at,object:objects(name),system:ppr_systems(name),room:object_rooms(name)"
+      "id,object_id,system_id,room_id,inventory_no,name,dispatch_name,service_start_date,status,serial_no,manufacturer,model,description,comment,created_at,object:objects(name),system:ppr_systems(name),room:object_rooms(name,floor,floor_ref:floors(name),room_type:room_types(name))"
     )
     .order("created_at", { ascending: false });
 
@@ -314,7 +314,20 @@ export async function listPprEquipmentForProfile(supabase: SupabaseClient, profi
     created_at: string;
     object: { name: string } | Array<{ name: string }> | null;
     system: { name: string } | Array<{ name: string }> | null;
-    room: { name: string } | Array<{ name: string }> | null;
+    room:
+      | {
+          name: string;
+          floor: string | null;
+          floor_ref: { name: string } | Array<{ name: string }> | null;
+          room_type: { name: string } | Array<{ name: string }> | null;
+        }
+      | Array<{
+          name: string;
+          floor: string | null;
+          floor_ref: { name: string } | Array<{ name: string }> | null;
+          room_type: { name: string } | Array<{ name: string }> | null;
+        }>
+      | null;
   }>;
 }
 
@@ -328,7 +341,7 @@ export async function getPprEquipmentByIdForProfile(
   const { data, error } = await supabase
     .from("ppr_equipment")
     .select(
-      "id,object_id,system_id,room_id,inventory_no,name,dispatch_name,service_start_date,status,serial_no,manufacturer,model,description,comment,created_at,object:objects(name),system:ppr_systems(name),room:object_rooms(name)"
+      "id,object_id,system_id,room_id,inventory_no,name,dispatch_name,service_start_date,status,serial_no,manufacturer,model,description,comment,created_at,object:objects(name),system:ppr_systems(name),room:object_rooms(name,floor,floor_ref:floors(name),room_type:room_types(name))"
     )
     .eq("id", equipmentId)
     .maybeSingle();
@@ -367,7 +380,20 @@ export async function getPprEquipmentByIdForProfile(
       created_at: string;
       object: { name: string } | Array<{ name: string }> | null;
       system: { name: string } | Array<{ name: string }> | null;
-      room: { name: string } | Array<{ name: string }> | null;
+      room:
+        | {
+            name: string;
+            floor: string | null;
+            floor_ref: { name: string } | Array<{ name: string }> | null;
+            room_type: { name: string } | Array<{ name: string }> | null;
+          }
+        | Array<{
+            name: string;
+            floor: string | null;
+            floor_ref: { name: string } | Array<{ name: string }> | null;
+            room_type: { name: string } | Array<{ name: string }> | null;
+          }>
+        | null;
     },
     qrCode: (qrCode ?? null) as
       | {
@@ -874,7 +900,7 @@ export async function listPprMonthPlanItemsForProfile(
   const query = supabase
     .from("ppr_month_plan_items")
     .select(
-      "id,object_id,month_plan_id,system_id,equipment_id,assignment_id,template_id,planned_for,source_due_date,is_overdue,is_carried_over,task_id,status,month_plan:ppr_month_plans(plan_month),equipment:ppr_equipment(name,inventory_no,room:object_rooms(name,floor)),template:ppr_work_templates(name,norm_hours),system:ppr_systems(name),object:objects(name),task:ppr_tasks(id,status,planned_for)"
+      "id,object_id,month_plan_id,system_id,equipment_id,assignment_id,template_id,planned_for,source_due_date,is_overdue,is_carried_over,task_id,status,month_plan:ppr_month_plans(plan_month),equipment:ppr_equipment(name,inventory_no,room:object_rooms(name,floor,floor_ref:floors(name,sort_order),room_type:room_types(name))),template:ppr_work_templates(name,norm_hours),system:ppr_systems(name),object:objects(name),task:ppr_tasks(id,status,planned_for)"
     )
     .order("planned_for", { ascending: true })
     .order("source_due_date", { ascending: true });
@@ -900,8 +926,42 @@ export async function listPprMonthPlanItemsForProfile(
     status: "pending" | "materialized" | "carried_over" | "closed" | "cancelled";
     month_plan: { plan_month: string } | Array<{ plan_month: string }> | null;
     equipment:
-      | { name: string; inventory_no: string; room: { name: string; floor: string | null } | Array<{ name: string; floor: string | null }> | null }
-      | Array<{ name: string; inventory_no: string; room: { name: string; floor: string | null } | Array<{ name: string; floor: string | null }> | null }>
+      | {
+          name: string;
+          inventory_no: string;
+          room:
+            | {
+                name: string;
+                floor: string | null;
+                floor_ref: { name: string; sort_order: number } | Array<{ name: string; sort_order: number }> | null;
+                room_type: { name: string } | Array<{ name: string }> | null;
+              }
+            | Array<{
+                name: string;
+                floor: string | null;
+                floor_ref: { name: string; sort_order: number } | Array<{ name: string; sort_order: number }> | null;
+                room_type: { name: string } | Array<{ name: string }> | null;
+              }>
+            | null;
+        }
+      | Array<{
+          name: string;
+          inventory_no: string;
+          room:
+            | {
+                name: string;
+                floor: string | null;
+                floor_ref: { name: string; sort_order: number } | Array<{ name: string; sort_order: number }> | null;
+                room_type: { name: string } | Array<{ name: string }> | null;
+              }
+            | Array<{
+                name: string;
+                floor: string | null;
+                floor_ref: { name: string; sort_order: number } | Array<{ name: string; sort_order: number }> | null;
+                room_type: { name: string } | Array<{ name: string }> | null;
+              }>
+            | null;
+        }>
       | null;
     template: { name: string; norm_hours: number | null } | Array<{ name: string; norm_hours: number | null }> | null;
     system: { name: string } | Array<{ name: string }> | null;

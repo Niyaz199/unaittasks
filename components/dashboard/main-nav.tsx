@@ -1,6 +1,14 @@
 import Link from "next/link";
 import type { Route } from "next";
 import type { Role } from "@/lib/types";
+import {
+  canAccessDirectories,
+  canManageObjects,
+  canManageUsers,
+  canReadFloorsDirectory,
+  canReadRoomTypesDirectory,
+} from "@/lib/capabilities";
+import { canAccessRoundsModule, canManageRoundsConfig, canReadRoundsReports } from "@/lib/rounds/permissions";
 
 type Props = {
   role: Role;
@@ -23,8 +31,11 @@ function Item({ href, label, currentPath }: { href: string; label: string; curre
 }
 
 export function MainNav({ role, currentPath }: Props) {
-  const canManageDirectories = role === "admin" || role === "chief";
+  const canOpenDirectories = canAccessDirectories(role);
   const canManagePprSystemGroups = role === "admin" || role === "chief" || role === "lead";
+  const canOpenRounds = canAccessRoundsModule(role);
+  const canOpenRoundsReports = canReadRoundsReports(role);
+  const canOpenRoundsConfig = canManageRoundsConfig(role);
 
   return (
     <nav className="side-nav">
@@ -43,18 +54,34 @@ export function MainNav({ role, currentPath }: Props) {
         ) : null}
       </section>
 
-      {canManageDirectories ? (
+      {canOpenRounds ? (
+        <section className="side-nav-section">
+          <p className="side-nav-title">Обходы</p>
+          <Item href="/rounds" label="Модуль обходов" currentPath={currentPath} />
+          <Item href="/rounds/scan" label="Сканер" currentPath={currentPath} />
+          {canOpenRoundsReports ? <Item href="/rounds/today" label="Сегодня" currentPath={currentPath} /> : null}
+          {canOpenRoundsReports ? <Item href="/rounds/archive" label="Архив" currentPath={currentPath} /> : null}
+          {canOpenRoundsConfig ? <Item href="/rounds/config" label="Конфигуратор" currentPath={currentPath} /> : null}
+          {canOpenRoundsConfig ? <Item href="/rounds/qr" label="QR помещений" currentPath={currentPath} /> : null}
+        </section>
+      ) : null}
+
+      {canOpenDirectories ? (
         <section className="side-nav-section">
           <p className="side-nav-title">Справочники</p>
-          <Item href="/users" label="Пользователи" currentPath={currentPath} />
-          <Item href="/objects" label="Объекты" currentPath={currentPath} />
+          {canManageUsers(role) ? <Item href="/users" label="Пользователи" currentPath={currentPath} /> : null}
+          {canManageObjects(role) ? <Item href="/objects" label="Объекты" currentPath={currentPath} /> : null}
+          {canReadFloorsDirectory(role) ? <Item href="/directories/floors" label="Этажи" currentPath={currentPath} /> : null}
+          {canReadRoomTypesDirectory(role) ? (
+            <Item href="/directories/room-types" label="Типы помещений" currentPath={currentPath} />
+          ) : null}
         </section>
       ) : null}
 
       <section className="side-nav-section">
         <p className="side-nav-title">Сервис</p>
         <Item href="/profile" label="Профиль" currentPath={currentPath} />
-        {canManageDirectories ? <Item href="/audit" label="Журнал" currentPath={currentPath} /> : null}
+        {canManageObjects(role) ? <Item href="/audit" label="Журнал" currentPath={currentPath} /> : null}
       </section>
     </nav>
   );

@@ -1,5 +1,5 @@
-const CACHE_NAME = "ops-tasker-v2";
-const STATIC_ASSETS = ["/manifest.webmanifest", "/icon.svg"];
+const CACHE_NAME = "ops-tasker-v3";
+const STATIC_ASSETS = ["/manifest.webmanifest", "/icon.svg", "/rounds", "/rounds/scan"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -42,7 +42,21 @@ self.addEventListener("fetch", (event) => {
   const accept = event.request.headers.get("accept") || "";
   const isHtmlNavigation = event.request.mode === "navigate" || accept.includes("text/html");
   if (isHtmlNavigation) {
-    event.respondWith(fetch(event.request));
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return response;
+        })
+        .catch(async () => {
+          const cached = await caches.match(event.request);
+          if (cached) return cached;
+          return caches.match("/rounds/scan");
+        })
+    );
     return;
   }
 

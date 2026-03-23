@@ -6,22 +6,30 @@ const OBJECT_ROOM_READ_ROLES = new Set(["admin", "chief", "lead", "engineer", "o
 const OBJECT_ROOM_MANAGE_ROLES = new Set(["admin", "chief", "lead", "object_engineer"]);
 
 type ObjectRow = { id: string; name: string };
+type NamedRelation = { name: string } | Array<{ name: string }> | null;
+type FloorRelation = { id: string; name: string; sort_order: number; is_active: boolean } | Array<{ id: string; name: string; sort_order: number; is_active: boolean }> | null;
+type RoomTypeRelation = { id: string; name: string; is_active: boolean } | Array<{ id: string; name: string; is_active: boolean }> | null;
 
 export type ObjectRoomRow = {
   id: string;
   object_id: string;
   name: string;
   floor: string | null;
+  floor_id: string | null;
+  room_type_id: string | null;
   description: string | null;
   is_active: boolean;
   created_at: string;
-  object: { name: string } | Array<{ name: string }> | null;
+  object: NamedRelation;
+  floor_ref: FloorRelation;
+  room_type: RoomTypeRelation;
 };
 
 export const objectRoomFormSchema = z.object({
   objectId: z.string().uuid(),
   name: z.string().trim().min(2),
-  floor: z.string().trim().max(100).optional().nullable(),
+  floorId: z.string().uuid().optional().nullable(),
+  roomTypeId: z.string().uuid().optional().nullable(),
   description: z.string().trim().max(2000).optional().nullable(),
   isActive: z.boolean().default(true),
 });
@@ -32,6 +40,13 @@ export function canReadObjectRooms(role: Profile["role"]) {
 
 export function canManageObjectRooms(role: Profile["role"]) {
   return OBJECT_ROOM_MANAGE_ROLES.has(role);
+}
+
+function isSchemaCacheError(error: unknown) {
+  const code = typeof error === "object" && error && "code" in error ? String((error as { code?: string }).code ?? "") : "";
+  const message =
+    typeof error === "object" && error && "message" in error ? String((error as { message?: string }).message ?? "") : "";
+  return code === "PGRST204" || code === "PGRST205" || message.toLowerCase().includes("schema cache");
 }
 
 async function listObjectScopedObjects(
@@ -99,12 +114,43 @@ export async function listObjectRoomsForProfile(supabase: SupabaseClient, profil
 
   const query = supabase
     .from("object_rooms")
-    .select("id,object_id,name,floor,description,is_active,created_at,object:objects(name)")
+    .select(
+      "id,object_id,name,floor,floor_id,room_type_id,description,is_active,created_at,object:objects(name),floor_ref:floors(id,name,sort_order,is_active),room_type:room_types(id,name,is_active)"
+    )
     .order("name", { ascending: true });
 
   const { data, error } =
     profile.role === "admin" || profile.role === "chief" ? await query : await query.in("object_id", objects.map((item) => item.id));
-  if (error) throw error;
+  if (error) {
+    if (!isSchemaCacheError(error)) throw error;
+
+    const legacyQuery = supabase
+      .from("object_rooms")
+      .select("id,object_id,name,floor,description,is_active,created_at,object:objects(name)")
+      .order("name", { ascending: true });
+    const legacyResult =
+      profile.role === "admin" || profile.role === "chief"
+        ? await legacyQuery
+        : await legacyQuery.in("object_id", objects.map((item) => item.id));
+    if (legacyResult.error) throw legacyResult.error;
+
+    return ((legacyResult.data ?? []) as Array<{
+      id: string;
+      object_id: string;
+      name: string;
+      floor: string | null;
+      description: string | null;
+      is_active: boolean;
+      created_at: string;
+      object: NamedRelation;
+    }>).map((row) => ({
+      ...row,
+      floor_id: null,
+      room_type_id: null,
+      floor_ref: null,
+      room_type: null,
+    }));
+  }
 
   return (data ?? []) as ObjectRoomRow[];
 }

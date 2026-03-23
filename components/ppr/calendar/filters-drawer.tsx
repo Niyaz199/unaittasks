@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import type { Route } from "next";
 import type { CalendarObjectOption, CalendarSystemGroupOption, CalendarSystemOption } from "./types";
 
 type DrawerProps = {
@@ -43,14 +44,14 @@ export function PprFiltersDrawer({ objects, systemGroups, systems, initial, onCl
     if (system) params.set("system", system);
     else params.delete("system");
 
-    router.push(`${pathname}?${params.toString()}`);
+    router.push(`${pathname}?${params.toString()}` as Route);
     onClose();
   };
 
   const handleReset = () => {
     const params = new URLSearchParams();
     params.set("tab", initial.tab);
-    router.push(`${pathname}?${params.toString()}`);
+    router.push(`${pathname}?${params.toString()}` as Route);
     onClose();
   };
 

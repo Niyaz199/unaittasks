@@ -2,7 +2,7 @@ import { requireProfile } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { canAccessPprTaskScreens, listPprTasksForProfile } from "@/lib/ppr/queries";
 import { PageHeader } from "@/components/ui/page-header";
-import { PprTaskList } from "@/components/ppr/tasks/ppr-task-list";
+import { PprTasksAdmin } from "@/components/ppr/tasks/ppr-tasks-admin";
 
 export default async function PprMyTasksPage() {
   const { profile } = await requireProfile();
@@ -25,7 +25,7 @@ export default async function PprMyTasksPage() {
         title="Мои ППР"
         description="Список активных ППР-заявок, где вы указаны исполнителем."
       />
-      <PprTaskList
+      <PprTasksAdmin
         tasks={tasks}
         emptyMessage="Активных ППР-заявок у вас нет"
         emptyHint="После назначения исполнителем заявки появятся в этом разделе."
