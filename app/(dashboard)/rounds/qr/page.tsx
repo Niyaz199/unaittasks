@@ -34,7 +34,7 @@ export default async function RoundsQrPage({
     <section className="grid">
       <PageHeader
         title="QR помещений"
-        description="Печатная форма и поштучная выгрузка QR-кодов для помещений, включенных в обходы."
+        description="Печатная форма и поштучная выгрузка общих QR-кодов помещений, участвующих в обходах."
         actions={<BackButton fallback="/rounds/config" label="← К конфигуратору" />}
       />
       <RoundsQrBoard rooms={rooms} />

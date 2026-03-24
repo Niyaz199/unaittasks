@@ -20,8 +20,8 @@ export type RoundsConfigRoom = {
   floor_name: string;
   is_active: boolean;
   rounds_enabled: boolean;
-  rounds_qr_token: string | null;
-  rounds_qr_generated_at: string | null;
+  room_qr_token: string | null;
+  room_qr_generated_at: string | null;
 };
 
 export type RoundsTodayRow = {

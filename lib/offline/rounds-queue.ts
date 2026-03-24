@@ -45,6 +45,12 @@ type QueueMeta = {
   lastSyncedAt: string | null;
 };
 
+type ApiErrorPayload = {
+  error?: string;
+  details?: string | Record<string, unknown> | null;
+  hint?: string | null;
+};
+
 const queueStorage = localforage.createInstance({
   name: "ops-tasker",
   storeName: "rounds_pending_checkins",
@@ -77,6 +83,13 @@ async function getMeta(): Promise<QueueMeta> {
 async function setMeta(meta: QueueMeta) {
   await queueStorage.setItem("meta", meta);
   emitRoundsQueueChanged();
+}
+
+async function readApiError(response: Response, fallback: string) {
+  const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+  if (payload?.error?.trim()) return payload.error.trim();
+  if (payload?.hint?.trim()) return payload.hint.trim();
+  return fallback;
 }
 
 function buildCheckinFormData(entry: PendingRoundsCheckin) {
@@ -142,8 +155,12 @@ export async function flushRoundsQueue() {
       });
 
       if (!response.ok) {
-        const payload = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(payload.error ?? "Sync failed");
+        const message = await readApiError(response, "Не удалось синхронизировать отметку обхода");
+        throw new Error(
+          message === "Помещение не включено в обходы"
+            ? "Помещение найдено по QR, но сейчас не включено в обходы. Отметка не синхронизирована."
+            : message
+        );
       }
 
       entry.syncStatus = "synced";

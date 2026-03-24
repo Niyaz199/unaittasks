@@ -299,10 +299,10 @@ begin
     raise exception 'room_id и scanned_at_device обязательны';
   end if;
 
-  select full_name
+  select profile_row.full_name
   into current_display_name
-  from public.profiles
-  where id = current_uid;
+  from public.profiles profile_row
+  where profile_row.id = current_uid;
 
   if current_display_name is null then
     raise exception 'Профиль пользователя не найден';
@@ -401,7 +401,7 @@ begin
     _client_event_id,
     coalesce(nullif(btrim(coalesce(_source, '')), ''), 'pwa')
   )
-  on conflict (room_id, operational_date) do update
+  on conflict on constraint rounds_checkins_room_day_key do update
   set
     object_id = excluded.object_id,
     checked_in_by_user_id = excluded.checked_in_by_user_id,
@@ -446,9 +446,9 @@ begin
 
   select *
   into existing_row
-  from public.rounds_checkins
-  where room_id = _room_id
-    and operational_date = op_date
+  from public.rounds_checkins checkin_row
+  where checkin_row.room_id = _room_id
+    and checkin_row.operational_date = op_date
   limit 1;
 
   return query

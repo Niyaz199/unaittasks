@@ -24,10 +24,14 @@ type ConfigRoomRow = {
   floor: string | null;
   is_active: boolean;
   rounds_enabled: boolean;
-  rounds_qr_token: string | null;
-  rounds_qr_generated_at: string | null;
   object: NamedRelation;
   floor_ref: FloorRelation;
+};
+
+type ActiveRoomQrRow = {
+  room_id: string;
+  qr_token: string;
+  generated_at: string;
 };
 
 type ArchiveQueryRow = {
@@ -60,6 +64,23 @@ function resolveName(value: NamedRelation) {
 function resolveFloorName(value: FloorRelation, fallback: string | null) {
   if (Array.isArray(value)) return value[0]?.name ?? fallback ?? "—";
   return value?.name ?? fallback ?? "—";
+}
+
+async function listActiveRoomQrMap(supabase: SupabaseClient, roomIds: string[]) {
+  if (!roomIds.length) {
+    return new Map<string, ActiveRoomQrRow>();
+  }
+
+  const { data, error } = await supabase
+    .from("object_room_qr_codes")
+    .select("room_id,qr_token,generated_at")
+    .in("room_id", roomIds)
+    .eq("is_active", true);
+  if (error) throw error;
+
+  return new Map(
+    ((data ?? []) as ActiveRoomQrRow[]).map((row) => [row.room_id, row] satisfies [string, ActiveRoomQrRow])
+  );
 }
 
 async function listRoundsScopedObjects(
@@ -176,9 +197,14 @@ export async function listRoundsConfigRoomsForProfile(
 
   const { data, error } = await supabase
     .from("object_rooms")
-    .select("id,object_id,name,floor,is_active,rounds_enabled,rounds_qr_token,rounds_qr_generated_at,object:objects(name),floor_ref:floors(name,sort_order)")
+    .select("id,object_id,name,floor,is_active,rounds_enabled,object:objects(name),floor_ref:floors(name,sort_order)")
     .in("object_id", targetIds);
   if (error) throw error;
+
+  const qrByRoomId = await listActiveRoomQrMap(
+    supabase,
+    ((data ?? []) as ConfigRoomRow[]).map((room) => room.id)
+  );
 
   const normalizedQuery = filters?.query?.trim().toLowerCase() ?? "";
   const rooms = ((data ?? []) as ConfigRoomRow[])
@@ -191,8 +217,8 @@ export async function listRoundsConfigRoomsForProfile(
       floor_name: resolveFloorName(room.floor_ref, room.floor),
       is_active: room.is_active,
       rounds_enabled: room.rounds_enabled,
-      rounds_qr_token: room.rounds_qr_token,
-      rounds_qr_generated_at: room.rounds_qr_generated_at,
+      room_qr_token: qrByRoomId.get(room.id)?.qr_token ?? null,
+      room_qr_generated_at: qrByRoomId.get(room.id)?.generated_at ?? null,
     }))
     .sort((left, right) => {
       if (left.object_name !== right.object_name) return left.object_name.localeCompare(right.object_name, "ru");
@@ -214,85 +240,72 @@ export async function saveRoundsRoomSelection(
     throw new Error("Объект недоступен для настройки обходов");
   }
 
+  const normalizedRoomIds = [...new Set(enabledRoomIds.filter(Boolean))];
+  const { data: objectRooms, error: roomsError } = await supabase
+    .from("object_rooms")
+    .select("id")
+    .eq("object_id", objectId);
+  if (roomsError) throw roomsError;
+
+  const allowedRoomIds = new Set(((objectRooms ?? []) as Array<{ id: string }>).map((room) => room.id));
+  const invalidRoomIds = normalizedRoomIds.filter((roomId) => !allowedRoomIds.has(roomId));
+  if (invalidRoomIds.length) {
+    throw new Error("В payload сохранения попали помещения, которые не принадлежат выбранному объекту.");
+  }
+
   const { error: disableError } = await supabase
     .from("object_rooms")
     .update({ rounds_enabled: false })
     .eq("object_id", objectId);
   if (disableError) throw disableError;
 
-  if (enabledRoomIds.length) {
+  if (normalizedRoomIds.length) {
     const { error: enableError } = await supabase
       .from("object_rooms")
       .update({ rounds_enabled: true })
       .eq("object_id", objectId)
-      .in("id", enabledRoomIds);
+      .in("id", normalizedRoomIds);
     if (enableError) throw enableError;
   }
+
+  return {
+    objectId,
+    enabledRoomIds: normalizedRoomIds,
+    enabledCount: normalizedRoomIds.length,
+  };
 }
 
-export async function ensureRoundsQrTokens(
+export async function saveRoundsRoomSelectionBatch(
   supabase: SupabaseClient,
   profile: Pick<Profile, "id" | "role">,
-  options: {
-    objectId?: string;
-    roomIds?: string[];
-    forceRegenerate?: boolean;
-    missingOnly?: boolean;
-  }
+  operations: Array<{ objectId: string; enabledRoomIds: string[] }>
 ) {
-  const objects = await listRoundsManageableObjectsForProfile(supabase, profile);
-  const accessibleObjectIds = new Set(objects.map((item) => item.id));
-  if (!accessibleObjectIds.size) {
-    return [];
+  const grouped = new Map<string, string[]>();
+  for (const operation of operations) {
+    if (!operation.objectId) continue;
+    grouped.set(operation.objectId, [...new Set(operation.enabledRoomIds.filter(Boolean))]);
   }
 
-  let query = supabase
-    .from("object_rooms")
-    .select("id,object_id,rounds_enabled,rounds_qr_token")
-    .eq("is_active", true);
+  const saved: Array<{ objectId: string; enabledCount: number }> = [];
+  const failed: Array<{ objectId: string; error: string }> = [];
 
-  if (options.objectId) {
-    if (!accessibleObjectIds.has(options.objectId)) {
-      throw new Error("Объект недоступен для генерации QR");
+  for (const [objectId, enabledRoomIds] of grouped) {
+    try {
+      const result = await saveRoundsRoomSelection(supabase, profile, objectId, enabledRoomIds);
+      saved.push({ objectId: result.objectId, enabledCount: result.enabledCount });
+    } catch (error) {
+      failed.push({
+        objectId,
+        error: error instanceof Error ? error.message : "Не удалось сохранить конфигурацию объекта",
+      });
     }
-    query = query.eq("object_id", options.objectId);
-  } else {
-    query = query.in("object_id", [...accessibleObjectIds]);
   }
 
-  if (options.roomIds?.length) {
-    query = query.in("id", options.roomIds);
-  }
-
-  const { data, error } = await query;
-  if (error) throw error;
-
-  const candidates = ((data ?? []) as Array<{ id: string; object_id: string; rounds_enabled: boolean; rounds_qr_token: string | null }>)
-    .filter((room) => room.rounds_enabled)
-    .filter((room) => (options.missingOnly ? !room.rounds_qr_token : true));
-
-  const updated: string[] = [];
-  for (const room of candidates) {
-    if (!options.forceRegenerate && !options.missingOnly && room.rounds_qr_token) {
-      continue;
-    }
-
-    const tokenResult = await supabase.rpc("rounds_generate_qr_token");
-    if (tokenResult.error) throw tokenResult.error;
-
-    const { error: updateError } = await supabase
-      .from("object_rooms")
-      .update({
-        rounds_qr_token: tokenResult.data,
-        rounds_qr_generated_at: new Date().toISOString(),
-      })
-      .eq("id", room.id);
-    if (updateError) throw updateError;
-
-    updated.push(room.id);
-  }
-
-  return updated;
+  return {
+    requestedObjectIds: [...grouped.keys()],
+    saved,
+    failed,
+  };
 }
 
 export async function getRoundsTodayForProfile(
@@ -446,7 +459,7 @@ export async function getRoundsPrintRowsForProfile(
 ) {
   const { rooms } = await listRoundsConfigRoomsForProfile(supabase, profile, { objectId: options?.objectId });
   const roomIds = new Set(options?.roomIds?.filter(Boolean) ?? []);
-  return rooms.filter((room) => room.rounds_enabled && room.rounds_qr_token && (!roomIds.size || roomIds.has(room.id)));
+  return rooms.filter((room) => room.rounds_enabled && room.room_qr_token && (!roomIds.size || roomIds.has(room.id)));
 }
 
 export async function upsertRoundsCheckin(

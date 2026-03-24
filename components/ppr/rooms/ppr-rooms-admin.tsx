@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import type { Route } from "next";
 import { useMemo, useState } from "react";
 import { createObjectRoomAction, updateObjectRoomAction } from "@/app/actions/object-room-actions";
 import { DataTable } from "@/components/ui/data-table";
@@ -252,6 +254,9 @@ export function PprRoomsAdmin({
                 <td><StatusBadge isActive={room.is_active} /></td>
                 <td>
                   <div className="ppr-table-actions">
+                    <Link className="btn btn-ghost ppr-action-btn" href={`/ppr/rooms/${encodeURIComponent(room.id)}` as Route}>
+                      Карточка
+                    </Link>
                     <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(room.id)}>
                       Изменить
                     </button>
@@ -272,6 +277,9 @@ export function PprRoomsAdmin({
                 <div className="text-soft">Тип помещения: {getRoomTypeLabel(room)}</div>
                 <div><StatusBadge isActive={room.is_active} /></div>
                 <div className="ppr-table-actions">
+                  <Link className="btn btn-ghost ppr-action-btn" href={`/ppr/rooms/${encodeURIComponent(room.id)}` as Route}>
+                    Карточка
+                  </Link>
                   <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(room.id)}>
                     Изменить
                   </button>

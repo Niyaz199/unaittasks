@@ -25,6 +25,15 @@ export type ObjectRoomRow = {
   room_type: RoomTypeRelation;
 };
 
+export type ObjectRoomQrCode = {
+  id: string;
+  object_id: string;
+  room_id: string;
+  qr_token: string;
+  is_active: boolean;
+  generated_at: string;
+};
+
 export const objectRoomFormSchema = z.object({
   objectId: z.string().uuid(),
   name: z.string().trim().min(2),
@@ -153,4 +162,91 @@ export async function listObjectRoomsForProfile(supabase: SupabaseClient, profil
   }
 
   return (data ?? []) as ObjectRoomRow[];
+}
+
+export async function getObjectRoomByIdForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">,
+  roomId: string
+) {
+  if (!canReadObjectRooms(profile.role)) {
+    throw new Error("Недостаточно прав для чтения карточки помещения");
+  }
+
+  const { data, error } = await supabase
+    .from("object_rooms")
+    .select(
+      "id,object_id,name,floor,floor_id,room_type_id,description,is_active,created_at,rounds_enabled,object:objects(name),floor_ref:floors(id,name,sort_order,is_active),room_type:room_types(id,name,is_active)"
+    )
+    .eq("id", roomId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const readableObjects = await listObjectRoomReadableObjectsForProfile(supabase, profile);
+  const canAccess =
+    profile.role === "admin" || profile.role === "chief" || readableObjects.some((item) => item.id === data.object_id);
+  if (!canAccess) return null;
+
+  const { data: qrCode, error: qrError } = await supabase
+    .from("object_room_qr_codes")
+    .select("id,object_id,room_id,qr_token,is_active,generated_at")
+    .eq("room_id", roomId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (qrError) throw qrError;
+
+  return {
+    room: data as ObjectRoomRow & { rounds_enabled: boolean },
+    qrCode: (qrCode ?? null) as ObjectRoomQrCode | null,
+  };
+}
+
+export async function getObjectRoomQrCodeByTokenForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "role">,
+  qrToken: string
+) {
+  if (!canReadObjectRooms(profile.role)) {
+    throw new Error("Недостаточно прав для QR-запросов помещений");
+  }
+
+  const { data, error } = await supabase.rpc("object_room_resolve_qr_token", { _token: qrToken.trim() });
+  if (error) throw error;
+
+  const row = Array.isArray(data) ? data[0] ?? null : data ?? null;
+  return row as ObjectRoomQrCode | null;
+}
+
+export async function regenerateObjectRoomQrCodeForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">,
+  roomId: string
+) {
+  if (!canManageObjectRooms(profile.role)) {
+    throw new Error("Недостаточно прав для регенерации QR помещения");
+  }
+
+  const manageableObjects = await listObjectRoomManageableObjectsForProfile(supabase, profile);
+  const { data: room, error: roomError } = await supabase
+    .from("object_rooms")
+    .select("id,object_id")
+    .eq("id", roomId)
+    .maybeSingle();
+  if (roomError) throw roomError;
+  if (!room) {
+    throw new Error("Помещение не найдено");
+  }
+
+  const canManage =
+    profile.role === "admin" || profile.role === "chief" || manageableObjects.some((item) => item.id === room.object_id);
+  if (!canManage) {
+    throw new Error("Помещение недоступно для регенерации QR");
+  }
+
+  const { data, error } = await supabase.rpc("object_room_regenerate_qr", { _room_id: roomId });
+  if (error) throw error;
+
+  const row = Array.isArray(data) ? data[0] ?? null : data ?? null;
+  return row as ObjectRoomQrCode | null;
 }

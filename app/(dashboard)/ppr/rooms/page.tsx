@@ -34,7 +34,7 @@ export default async function PprRoomsPage({
     <section className="grid">
       <PageHeader
         title="Помещения объектов"
-        description="Общий справочник помещений, используемый в ППР и подготовленный для будущего модуля обходов."
+        description="Общий справочник помещений с собственными карточками и постоянными QR-кодами; участие в обходах настраивается отдельно."
         actions={<BackButton fallback="/ppr" label="← Назад к ППР" />}
       />
 

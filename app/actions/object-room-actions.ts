@@ -146,7 +146,12 @@ export async function createObjectRoomAction(formData: FormData) {
   revalidatePath("/directories/floors");
   revalidatePath("/directories/room-types");
   revalidatePath("/ppr/rooms");
+  revalidatePath(`/ppr/rooms/${data.id}`);
   revalidatePath("/ppr/equipment");
+  revalidatePath("/rounds/config");
+  revalidatePath("/rounds/today");
+  revalidatePath("/rounds/archive");
+  revalidatePath("/rounds/qr");
 }
 
 export async function updateObjectRoomAction(formData: FormData) {
@@ -196,5 +201,10 @@ export async function updateObjectRoomAction(formData: FormData) {
   revalidatePath("/directories/floors");
   revalidatePath("/directories/room-types");
   revalidatePath("/ppr/rooms");
+  revalidatePath(`/ppr/rooms/${roomId}`);
   revalidatePath("/ppr/equipment");
+  revalidatePath("/rounds/config");
+  revalidatePath("/rounds/today");
+  revalidatePath("/rounds/archive");
+  revalidatePath("/rounds/qr");
 }

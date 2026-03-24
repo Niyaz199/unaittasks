@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import type { Role } from "@/lib/types";
 import {
@@ -29,6 +30,7 @@ type NavSection = {
   title: string;
   icon: React.ReactNode;
   show?: boolean;
+  href?: string;
   items: NavItem[];
 };
 
@@ -38,8 +40,9 @@ function isActiveItem(currentPath: string, href: string) {
   return currentPath === href || currentPath.startsWith(`${href}/`);
 }
 
-function isSectionActive(currentPath: string, items: NavItem[]) {
-  return items.some((item) => isActiveItem(currentPath, item.href));
+function isSectionActive(currentPath: string, section: NavSection) {
+  if (section.href && isActiveItem(currentPath, section.href)) return true;
+  return section.items.some((item) => isActiveItem(currentPath, item.href));
 }
 
 // Icons
@@ -81,6 +84,7 @@ const Icons = {
 };
 
 export function MainNav({ role, currentPath }: Props) {
+  const router = useRouter();
   const canOpenDirectories = canAccessDirectories(role);
   const canManagePprSystemGroups = role === "admin" || role === "chief" || role === "lead";
   const canOpenRounds = canAccessRoundsModule(role);
@@ -104,8 +108,8 @@ export function MainNav({ role, currentPath }: Props) {
       title: "ППР",
       icon: Icons.Ppr,
       show: true,
+      href: "/ppr",
       items: [
-        { href: "/ppr", label: "Модуль ППР", show: true },
         { href: "/ppr/system-groups", label: "Группы систем ППР", show: canManagePprSystemGroups },
         { href: "/ppr/systems", label: "Системы", show: true },
         { href: "/ppr/equipment", label: "Оборудование", show: true },
@@ -122,8 +126,8 @@ export function MainNav({ role, currentPath }: Props) {
       title: "Обходы",
       icon: Icons.Rounds,
       show: canOpenRounds,
+      href: "/rounds",
       items: [
-        { href: "/rounds", label: "Модуль обходов", show: true },
         { href: "/rounds/scan", label: "Сканер", show: true },
         { href: "/rounds/today", label: "Сегодня", show: canOpenRoundsReports },
         { href: "/rounds/archive", label: "Архив", show: canOpenRoundsReports },
@@ -166,13 +170,13 @@ export function MainNav({ role, currentPath }: Props) {
     .filter((s) => s.items.length > 0);
 
   // Find initially active section
-  const initialActiveSection = visibleSections.find((s) => isSectionActive(currentPath, s.items))?.id || visibleSections[0]?.id;
+  const initialActiveSection = visibleSections.find((s) => isSectionActive(currentPath, s))?.id || visibleSections[0]?.id;
 
   const [expandedSection, setExpandedSection] = useState<string | null>(initialActiveSection);
 
   // Auto-expand when path changes
   useEffect(() => {
-    const active = visibleSections.find((s) => isSectionActive(currentPath, s.items));
+    const active = visibleSections.find((s) => isSectionActive(currentPath, s));
     if (active && active.id !== expandedSection) {
       setExpandedSection(active.id);
     }
@@ -183,24 +187,39 @@ export function MainNav({ role, currentPath }: Props) {
     setExpandedSection((prev) => (prev === id ? null : id));
   };
 
+  const handleSectionClick = (section: NavSection) => {
+    if (section.href) {
+      router.push(section.href as Route);
+      setExpandedSection(section.id);
+    } else {
+      toggleSection(section.id);
+    }
+  };
+
   return (
     <nav className="side-nav">
       {visibleSections.map((section) => {
         const isExpanded = expandedSection === section.id;
-        const isActive = isSectionActive(currentPath, section.items);
+        const isActive = isSectionActive(currentPath, section);
 
         return (
           <div key={section.id} className="side-nav-group">
             <button
               type="button"
               className={`side-nav-group-btn ${isActive ? "active" : ""}`}
-              onClick={() => toggleSection(section.id)}
+              onClick={() => handleSectionClick(section)}
             >
               <span className="side-nav-group-title">
                 <span className="side-nav-group-icon">{section.icon}</span>
                 {section.title}
               </span>
-              <span className={`side-nav-chevron ${isExpanded ? "expanded" : ""}`}>
+              <span
+                className={`side-nav-chevron ${isExpanded ? "expanded" : ""}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleSection(section.id);
+                }}
+              >
                 {Icons.Chevron}
               </span>
             </button>

@@ -26,14 +26,13 @@ export default async function RoundsConfigPage({
   const supabase = await createSupabaseServerClient();
   const data = await listRoundsConfigRoomsForProfile(supabase, profile, {
     objectId: typeof search.objectId === "string" ? search.objectId : undefined,
-    query: typeof search.q === "string" ? search.q : undefined,
   });
 
   return (
     <section className="grid">
       <PageHeader
         title="Конфигуратор обходов"
-        description="Массовое включение помещений в обходы, генерация отсутствующих QR и подготовка печати."
+        description="Массовое включение помещений в обходы и подготовка печати общих QR-кодов для участвующих помещений."
         actions={<BackButton fallback="/rounds/today" label="← К обходам" />}
       />
       <RoundsConfigAdmin

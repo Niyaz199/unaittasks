@@ -1,5 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { getApiSession } from "@/lib/api-auth";
 import { ROUNDS_MAX_COMMENT_LENGTH } from "@/lib/rounds/constants";
 import { uploadRoundsPhoto, validateRoundsPhoto } from "@/lib/rounds/files";
@@ -13,7 +14,36 @@ function revalidateRoundsPaths() {
   revalidatePath("/rounds/scan");
 }
 
+const checkinSchema = z.object({
+  roomId: z.string().uuid("room_id должен быть корректным UUID"),
+  clientEventId: z.string().uuid("client_event_id должен быть корректным UUID"),
+  scannedAtDevice: z.string().datetime({ offset: true, message: "scanned_at_device должен быть корректной датой ISO" }),
+  comment: z.string().max(ROUNDS_MAX_COMMENT_LENGTH, `Комментарий не должен превышать ${ROUNDS_MAX_COMMENT_LENGTH} символов`),
+  source: z.string().trim().min(1).max(50),
+});
+
+function extractApiErrorMessage(error: unknown, fallback = "Не удалось сохранить отметку обхода") {
+  if (typeof error === "string" && error.trim()) return error.trim();
+  if (error instanceof Error && error.message.trim()) return error.message.trim();
+  if (typeof error === "object" && error) {
+    for (const key of ["message", "error", "details", "hint"] as const) {
+      const value = key in error ? (error as Record<string, unknown>)[key] : null;
+      if (typeof value === "string" && value.trim()) {
+        return value.trim();
+      }
+    }
+  }
+  return fallback;
+}
+
 export async function POST(request: Request) {
+  let uploadedPhoto: {
+    storage_path: string;
+    file_name: string;
+    mime_type: string;
+    size_bytes: number;
+  } | null = null;
+
   try {
     const { supabase, profile } = await getApiSession();
     if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -30,19 +60,22 @@ export async function POST(request: Request) {
     const photoField = formData.get("photo");
     const photo = photoField instanceof File && photoField.size > 0 ? photoField : null;
 
-    if (!roomId || !clientEventId || !scannedAtDevice) {
-      return NextResponse.json({ error: "room_id, client_event_id и scanned_at_device обязательны" }, { status: 400 });
+    const payload = checkinSchema.safeParse({
+      roomId,
+      clientEventId,
+      scannedAtDevice,
+      comment,
+      source,
+    });
+    if (!payload.success) {
+      return NextResponse.json(
+        {
+          error: payload.error.issues[0]?.message ?? "Некорректные данные отметки обхода",
+          details: payload.error.flatten(),
+        },
+        { status: 400 }
+      );
     }
-    if (comment.length > ROUNDS_MAX_COMMENT_LENGTH) {
-      return NextResponse.json({ error: `Комментарий не должен превышать ${ROUNDS_MAX_COMMENT_LENGTH} символов` }, { status: 400 });
-    }
-
-    let uploadedPhoto: {
-      storage_path: string;
-      file_name: string;
-      mime_type: string;
-      size_bytes: number;
-    } | null = null;
 
     if (photo) {
       const validationError = validateRoundsPhoto(photo);
@@ -72,7 +105,24 @@ export async function POST(request: Request) {
     revalidateRoundsPaths();
     return NextResponse.json({ ok: true, checkin: result });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 400 });
+    try {
+      if (uploadedPhoto?.storage_path) {
+        const { supabase } = await getApiSession();
+        await supabase.storage.from("rounds-files").remove([uploadedPhoto.storage_path]);
+      }
+    } catch {
+      // ignore storage cleanup failures and return the original business error
+    }
+
+    const message = extractApiErrorMessage(error);
+    const details =
+      typeof error === "object" && error && "details" in error && typeof (error as { details?: unknown }).details === "string"
+        ? (error as { details: string }).details
+        : null;
+    const hint =
+      typeof error === "object" && error && "hint" in error && typeof (error as { hint?: unknown }).hint === "string"
+        ? (error as { hint: string }).hint
+        : null;
+    return NextResponse.json({ error: message, details, hint }, { status: 400 });
   }
 }

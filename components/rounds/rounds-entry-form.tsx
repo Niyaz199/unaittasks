@@ -23,6 +23,21 @@ type ResolvedRoom = {
   qr_token: string;
 };
 
+type ApiErrorPayload = {
+  error?: string;
+  details?: string | Record<string, unknown> | null;
+  hint?: string | null;
+};
+
+type LookupState = "unknown" | "enabled" | "disabled" | "inactive" | "configured" | "invalid";
+
+type ResolveTokenPayload = {
+  ok?: boolean;
+  state?: LookupState;
+  room?: ResolvedRoom | null;
+  error?: string;
+};
+
 export function RoundsEntryForm({ token, userId }: Props) {
   const router = useRouter();
   const [room, setRoom] = useState<ResolvedRoom | null>(null);
@@ -31,6 +46,7 @@ export function RoundsEntryForm({ token, userId }: Props) {
   const [photoFiles, setPhotoFiles] = useState<PickedFile[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [isError, setIsError] = useState(false);
+  const [lookupState, setLookupState] = useState<LookupState>("unknown");
   const [pending, startTransition] = useTransition();
 
   const normalizedToken = useMemo(() => extractRoundsToken(token), [token]);
@@ -39,13 +55,19 @@ export function RoundsEntryForm({ token, userId }: Props) {
     let cancelled = false;
 
     async function load() {
+      setLookupState("unknown");
+      setRoom(null);
+
       const localSnapshot = await loadRoundsScannerSnapshot();
       if (cancelled) return;
 
       if (localSnapshot) {
         setProjectTimeZone(localSnapshot.projectTimeZone);
         const match = localSnapshot.rooms.find((item) => item.qr_token === normalizedToken) ?? null;
-        if (match) setRoom(match);
+        if (match) {
+          setRoom(match);
+          setLookupState("enabled");
+        }
       }
 
       if (!navigator.onLine) return;
@@ -72,7 +94,25 @@ export function RoundsEntryForm({ token, userId }: Props) {
         if (cancelled) return;
 
         setProjectTimeZone(snapshot.projectTimeZone);
-        setRoom(snapshot.rooms.find((item) => item.qr_token === normalizedToken) ?? null);
+        const matchedRoom = snapshot.rooms.find((item) => item.qr_token === normalizedToken) ?? null;
+        if (matchedRoom) {
+          setRoom(matchedRoom);
+          setLookupState("enabled");
+          return;
+        }
+
+        const resolveResponse = await fetch(`/api/rounds/resolve/${encodeURIComponent(normalizedToken)}`);
+        const resolvePayload = (await resolveResponse.json().catch(() => null)) as ResolveTokenPayload | null;
+        if (cancelled) return;
+
+        if (resolveResponse.ok && resolvePayload?.ok && resolvePayload.room) {
+          setRoom(resolvePayload.room);
+          setLookupState("enabled");
+          return;
+        }
+
+        setRoom(null);
+        setLookupState(resolvePayload?.state ?? "invalid");
       } catch {
         // keep offline snapshot
       }
@@ -92,6 +132,13 @@ export function RoundsEntryForm({ token, userId }: Props) {
   function setError(nextMessage: string) {
     setMessage(nextMessage);
     setIsError(true);
+  }
+
+  async function readApiError(response: Response, fallback: string) {
+    const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+    if (payload?.error?.trim()) return payload.error.trim();
+    if (payload?.hint?.trim()) return payload.hint.trim();
+    return fallback;
   }
 
   async function persistOffline(input?: {
@@ -156,8 +203,16 @@ export function RoundsEntryForm({ token, userId }: Props) {
         body: formData,
       });
       if (!response.ok) {
-        const payload = (await response.json().catch(() => ({}))) as { error?: string };
-        setError(payload.error ?? "Не удалось сохранить отметку обхода.");
+        const fallback =
+          response.status === 400
+            ? "Отметку обхода не удалось сохранить. Проверьте помещение и повторите попытку."
+            : "Не удалось сохранить отметку обхода.";
+        const message = await readApiError(response, fallback);
+        setError(
+          message === "Помещение не включено в обходы"
+            ? "Помещение найдено по QR, но сейчас не включено в обходы. Обратитесь к конфигуратору обходов."
+            : message
+        );
         return;
       }
 
@@ -221,9 +276,23 @@ export function RoundsEntryForm({ token, userId }: Props) {
           </>
         ) : (
           <div className="grid" style={{ gap: "0.45rem" }}>
-            <strong>Помещение не найдено</strong>
+            <strong>
+              {lookupState === "disabled"
+                ? "Помещение выключено из обходов"
+                : lookupState === "inactive"
+                  ? "Помещение недоступно"
+                  : lookupState === "configured"
+                    ? "Конфигурация обходов не обновилась"
+                    : "Помещение не найдено"}
+            </strong>
             <div className="text-soft">
-              Не удалось разрешить QR-токен. Если вы офлайн, сначала откройте `Обходы` онлайн, чтобы кэшировать конфигурацию.
+              {lookupState === "disabled"
+                ? "QR помещения найден, но помещение сейчас не включено в обходы."
+                : lookupState === "inactive"
+                  ? "QR помещения найден, но само помещение сейчас неактивно."
+                  : lookupState === "configured"
+                    ? "QR помещения найден и помещение отмечено в обходах, но сканер пока не получил актуальную конфигурацию. Откройте конфигуратор, сохраните конфигурацию ещё раз и перезагрузите экран обходов."
+                    : "Не удалось разрешить QR-токен. Если вы офлайн, сначала откройте `Обходы` онлайн, чтобы кэшировать конфигурацию."}
             </div>
             <div className="row">
               <button className="btn btn-ghost" type="button" onClick={() => router.replace("/rounds/scan")}>
