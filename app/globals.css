@@ -75,9 +75,23 @@ a {
 }
 
 .admin-brand {
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #fff;
+  padding: 0.2rem 0.5rem;
+}
+.admin-brand::before {
+  content: "";
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--brand-grad-start), var(--brand-grad-end));
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
 .admin-page {
@@ -86,7 +100,15 @@ a {
   padding: 1rem 1rem 5.5rem;
 }
 
-.sidebar-user,
+.sidebar-user {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.75rem 0.85rem;
+  background: color-mix(in srgb, var(--panel-soft) 30%, transparent);
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--line) 40%, transparent);
+}
+
 .topbar-user {
   display: grid;
   gap: 0.15rem;
@@ -117,44 +139,125 @@ a {
 
 .side-nav {
   display: grid;
-  gap: 1rem;
+  gap: 0.4rem;
 }
 
-.side-nav-section {
+.side-nav-group {
   display: grid;
-  gap: 0.35rem;
+  gap: 0;
 }
 
-.side-nav-title {
-  margin: 0;
-  font-size: 0.74rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.side-nav-group-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
   color: var(--text-soft);
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-height: 44px;
+}
+
+.side-nav-group-btn:hover {
+  background: color-mix(in srgb, var(--panel-soft) 50%, transparent);
+  color: var(--text);
+}
+
+.side-nav-group-btn.active {
+  color: #eff6ff;
+}
+
+.side-nav-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.side-nav-group-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  opacity: 0.7;
+}
+
+.side-nav-group-btn.active .side-nav-group-icon {
+  opacity: 1;
+  color: #bfdbfe;
+}
+
+.side-nav-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  opacity: 0.4;
+  transition: transform 0.2s ease;
+}
+
+.side-nav-group-btn:hover .side-nav-chevron {
+  opacity: 0.8;
+}
+
+.side-nav-chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.side-nav-content {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.2s ease-out;
+}
+
+.side-nav-content.expanded {
+  grid-template-rows: 1fr;
+}
+
+.side-nav-content-inner {
+  overflow: hidden;
+  min-height: 0;
+  display: grid;
+  gap: 0.15rem;
+  padding-left: 2.3rem;
+}
+
+.side-nav-content-inner > :first-child {
+  margin-top: 0.15rem;
+}
+
+.side-nav-content-inner > :last-child {
+  margin-bottom: 0.25rem;
 }
 
 .side-nav-link {
-  display: block;
-  border-radius: 10px;
-  padding: 0.54rem 0.7rem;
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  padding: 0.45rem 0.75rem;
   color: var(--text-soft);
+  font-size: 0.88rem;
   border: 1px solid transparent;
   transition: all 0.15s ease;
+  min-height: 40px;
 }
 
 .side-nav-link:hover {
   color: var(--text);
-  background: color-mix(in srgb, var(--panel-soft) 70%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--line) 45%, transparent);
+  background: color-mix(in srgb, var(--panel-soft) 45%, transparent);
 }
 
 .side-nav-link.active {
   color: #eff6ff;
-  border-color: color-mix(in srgb, var(--accent) 55%, #ffffff 8%);
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--brand-grad-start) 24%, transparent), color-mix(in srgb, var(--brand-grad-end) 24%, transparent)),
-    #1a2741;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
+  background: color-mix(in srgb, var(--brand-grad-start) 20%, transparent);
+  font-weight: 500;
 }
 
 .card {
@@ -1470,12 +1573,26 @@ textarea {
 
   .admin-sidebar {
     border-right: 1px solid var(--line);
-    padding: 1rem;
+    padding: 1.25rem 1rem;
     position: sticky;
     top: 0;
     height: 100vh;
     overflow: auto;
     background: color-mix(in srgb, #0d1930 88%, transparent);
+  }
+  
+  .admin-sidebar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .admin-sidebar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .admin-sidebar::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--line-strong) 50%, transparent);
+    border-radius: 10px;
+  }
+  .admin-sidebar::-webkit-scrollbar-thumb:hover {
+    background: var(--line-strong);
   }
 
   .mobile-tabs {

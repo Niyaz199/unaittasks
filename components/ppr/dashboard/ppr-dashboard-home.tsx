@@ -36,13 +36,6 @@ const NAV_CARDS: NavCard[] = [
     group: "structure",
   },
   {
-    href: "/ppr/rooms",
-    label: "Помещения",
-    description: "Общий справочник помещений объектов",
-    icon: "🏠",
-    group: "structure",
-  },
-  {
     href: "/ppr/equipment",
     label: "Оборудование",
     description: "Единицы оборудования и QR-коды",
