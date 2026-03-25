@@ -5,7 +5,6 @@ import { getApiSession } from "@/lib/api-auth";
 import { canManageRoundsConfig } from "@/lib/rounds/permissions";
 import {
   getRoundsScannerConfigForProfile,
-  listRoundsManageableObjectsForProfile,
   saveRoundsRoomSelectionBatch,
   saveRoundsRoomSelection,
 } from "@/lib/rounds/queries";
@@ -32,19 +31,13 @@ export async function GET() {
     const { supabase, profile } = await getApiSession();
     if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const [scanner, manageableObjects] = await Promise.all([
-      getRoundsScannerConfigForProfile(supabase, profile),
-      canManageRoundsConfig(profile.role) ? listRoundsManageableObjectsForProfile(supabase, profile) : Promise.resolve([]),
-    ]);
+    const scanner = await getRoundsScannerConfigForProfile(supabase, profile);
 
     return NextResponse.json({
       ok: true,
       projectTimeZone: scanner.projectTimeZone,
-      role: profile.role,
       scannerObjects: scanner.objects,
       scannerRooms: scanner.rooms,
-      manageableObjects,
-      canManageConfig: canManageRoundsConfig(profile.role),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

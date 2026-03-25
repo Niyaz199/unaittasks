@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PhotoPicker, type PickedFile } from "@/components/tasks/photo-picker";
-import { enqueueRoundsCheckin, loadRoundsScannerSnapshot, saveRoundsScannerSnapshot } from "@/lib/offline/rounds-queue";
+import { enqueueRoundsCheckin } from "@/lib/offline/rounds-queue";
 import { compressRoundsPhoto } from "@/lib/rounds/client-photo";
 import { toOperationalDate } from "@/lib/rounds/date";
 import { extractRoundsToken } from "@/lib/rounds/token";
+import { useRoundsScannerConfig } from "@/components/rounds/rounds-scanner-config-provider";
 import { RoundsSyncStatus } from "@/components/rounds/rounds-sync-status";
 
 type Props = {
@@ -40,6 +41,7 @@ type ResolveTokenPayload = {
 
 export function RoundsEntryForm({ token, userId }: Props) {
   const router = useRouter();
+  const { snapshot, isLoading } = useRoundsScannerConfig();
   const [room, setRoom] = useState<ResolvedRoom | null>(null);
   const [projectTimeZone, setProjectTimeZone] = useState("UTC");
   const [comment, setComment] = useState("");
@@ -58,49 +60,19 @@ export function RoundsEntryForm({ token, userId }: Props) {
       setLookupState("unknown");
       setRoom(null);
 
-      const localSnapshot = await loadRoundsScannerSnapshot();
-      if (cancelled) return;
-
-      if (localSnapshot) {
-        setProjectTimeZone(localSnapshot.projectTimeZone);
-        const match = localSnapshot.rooms.find((item) => item.qr_token === normalizedToken) ?? null;
+      if (snapshot) {
+        setProjectTimeZone(snapshot.projectTimeZone);
+        const match = snapshot.rooms.find((item) => item.qr_token === normalizedToken) ?? null;
         if (match) {
           setRoom(match);
           setLookupState("enabled");
+          return;
         }
       }
 
-      if (!navigator.onLine) return;
+      if (isLoading || !navigator.onLine) return;
 
       try {
-        const response = await fetch("/api/rounds/config");
-        const payload = (await response.json().catch(() => null)) as
-          | {
-              ok?: boolean;
-              projectTimeZone?: string;
-              scannerObjects?: Array<{ id: string; name: string }>;
-              scannerRooms?: ResolvedRoom[];
-            }
-          | null;
-        if (!payload?.ok || cancelled) return;
-
-        const snapshot = {
-          projectTimeZone: payload.projectTimeZone ?? "UTC",
-          objects: payload.scannerObjects ?? [],
-          rooms: payload.scannerRooms ?? [],
-          updatedAt: new Date().toISOString(),
-        };
-        await saveRoundsScannerSnapshot(snapshot);
-        if (cancelled) return;
-
-        setProjectTimeZone(snapshot.projectTimeZone);
-        const matchedRoom = snapshot.rooms.find((item) => item.qr_token === normalizedToken) ?? null;
-        if (matchedRoom) {
-          setRoom(matchedRoom);
-          setLookupState("enabled");
-          return;
-        }
-
         const resolveResponse = await fetch(`/api/rounds/resolve/${encodeURIComponent(normalizedToken)}`);
         const resolvePayload = (await resolveResponse.json().catch(() => null)) as ResolveTokenPayload | null;
         if (cancelled) return;
@@ -114,7 +86,7 @@ export function RoundsEntryForm({ token, userId }: Props) {
         setRoom(null);
         setLookupState(resolvePayload?.state ?? "invalid");
       } catch {
-        // keep offline snapshot
+        // Keep shared snapshot result when fallback resolve fails.
       }
     }
 
@@ -122,7 +94,7 @@ export function RoundsEntryForm({ token, userId }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [normalizedToken]);
+  }, [isLoading, normalizedToken, snapshot]);
 
   function setInfo(nextMessage: string) {
     setMessage(nextMessage);

@@ -1,6 +1,8 @@
+import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listObjectRoomsForProfile } from "@/lib/object-rooms";
 import type { Profile } from "@/lib/types";
+import { getPprSignedUrls } from "@/lib/ppr/files";
 import { canAssignExecutorToPprTask } from "@/lib/ppr/permissions";
 import type { PprTaskAttachment, PprTaskComment } from "@/lib/ppr/types";
 
@@ -156,34 +158,39 @@ export function canAccessPprQrScreens(role: Profile["role"]) {
   return QR_LAYER_ROLES.has(role);
 }
 
+const listPprManageableObjectsCached = cache(
+  async (supabase: SupabaseClient, profileId: string, role: Profile["role"]): Promise<ObjectRow[]> => {
+    if (role === "admin" || role === "chief") {
+      const { data, error } = await supabase.from("objects").select("id,name").order("name", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as ObjectRow[];
+    }
+
+    if (role !== "lead" && role !== "object_engineer") {
+      return [];
+    }
+
+    type UserObjectRow = { objects: ObjectRow | null };
+    const { data, error } = await supabase
+      .from("user_objects")
+      .select("objects(id,name)")
+      .eq("user_id", profileId);
+    if (error) throw error;
+
+    const rows = ((data ?? []) as unknown as UserObjectRow[])
+      .map((row) => row.objects)
+      .filter((row): row is ObjectRow => row !== null);
+
+    return rows.sort((a, b) => a.name.localeCompare(b.name, "ru"));
+  }
+);
+
 export async function listPprManageableObjectsForProfile(
   supabase: SupabaseClient,
   profile: Pick<Profile, "id" | "role">
 ): Promise<ObjectRow[]> {
   assertPprStructureQueryAccess(profile.role);
-
-  if (profile.role === "admin" || profile.role === "chief") {
-    const { data, error } = await supabase.from("objects").select("id,name").order("name", { ascending: true });
-    if (error) throw error;
-    return (data ?? []) as ObjectRow[];
-  }
-
-  if (profile.role !== "lead" && profile.role !== "object_engineer") {
-    return [];
-  }
-
-  type UserObjectRow = { objects: ObjectRow | null };
-  const { data, error } = await supabase
-    .from("user_objects")
-    .select("objects(id,name)")
-    .eq("user_id", profile.id);
-  if (error) throw error;
-
-  const rows = ((data ?? []) as unknown as UserObjectRow[])
-    .map((row) => row.objects)
-    .filter((row): row is ObjectRow => row !== null);
-
-  return rows.sort((a, b) => a.name.localeCompare(b.name, "ru"));
+  return listPprManageableObjectsCached(supabase, profile.id, profile.role);
 }
 
 export async function listPprSystemGroups(
@@ -245,17 +252,24 @@ export async function listPprResponsibleCandidates(
   );
 }
 
-export async function listPprSystemsForProfile(supabase: SupabaseClient, profile: Pick<Profile, "id" | "role">) {
+export async function listPprSystemsForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">,
+  options: { objectId?: string } = {}
+) {
   assertPprStructureQueryAccess(profile.role);
   const objects = await listPprManageableObjectsForProfile(supabase, profile);
   if (!objects.length && profile.role !== "admin" && profile.role !== "chief") return [];
 
-  const query = supabase
+  let query = supabase
     .from("ppr_systems")
     .select(
       "id,object_id,system_group_id,name,description,responsible_user_id,is_active,created_at,object:objects(name),system_group:ppr_system_groups(name),responsible:profiles(full_name,role)"
     )
     .order("name", { ascending: true });
+  if (options.objectId) {
+    query = query.eq("object_id", options.objectId);
+  }
 
   const { data, error } =
     profile.role === "admin" || profile.role === "chief" ? await query : await query.in("object_id", objects.map((item) => item.id));
@@ -280,17 +294,24 @@ export async function listPprRoomsForProfile(supabase: SupabaseClient, profile: 
   return listObjectRoomsForProfile(supabase, profile);
 }
 
-export async function listPprEquipmentForProfile(supabase: SupabaseClient, profile: Pick<Profile, "id" | "role">) {
+export async function listPprEquipmentForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">,
+  options: { objectId?: string } = {}
+) {
   assertPprStructureQueryAccess(profile.role);
   const objects = await listPprManageableObjectsForProfile(supabase, profile);
   if (!objects.length && profile.role !== "admin" && profile.role !== "chief") return [];
 
-  const query = supabase
+  let query = supabase
     .from("ppr_equipment")
     .select(
       "id,object_id,system_id,room_id,inventory_no,name,dispatch_name,service_start_date,status,serial_no,manufacturer,model,description,comment,created_at,object:objects(name),system:ppr_systems(name),room:object_rooms(name,floor,floor_ref:floors(name),room_type:room_types(name))"
     )
     .order("created_at", { ascending: false });
+  if (options.objectId) {
+    query = query.eq("object_id", options.objectId);
+  }
 
   const { data, error } =
     profile.role === "admin" || profile.role === "chief" ? await query : await query.in("object_id", objects.map((item) => item.id));
@@ -602,59 +623,78 @@ export async function listAssignableTemplatesForProfile(supabase: SupabaseClient
   }>;
 }
 
+const listPprCalendarSystemsCached = cache(
+  async (
+    supabase: SupabaseClient,
+    profileId: string,
+    role: Profile["role"]
+  ): Promise<
+    Array<{
+      id: string;
+      object_id: string;
+      system_group_id: string;
+      name: string;
+      responsible_user_id: string | null;
+      object: { name: string } | Array<{ name: string }> | null;
+      system_group: { name: string; code: string } | Array<{ name: string; code: string }> | null;
+    }>
+  > => {
+    const baseQuery = supabase
+      .from("ppr_systems")
+      .select("id,object_id,system_group_id,name,responsible_user_id,object:objects(name),system_group:ppr_system_groups(name,code)")
+      .order("name", { ascending: true });
+
+    if (role === "admin" || role === "chief") {
+      const { data, error } = await baseQuery;
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        id: string;
+        object_id: string;
+        system_group_id: string;
+        name: string;
+        responsible_user_id: string | null;
+        object: { name: string } | Array<{ name: string }> | null;
+        system_group: { name: string; code: string } | Array<{ name: string; code: string }> | null;
+      }>;
+    }
+
+    if (role === "engineer") {
+      const { data, error } = await baseQuery.eq("responsible_user_id", profileId);
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        id: string;
+        object_id: string;
+        system_group_id: string;
+        name: string;
+        responsible_user_id: string | null;
+        object: { name: string } | Array<{ name: string }> | null;
+        system_group: { name: string; code: string } | Array<{ name: string; code: string }> | null;
+      }>;
+    }
+
+    const manageableObjects = await listPprManageableObjectsCached(supabase, profileId, role);
+    if (!manageableObjects.length) return [];
+
+    const { data, error } = await baseQuery.in(
+      "object_id",
+      manageableObjects.map((item) => item.id)
+    );
+    if (error) throw error;
+    return (data ?? []) as Array<{
+      id: string;
+      object_id: string;
+      system_group_id: string;
+      name: string;
+      responsible_user_id: string | null;
+      object: { name: string } | Array<{ name: string }> | null;
+      system_group: { name: string; code: string } | Array<{ name: string; code: string }> | null;
+    }>;
+  }
+);
+
 export async function listPprCalendarSystemsForProfile(supabase: SupabaseClient, profile: Pick<Profile, "id" | "role">) {
   assertPprCalendarQueryAccess(profile.role);
-
-  const baseQuery = supabase
-    .from("ppr_systems")
-    .select("id,object_id,system_group_id,name,responsible_user_id,object:objects(name),system_group:ppr_system_groups(name,code)")
-    .order("name", { ascending: true });
-
-  if (profile.role === "admin" || profile.role === "chief") {
-    const { data, error } = await baseQuery;
-    if (error) throw error;
-    return (data ?? []) as Array<{
-      id: string;
-      object_id: string;
-      system_group_id: string;
-      name: string;
-      responsible_user_id: string | null;
-      object: { name: string } | Array<{ name: string }> | null;
-      system_group: { name: string; code: string } | Array<{ name: string; code: string }> | null;
-    }>;
-  }
-
-  if (profile.role === "engineer") {
-    const { data, error } = await baseQuery.eq("responsible_user_id", profile.id);
-    if (error) throw error;
-    return (data ?? []) as Array<{
-      id: string;
-      object_id: string;
-      system_group_id: string;
-      name: string;
-      responsible_user_id: string | null;
-      object: { name: string } | Array<{ name: string }> | null;
-      system_group: { name: string; code: string } | Array<{ name: string; code: string }> | null;
-    }>;
-  }
-
-  const manageableObjects = await listPprManageableObjectsForProfile(supabase, profile);
-  if (!manageableObjects.length) return [];
-
-  const { data, error } = await baseQuery.in(
-    "object_id",
-    manageableObjects.map((item) => item.id)
-  );
-  if (error) throw error;
-  return (data ?? []) as Array<{
-    id: string;
-    object_id: string;
-    system_group_id: string;
-    name: string;
-    responsible_user_id: string | null;
-    object: { name: string } | Array<{ name: string }> | null;
-    system_group: { name: string; code: string } | Array<{ name: string; code: string }> | null;
-  }>;
+  return listPprCalendarSystemsCached(supabase, profile.id, profile.role);
 }
 
 export async function listPprCalendarSystemGroupsForProfile(
@@ -710,6 +750,20 @@ export type PprCalendarYearSystemOverviewRow = {
   months: PprCalendarMonthMetrics[];
   totals: PprCalendarAggregatedMetrics;
 };
+
+async function listPprCalendarScopedSystemsForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">,
+  options: { objectId?: string; systemGroupId?: string; systemId?: string }
+) {
+  const systems = await listPprCalendarSystemsForProfile(supabase, profile);
+  return systems.filter(
+    (system) =>
+      (!options.objectId || system.object_id === options.objectId) &&
+      (!options.systemGroupId || system.system_group_id === options.systemGroupId) &&
+      (!options.systemId || system.id === options.systemId)
+  );
+}
 
 async function listPprCalendarYearRowsForSystems(
   supabase: SupabaseClient,
@@ -859,22 +913,29 @@ export async function listPprCalendarYearOverviewBySystemForProfile(
 export async function listPprMonthPlansForProfile(
   supabase: SupabaseClient,
   profile: Pick<Profile, "id" | "role">,
-  options: { planMonth: string; systemId?: string; objectId?: string }
+  options: { planMonth: string; systemId?: string; objectId?: string; systemGroupId?: string }
 ) {
   assertPprCalendarQueryAccess(profile.role);
-  const systems = await listPprCalendarSystemsForProfile(supabase, profile);
+  const systems = await listPprCalendarScopedSystemsForProfile(supabase, profile, {
+    objectId: options.objectId,
+    systemGroupId: options.systemGroupId,
+    systemId: options.systemId,
+  });
   const allowedSystemIds = systems.map((item) => item.id);
   if (!allowedSystemIds.length) return [];
 
-  const query = supabase
+  let query = supabase
     .from("ppr_month_plans")
     .select("id,object_id,system_id,plan_month,generated_at,object:objects(name),system:ppr_systems(name)")
     .eq("plan_month", options.planMonth)
+    .in("system_id", allowedSystemIds)
     .order("generated_at", { ascending: false });
 
-  const scopedQuery = options.systemId ? query.eq("system_id", options.systemId) : query.in("system_id", allowedSystemIds);
-  const objectScopedQuery = options.objectId ? scopedQuery.eq("object_id", options.objectId) : scopedQuery;
-  const { data, error } = await objectScopedQuery;
+  if (options.objectId) {
+    query = query.eq("object_id", options.objectId);
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as Array<{
     id: string;
@@ -890,27 +951,51 @@ export async function listPprMonthPlansForProfile(
 export async function listPprMonthPlanItemsForProfile(
   supabase: SupabaseClient,
   profile: Pick<Profile, "id" | "role">,
-  options: { planMonth: string; systemId?: string; objectId?: string }
+  options: { planMonth: string; systemId?: string; objectId?: string; systemGroupId?: string }
 ) {
   assertPprCalendarQueryAccess(profile.role);
-  const systems = await listPprCalendarSystemsForProfile(supabase, profile);
+  const systems = await listPprCalendarScopedSystemsForProfile(supabase, profile, {
+    objectId: options.objectId,
+    systemGroupId: options.systemGroupId,
+    systemId: options.systemId,
+  });
   const allowedSystemIds = systems.map((item) => item.id);
   if (!allowedSystemIds.length) return [];
 
-  const query = supabase
+  let monthPlanIdsQuery = supabase
+    .from("ppr_month_plans")
+    .select("id")
+    .eq("plan_month", options.planMonth)
+    .in("system_id", allowedSystemIds);
+
+  if (options.objectId) {
+    monthPlanIdsQuery = monthPlanIdsQuery.eq("object_id", options.objectId);
+  }
+
+  const { data: monthPlansData, error: monthPlansError } = await monthPlanIdsQuery;
+  if (monthPlansError) throw monthPlansError;
+
+  const monthPlanIds = ((monthPlansData ?? []) as Array<{ id: string }>).map((row) => row.id);
+  if (!monthPlanIds.length) return [];
+
+  let query = supabase
     .from("ppr_month_plan_items")
     .select(
       "id,object_id,month_plan_id,system_id,equipment_id,assignment_id,template_id,planned_for,source_due_date,is_overdue,is_carried_over,task_id,status,month_plan:ppr_month_plans(plan_month),equipment:ppr_equipment(name,inventory_no,room:object_rooms(name,floor,floor_ref:floors(name,sort_order),room_type:room_types(name))),template:ppr_work_templates(name,norm_hours),system:ppr_systems(name),object:objects(name),task:ppr_tasks(id,status,planned_for)"
     )
+    .in("month_plan_id", monthPlanIds)
+    .in("system_id", allowedSystemIds)
     .order("planned_for", { ascending: true })
     .order("source_due_date", { ascending: true });
 
-  const scopedQuery = options.systemId ? query.eq("system_id", options.systemId) : query.in("system_id", allowedSystemIds);
-  const objectScopedQuery = options.objectId ? scopedQuery.eq("object_id", options.objectId) : scopedQuery;
-  const { data, error } = await objectScopedQuery;
+  if (options.objectId) {
+    query = query.eq("object_id", options.objectId);
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
 
-  return ((data ?? []) as Array<{
+  return (data ?? []) as Array<{
     id: string;
     object_id: string;
     month_plan_id: string;
@@ -970,11 +1055,7 @@ export async function listPprMonthPlanItemsForProfile(
       | { id: string; status: "new" | "in_progress" | "done" | "closed" | "cancelled"; planned_for: string }
       | Array<{ id: string; status: "new" | "in_progress" | "done" | "closed" | "cancelled"; planned_for: string }>
       | null;
-  }>)
-    .filter((item) => {
-      const monthPlan = Array.isArray(item.month_plan) ? item.month_plan[0] : item.month_plan;
-      return monthPlan?.plan_month === options.planMonth;
-    });
+  }>;
 }
 
 export async function getPprMonthPlanItemForProfile(
@@ -1248,6 +1329,62 @@ export async function listPprTaskAttachmentsForProfile(
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as PprTaskAttachment[];
+}
+
+export type PprTaskAttachmentWithUrl = PprTaskAttachment & { url: string | null };
+
+export type PprTaskAttachmentsReadModel = {
+  taskAttachments: PprTaskAttachmentWithUrl[];
+  commentAttachmentsById: Record<string, PprTaskAttachmentWithUrl[]>;
+};
+
+export async function getPprTaskAttachmentsReadModelForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">,
+  taskId: string
+): Promise<PprTaskAttachmentsReadModel> {
+  const task = await getPprTaskByIdForProfile(supabase, profile, taskId);
+  if (!task) {
+    return { taskAttachments: [], commentAttachmentsById: {} };
+  }
+
+  const { data, error } = await supabase
+    .from("ppr_task_attachments")
+    .select("id,object_id,task_id,comment_id,storage_path,file_name,mime_type,size_bytes,uploaded_by,created_at")
+    .eq("task_id", taskId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+
+  const attachments = (data ?? []) as PprTaskAttachment[];
+  const signedUrls = await getPprSignedUrls(
+    supabase,
+    attachments.map((item) => item.storage_path)
+  );
+
+  const taskAttachments: PprTaskAttachmentWithUrl[] = [];
+  const commentAttachmentsById: Record<string, PprTaskAttachmentWithUrl[]> = {};
+
+  for (const attachment of attachments) {
+    const item: PprTaskAttachmentWithUrl = {
+      ...attachment,
+      url: signedUrls[attachment.storage_path] ?? null,
+    };
+
+    if (!attachment.comment_id) {
+      taskAttachments.push(item);
+      continue;
+    }
+
+    if (!commentAttachmentsById[attachment.comment_id]) {
+      commentAttachmentsById[attachment.comment_id] = [];
+    }
+    commentAttachmentsById[attachment.comment_id].push(item);
+  }
+
+  return {
+    taskAttachments,
+    commentAttachmentsById,
+  };
 }
 
 export async function getPprTaskCompletionEvidenceForProfile(

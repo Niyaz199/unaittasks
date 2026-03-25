@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { flushRoundsQueue, getRoundsQueueSummary } from "@/lib/offline/rounds-queue";
+import { getRoundsQueueSummary } from "@/lib/offline/rounds-queue";
+import { runOfflineSync } from "@/lib/offline/sync-coordinator";
 
 type Summary = {
   pendingCount: number;
@@ -33,7 +34,9 @@ export function RoundsSyncStatus() {
   async function handleSync() {
     setSyncing(true);
     try {
-      await flushRoundsQueue();
+      await runOfflineSync();
+      await refresh();
+    } catch {
       await refresh();
     } finally {
       setSyncing(false);

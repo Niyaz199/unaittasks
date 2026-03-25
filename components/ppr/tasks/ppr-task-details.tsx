@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import type {
+  PprTaskAttachmentWithUrl,
   PprTaskAssigneeCandidateRow,
   PprTaskCommentRow,
   PprTaskSummaryRow,
@@ -33,12 +34,16 @@ export function PprTaskDetails({
   workItems,
   assigneeCandidates,
   comments,
+  taskAttachments,
+  commentAttachmentsById,
   permissions,
 }: {
   task: PprTaskSummaryRow;
   workItems: PprTaskWorkItemRow[];
   assigneeCandidates: PprTaskAssigneeCandidateRow[];
   comments: PprTaskCommentRow[];
+  taskAttachments: PprTaskAttachmentWithUrl[];
+  commentAttachmentsById: Record<string, PprTaskAttachmentWithUrl[]>;
   permissions: {
     canAssign: boolean;
     canStart: boolean;
@@ -155,11 +160,12 @@ export function PprTaskDetails({
           <div className="text-soft">Добавление комментариев и фото для текущей роли недоступно.</div>
         )}
 
-        <PprTaskAttachmentsGallery taskId={task.id} />
+        <PprTaskAttachmentsGallery attachments={taskAttachments} />
 
         <div className="comment-feed">
           {comments.map((comment) => {
             const author = Array.isArray(comment.author) ? comment.author[0] : comment.author;
+            const commentAttachments = commentAttachmentsById[comment.id] ?? [];
             return (
               <div key={comment.id} className="comment-item">
                 <div className="comment-item-head">
@@ -167,7 +173,7 @@ export function PprTaskDetails({
                   <span className="text-soft">{new Date(comment.created_at).toLocaleString("ru-RU")}</span>
                 </div>
                 <div className="comment-body">{comment.body}</div>
-                <PprTaskAttachmentsGallery taskId={task.id} commentId={comment.id} />
+                <PprTaskAttachmentsGallery attachments={commentAttachments} />
               </div>
             );
           })}

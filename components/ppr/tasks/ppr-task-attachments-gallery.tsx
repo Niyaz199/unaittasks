@@ -1,29 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import type { PprTaskAttachment } from "@/lib/ppr/types";
+import { useState } from "react";
+import type { PprTaskAttachmentWithUrl } from "@/lib/ppr/queries";
 
-type AttachmentWithUrl = PprTaskAttachment & { url: string | null };
-
-export function PprTaskAttachmentsGallery({ taskId, commentId = null }: { taskId: string; commentId?: string | null }) {
-  const [attachments, setAttachments] = useState<AttachmentWithUrl[]>([]);
+export function PprTaskAttachmentsGallery({ attachments }: { attachments: PprTaskAttachmentWithUrl[] }) {
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
-
-  const fetchAttachments = useCallback(async () => {
-    const qs = commentId ? `?comment_id=${commentId}` : "";
-    try {
-      const response = await fetch(`/api/ppr/tasks/${taskId}/attachments${qs}`);
-      if (!response.ok) return;
-      const json = await response.json();
-      setAttachments(json.attachments ?? []);
-    } catch {
-      // ignore
-    }
-  }, [taskId, commentId]);
-
-  useEffect(() => {
-    fetchAttachments();
-  }, [fetchAttachments]);
 
   if (!attachments.length) return null;
 

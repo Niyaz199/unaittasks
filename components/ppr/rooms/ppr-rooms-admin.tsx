@@ -1,14 +1,20 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import type { Route } from "next";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createObjectRoomAction, updateObjectRoomAction } from "@/app/actions/object-room-actions";
 import { DataTable } from "@/components/ui/data-table";
 import { PprModal } from "@/components/ppr/ui/ppr-modal";
 import { PprPageShell } from "@/components/ppr/ui/ppr-page-shell";
 import { StatusBadge } from "@/components/ppr/ui/status-badge";
-import { PprRoomForm } from "@/components/ppr/rooms/ppr-room-form";
+
+const PprRoomForm = dynamic(
+  () => import("@/components/ppr/rooms/ppr-room-form").then((module) => module.PprRoomForm),
+  { loading: () => <div className="section-card text-soft">Загрузка формы помещения...</div> }
+);
 
 type RoomRow = {
   id: string;
@@ -70,6 +76,7 @@ export function PprRoomsAdmin({
   initialFilterObjectId?: string;
   initialFilterFloorId?: string;
 }) {
+  const router = useRouter();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
@@ -81,6 +88,12 @@ export function PprRoomsAdmin({
   const [filterStatus, setFilterStatus] = useState<"all" | "active" | "inactive">("all");
 
   const editingRoom = editingId ? rooms.find((item) => item.id === editingId) ?? null : null;
+  const hasSelectedObject = filterObjectId !== "";
+
+  useEffect(() => {
+    setFilterObjectId(initialFilterObjectId);
+    setFilterFloorId(initialFilterFloorId);
+  }, [initialFilterFloorId, initialFilterObjectId]);
 
   const availableFloors = useMemo(() => {
     const filtered = filterObjectId === "" ? floors : floors.filter((floor) => floor.object_id === filterObjectId);
@@ -100,6 +113,17 @@ export function PprRoomsAdmin({
       }),
     [roomTypes]
   );
+
+  const formObjects = useMemo(
+    () => objects.filter((objectItem) => objectItem.id === filterObjectId),
+    [filterObjectId, objects]
+  );
+
+  function updateSearchParams(nextObjectId: string) {
+    const params = new URLSearchParams();
+    if (nextObjectId) params.set("objectId", nextObjectId);
+    router.replace((`/ppr/rooms${params.toString() ? `?${params.toString()}` : ""}`) as Route);
+  }
 
   const filteredRooms = useMemo(() => {
     return rooms.filter((room) => {
@@ -164,10 +188,20 @@ export function PprRoomsAdmin({
         metrics={metrics}
         onSearch={setSearchTerm}
         searchPlaceholder="Поиск по названию..."
-        isEmpty={!objects.length || rooms.length === 0}
+        isEmpty={!objects.length || !hasSelectedObject || rooms.length === 0}
         emptyState={{
-          message: !objects.length ? "Нет доступных объектов" : "Помещения не найдены",
-          hint: !objects.length ? "Чтобы добавить помещение, сначала нужен доступ хотя бы к одному объекту." : "Создайте первое помещение для доступного объекта.",
+          message:
+            !objects.length
+              ? "Нет доступных объектов"
+              : !hasSelectedObject
+                ? "Выберите объект"
+                : "Помещения не найдены",
+          hint:
+            !objects.length
+              ? "Чтобы добавить помещение, сначала нужен доступ хотя бы к одному объекту."
+              : !hasSelectedObject
+                ? "Сначала выберите объект, чтобы загрузить помещения и этажи только для него."
+                : "Создайте первое помещение для выбранного объекта.",
         }}
         isFilteredEmpty={filteredRooms.length === 0}
         filters={
@@ -176,12 +210,14 @@ export function PprRoomsAdmin({
               className="select"
               value={filterObjectId}
               onChange={(e) => {
-                setFilterObjectId(e.target.value);
+                const nextObjectId = e.target.value;
+                setFilterObjectId(nextObjectId);
                 setFilterFloorId("");
+                updateSearchParams(nextObjectId);
               }}
               style={{ maxWidth: "200px" }}
             >
-              <option value="">Все объекты</option>
+              <option value="">Выберите объект</option>
               {objects.map((obj) => (
                 <option key={obj.id} value={obj.id}>
                   {obj.name}
@@ -228,7 +264,7 @@ export function PprRoomsAdmin({
               <option value="inactive">Неактивные</option>
             </select>
 
-            <button className="btn btn-accent" type="button" onClick={() => setIsCreateOpen(true)} disabled={!objects.length}>
+            <button className="btn btn-accent" type="button" onClick={() => setIsCreateOpen(true)} disabled={!hasSelectedObject}>
               + Добавить
             </button>
           </>
@@ -293,7 +329,7 @@ export function PprRoomsAdmin({
       <PprModal open={isCreateOpen} onClose={() => { setIsCreateOpen(false); setIsDirty(false); }} title="Новое помещение" isDirty={isDirty}>
         <PprRoomForm
           action={createObjectRoomAction}
-          objects={objects}
+          objects={formObjects}
           floors={floors}
           roomTypes={roomTypes}
           onSubmitted={() => { setIsCreateOpen(false); setIsDirty(false); }}
@@ -307,7 +343,7 @@ export function PprRoomsAdmin({
           <PprRoomForm
             action={updateObjectRoomAction}
             roomId={editingRoom.id}
-            objects={objects}
+            objects={formObjects}
             floors={floors}
             roomTypes={roomTypes}
             onSubmitted={() => { setEditingId(null); setIsDirty(false); }}

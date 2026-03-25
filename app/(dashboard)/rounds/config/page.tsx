@@ -1,9 +1,8 @@
 import { requireProfile } from "@/lib/auth";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { BackButton } from "@/components/ui/back-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { canManageRoundsConfig } from "@/lib/rounds/permissions";
-import { listRoundsConfigRoomsForProfile } from "@/lib/rounds/queries";
+import { listRoundsConfigRoomsForProfile, listRoundsManageableObjectsForProfile } from "@/lib/rounds/queries";
 import { RoundsConfigAdmin } from "@/components/rounds/rounds-config-admin";
 
 export default async function RoundsConfigPage({
@@ -12,7 +11,7 @@ export default async function RoundsConfigPage({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const search = searchParams ? await searchParams : {};
-  const { profile } = await requireProfile();
+  const { profile, supabase } = await requireProfile();
 
   if (!canManageRoundsConfig(profile.role)) {
     return (
@@ -23,10 +22,16 @@ export default async function RoundsConfigPage({
     );
   }
 
-  const supabase = await createSupabaseServerClient();
-  const data = await listRoundsConfigRoomsForProfile(supabase, profile, {
-    objectId: typeof search.objectId === "string" ? search.objectId : undefined,
-  });
+  const requestedObjectId = typeof search.objectId === "string" ? search.objectId : undefined;
+  const data = requestedObjectId
+    ? await listRoundsConfigRoomsForProfile(supabase, profile, {
+        objectId: requestedObjectId,
+        query: typeof search.q === "string" ? search.q : undefined,
+      })
+    : {
+        objects: await listRoundsManageableObjectsForProfile(supabase, profile),
+        rooms: [],
+      };
 
   return (
     <section className="grid">
@@ -38,7 +43,7 @@ export default async function RoundsConfigPage({
       <RoundsConfigAdmin
         objects={data.objects}
         rooms={data.rooms}
-        initialObjectId={typeof search.objectId === "string" ? search.objectId : ""}
+        initialObjectId={requestedObjectId ?? ""}
         initialQuery={typeof search.q === "string" ? search.q : ""}
       />
     </section>

@@ -1,15 +1,21 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import type { Route } from "next";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createPprEquipmentAction, updatePprEquipmentAction } from "@/app/actions/ppr-directory-actions";
 import { DataTable } from "@/components/ui/data-table";
 import { PprModal } from "@/components/ppr/ui/ppr-modal";
 import { pprEquipmentStatusMeta } from "@/lib/ppr/presentation";
-import { PprEquipmentForm } from "@/components/ppr/equipment/ppr-equipment-form";
 import { PprPageShell } from "@/components/ppr/ui/ppr-page-shell";
 import { StatusBadge } from "@/components/ppr/ui/status-badge";
+
+const PprEquipmentForm = dynamic(
+  () => import("@/components/ppr/equipment/ppr-equipment-form").then((module) => module.PprEquipmentForm),
+  { loading: () => <div className="section-card text-soft">Загрузка формы оборудования...</div> }
+);
 
 type EquipmentRow = {
   id: string;
@@ -97,25 +103,35 @@ export function PprEquipmentAdmin({
   objects,
   systems,
   rooms,
+  initialFilterObjectId = "",
 }: {
   equipment: EquipmentRow[];
   objects: ObjectOption[];
   systems: SystemOption[];
   rooms: RoomOption[];
+  initialFilterObjectId?: string;
 }) {
+  const router = useRouter();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterObjectId, setFilterObjectId] = useState("");
+  const [filterObjectId, setFilterObjectId] = useState(initialFilterObjectId);
   const [filterSystemId, setFilterSystemId] = useState("");
   const [filterRoomId, setFilterRoomId] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("");
 
   const editingEquipment = editingId ? equipment.find((item) => item.id === editingId) ?? null : null;
-  const hasPrerequisites = objects.length > 0 && systems.length > 0 && rooms.length > 0;
+  const hasSelectedObject = filterObjectId !== "";
+  const hasPrerequisites = hasSelectedObject && systems.length > 0 && rooms.length > 0;
+
+  useEffect(() => {
+    setFilterObjectId(initialFilterObjectId);
+    setFilterSystemId("");
+    setFilterRoomId("");
+  }, [initialFilterObjectId]);
 
   // Filter logic
   const filteredEquipment = useMemo(() => {
@@ -145,6 +161,17 @@ export function PprEquipmentAdmin({
     return rooms.filter((r) => r.object_id === filterObjectId);
   }, [rooms, filterObjectId]);
 
+  const formObjects = useMemo(
+    () => objects.filter((objectItem) => objectItem.id === filterObjectId),
+    [filterObjectId, objects]
+  );
+
+  function updateSearchParams(nextObjectId: string) {
+    const params = new URLSearchParams();
+    if (nextObjectId) params.set("objectId", nextObjectId);
+    router.replace((`/ppr/equipment${params.toString() ? `?${params.toString()}` : ""}`) as Route);
+  }
+
   // Summary metrics
   const metrics = useMemo(() => {
     const total = equipment.length;
@@ -166,10 +193,24 @@ export function PprEquipmentAdmin({
         metrics={metrics}
         onSearch={setSearchTerm}
         searchPlaceholder="Поиск по названию или инв. номеру..."
-        isEmpty={!hasPrerequisites || equipment.length === 0}
+        isEmpty={!objects.length || !hasSelectedObject || !hasPrerequisites || equipment.length === 0}
         emptyState={{
-          message: !hasPrerequisites ? "Недостаточно структуры для создания оборудования" : "Оборудование ППР пока не создано",
-          hint: !hasPrerequisites ? "Для создания оборудования нужны объект, система и помещение." : "Добавьте первую единицу оборудования для доступного объекта.",
+          message:
+            !objects.length
+              ? "Нет доступных объектов"
+              : !hasSelectedObject
+                ? "Выберите объект"
+                : !hasPrerequisites
+                  ? "Недостаточно структуры для создания оборудования"
+                  : "Оборудование ППР пока не создано",
+          hint:
+            !objects.length
+              ? "Чтобы управлять оборудованием, нужен доступ хотя бы к одному объекту."
+              : !hasSelectedObject
+                ? "Сначала выберите объект, чтобы загрузить оборудование, системы и помещения только для него."
+                : !hasPrerequisites
+                  ? "Для создания оборудования в выбранном объекте нужны система и помещение."
+                  : "Добавьте первую единицу оборудования для выбранного объекта.",
         }}
         isFilteredEmpty={filteredEquipment.length === 0}
         filters={
@@ -178,13 +219,15 @@ export function PprEquipmentAdmin({
               className="select"
               value={filterObjectId}
               onChange={(e) => {
-                setFilterObjectId(e.target.value);
+                const nextObjectId = e.target.value;
+                setFilterObjectId(nextObjectId);
                 setFilterSystemId("");
                 setFilterRoomId("");
+                updateSearchParams(nextObjectId);
               }}
               style={{ maxWidth: "200px" }}
             >
-              <option value="">Все объекты</option>
+              <option value="">Выберите объект</option>
               {objects.map((obj) => (
                 <option key={obj.id} value={obj.id}>
                   {obj.name}
@@ -196,6 +239,7 @@ export function PprEquipmentAdmin({
               className="select"
               value={filterSystemId}
               onChange={(e) => setFilterSystemId(e.target.value)}
+              disabled={!hasSelectedObject}
               style={{ maxWidth: "200px" }}
             >
               <option value="">Все системы</option>
@@ -210,6 +254,7 @@ export function PprEquipmentAdmin({
               className="select"
               value={filterRoomId}
               onChange={(e) => setFilterRoomId(e.target.value)}
+              disabled={!hasSelectedObject}
               style={{ maxWidth: "200px" }}
             >
               <option value="">Все помещения</option>
@@ -309,7 +354,7 @@ export function PprEquipmentAdmin({
       <PprModal open={isCreateOpen} onClose={() => { setIsCreateOpen(false); setIsDirty(false); }} title="Новое оборудование ППР" isDirty={isDirty}>
         <PprEquipmentForm
           action={createPprEquipmentAction}
-          objects={objects}
+          objects={formObjects}
           systems={systems}
           rooms={rooms}
           onSubmitted={() => { setIsCreateOpen(false); setIsDirty(false); }}
@@ -323,7 +368,7 @@ export function PprEquipmentAdmin({
           <PprEquipmentForm
             action={updatePprEquipmentAction}
             equipmentId={editingEquipment.id}
-            objects={objects}
+            objects={formObjects}
             systems={systems}
             rooms={rooms}
             onSubmitted={() => { setEditingId(null); setIsDirty(false); }}

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Profile } from "@/lib/types";
@@ -58,38 +59,41 @@ function isSchemaCacheError(error: unknown) {
   return code === "PGRST204" || code === "PGRST205" || message.toLowerCase().includes("schema cache");
 }
 
-async function listObjectScopedObjects(
-  supabase: SupabaseClient,
-  profile: Pick<Profile, "id" | "role">,
-  mode: "read" | "manage"
-): Promise<ObjectRow[]> {
-  if (profile.role === "admin" || profile.role === "chief") {
-    const { data, error } = await supabase.from("objects").select("id,name").order("name", { ascending: true });
-    if (error) throw error;
-    return (data ?? []) as ObjectRow[];
+const listObjectScopedObjects = cache(
+  async (
+    supabase: SupabaseClient,
+    profileId: string,
+    role: Profile["role"],
+    mode: "read" | "manage"
+  ): Promise<ObjectRow[]> => {
+    if (role === "admin" || role === "chief") {
+      const { data, error } = await supabase.from("objects").select("id,name").order("name", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as ObjectRow[];
+    }
+
+    const canProceed =
+      mode === "manage"
+        ? role === "lead" || role === "object_engineer"
+        : role === "lead" || role === "engineer" || role === "object_engineer";
+    if (!canProceed) {
+      return [];
+    }
+
+    type UserObjectRow = { objects: ObjectRow | null };
+    const { data: scopedData, error: scopedError } = await supabase
+      .from("user_objects")
+      .select("objects(id,name)")
+      .eq("user_id", profileId);
+    if (scopedError) throw scopedError;
+
+    const rows = ((scopedData ?? []) as unknown as UserObjectRow[])
+      .map((row) => row.objects)
+      .filter((row): row is ObjectRow => row !== null);
+
+    return rows.sort((a, b) => a.name.localeCompare(b.name, "ru"));
   }
-
-  const canProceed =
-    mode === "manage"
-      ? profile.role === "lead" || profile.role === "object_engineer"
-      : profile.role === "lead" || profile.role === "engineer" || profile.role === "object_engineer";
-  if (!canProceed) {
-    return [];
-  }
-
-  type UserObjectRow = { objects: ObjectRow | null };
-  const { data, error } = await supabase
-    .from("user_objects")
-    .select("objects(id,name)")
-    .eq("user_id", profile.id);
-  if (error) throw error;
-
-  const rows = ((data ?? []) as unknown as UserObjectRow[])
-    .map((row) => row.objects)
-    .filter((row): row is ObjectRow => row !== null);
-
-  return rows.sort((a, b) => a.name.localeCompare(b.name, "ru"));
-}
+);
 
 export async function listObjectRoomReadableObjectsForProfile(
   supabase: SupabaseClient,
@@ -99,7 +103,7 @@ export async function listObjectRoomReadableObjectsForProfile(
     throw new Error("Недостаточно прав для чтения справочника помещений");
   }
 
-  return listObjectScopedObjects(supabase, profile, "read");
+  return listObjectScopedObjects(supabase, profile.id, profile.role, "read");
 }
 
 export async function listObjectRoomManageableObjectsForProfile(
@@ -110,10 +114,14 @@ export async function listObjectRoomManageableObjectsForProfile(
     throw new Error("Недостаточно прав для управления справочником помещений");
   }
 
-  return listObjectScopedObjects(supabase, profile, "manage");
+  return listObjectScopedObjects(supabase, profile.id, profile.role, "manage");
 }
 
-export async function listObjectRoomsForProfile(supabase: SupabaseClient, profile: Pick<Profile, "id" | "role">) {
+export async function listObjectRoomsForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">,
+  options: { objectId?: string } = {}
+) {
   if (!canReadObjectRooms(profile.role)) {
     throw new Error("Недостаточно прав для чтения справочника помещений");
   }
@@ -121,22 +129,28 @@ export async function listObjectRoomsForProfile(supabase: SupabaseClient, profil
   const objects = await listObjectRoomReadableObjectsForProfile(supabase, profile);
   if (!objects.length && profile.role !== "admin" && profile.role !== "chief") return [];
 
-  const query = supabase
+  let query = supabase
     .from("object_rooms")
     .select(
       "id,object_id,name,floor,floor_id,room_type_id,description,is_active,created_at,object:objects(name),floor_ref:floors(id,name,sort_order,is_active),room_type:room_types(id,name,is_active)"
     )
     .order("name", { ascending: true });
+  if (options.objectId) {
+    query = query.eq("object_id", options.objectId);
+  }
 
   const { data, error } =
     profile.role === "admin" || profile.role === "chief" ? await query : await query.in("object_id", objects.map((item) => item.id));
   if (error) {
     if (!isSchemaCacheError(error)) throw error;
 
-    const legacyQuery = supabase
+    let legacyQuery = supabase
       .from("object_rooms")
       .select("id,object_id,name,floor,description,is_active,created_at,object:objects(name)")
       .order("name", { ascending: true });
+    if (options.objectId) {
+      legacyQuery = legacyQuery.eq("object_id", options.objectId);
+    }
     const legacyResult =
       profile.role === "admin" || profile.role === "chief"
         ? await legacyQuery

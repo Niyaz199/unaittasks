@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Profile } from "@/lib/types";
 import { getRoundsProjectTimeZone } from "@/lib/rounds/constants";
@@ -66,6 +67,10 @@ function resolveFloorName(value: FloorRelation, fallback: string | null) {
   return value?.name ?? fallback ?? "—";
 }
 
+function toContainsPattern(value: string) {
+  return `%${value}%`;
+}
+
 async function listActiveRoomQrMap(supabase: SupabaseClient, roomIds: string[]) {
   if (!roomIds.length) {
     return new Map<string, ActiveRoomQrRow>();
@@ -83,70 +88,73 @@ async function listActiveRoomQrMap(supabase: SupabaseClient, roomIds: string[]) 
   );
 }
 
-async function listRoundsScopedObjects(
-  supabase: SupabaseClient,
-  profile: Pick<Profile, "id" | "role">,
-  mode: "scan" | "read" | "manage"
-): Promise<RoundsObjectOption[]> {
-  if (profile.role === "admin" || profile.role === "chief") {
-    const { data, error } = await supabase.from("objects").select("id,name").order("name", { ascending: true });
-    if (error) throw error;
-    return (data ?? []) as RoundsObjectOption[];
-  }
-
-  if (mode !== "scan" && profile.role === "tech") {
-    return [];
-  }
-
-  const result = new Map<string, RoundsObjectOption>();
-
-  if (profile.role === "lead" || profile.role === "engineer" || profile.role === "object_engineer" || profile.role === "tech") {
-    type UserObjectRow = { objects: RoundsObjectOption | null };
-    const { data, error } = await supabase
-      .from("user_objects")
-      .select("objects(id,name)")
-      .eq("user_id", profile.id);
-    if (error) throw error;
-
-    for (const row of ((data ?? []) as unknown as UserObjectRow[])) {
-      if (row.objects) result.set(row.objects.id, row.objects);
+const listRoundsScopedObjects = cache(
+  async (
+    supabase: SupabaseClient,
+    profileId: string,
+    role: Profile["role"],
+    mode: "scan" | "read" | "manage"
+  ): Promise<RoundsObjectOption[]> => {
+    if (role === "admin" || role === "chief") {
+      const { data, error } = await supabase.from("objects").select("id,name").order("name", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as RoundsObjectOption[];
     }
-  }
 
-  if (profile.role === "object_engineer") {
-    const { data, error } = await supabase
-      .from("objects")
-      .select("id,name")
-      .eq("object_engineer_id", profile.id);
-    if (error) throw error;
-
-    for (const row of (data ?? []) as RoundsObjectOption[]) {
-      result.set(row.id, row);
+    if (mode !== "scan" && role === "tech") {
+      return [];
     }
-  }
 
-  return [...result.values()].sort((left, right) => left.name.localeCompare(right.name, "ru"));
-}
+    const result = new Map<string, RoundsObjectOption>();
+
+    if (role === "lead" || role === "engineer" || role === "object_engineer" || role === "tech") {
+      type UserObjectRow = { objects: RoundsObjectOption | null };
+      const { data, error } = await supabase
+        .from("user_objects")
+        .select("objects(id,name)")
+        .eq("user_id", profileId);
+      if (error) throw error;
+
+      for (const row of ((data ?? []) as unknown as UserObjectRow[])) {
+        if (row.objects) result.set(row.objects.id, row.objects);
+      }
+    }
+
+    if (role === "object_engineer") {
+      const { data, error } = await supabase
+        .from("objects")
+        .select("id,name")
+        .eq("object_engineer_id", profileId);
+      if (error) throw error;
+
+      for (const row of (data ?? []) as RoundsObjectOption[]) {
+        result.set(row.id, row);
+      }
+    }
+
+    return [...result.values()].sort((left, right) => left.name.localeCompare(right.name, "ru"));
+  }
+);
 
 export async function listRoundsReadableObjectsForProfile(supabase: SupabaseClient, profile: Pick<Profile, "id" | "role">) {
   if (!canReadRoundsReports(profile.role)) {
     throw new Error("Недостаточно прав для просмотра обходов");
   }
-  return listRoundsScopedObjects(supabase, profile, "read");
+  return listRoundsScopedObjects(supabase, profile.id, profile.role, "read");
 }
 
 export async function listRoundsManageableObjectsForProfile(supabase: SupabaseClient, profile: Pick<Profile, "id" | "role">) {
   if (!canManageRoundsConfig(profile.role)) {
     throw new Error("Недостаточно прав для настройки обходов");
   }
-  return listRoundsScopedObjects(supabase, profile, "manage");
+  return listRoundsScopedObjects(supabase, profile.id, profile.role, "manage");
 }
 
 export async function listRoundsScannerObjectsForProfile(supabase: SupabaseClient, profile: Pick<Profile, "id" | "role">) {
   if (!canUseRoundsScanner(profile.role)) {
     throw new Error("Недостаточно прав для работы со сканером обходов");
   }
-  return listRoundsScopedObjects(supabase, profile, "scan");
+  return listRoundsScopedObjects(supabase, profile.id, profile.role, "scan");
 }
 
 export async function getRoundsScannerConfigForProfile(supabase: SupabaseClient, profile: Pick<Profile, "id" | "role">) {
@@ -195,10 +203,17 @@ export async function listRoundsConfigRoomsForProfile(
     return { objects, rooms: [] as RoundsConfigRoom[] };
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("object_rooms")
     .select("id,object_id,name,floor,is_active,rounds_enabled,object:objects(name),floor_ref:floors(name,sort_order)")
     .in("object_id", targetIds);
+
+  const normalizedQuery = filters?.query?.trim().toLowerCase() ?? "";
+  if (normalizedQuery) {
+    query = query.ilike("name", toContainsPattern(normalizedQuery));
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
 
   const qrByRoomId = await listActiveRoomQrMap(
@@ -206,9 +221,7 @@ export async function listRoundsConfigRoomsForProfile(
     ((data ?? []) as ConfigRoomRow[]).map((room) => room.id)
   );
 
-  const normalizedQuery = filters?.query?.trim().toLowerCase() ?? "";
   const rooms = ((data ?? []) as ConfigRoomRow[])
-    .filter((room) => normalizedQuery === "" || room.name.toLowerCase().includes(normalizedQuery))
     .map((room) => ({
       id: room.id,
       object_id: room.object_id,
@@ -253,20 +266,11 @@ export async function saveRoundsRoomSelection(
     throw new Error("В payload сохранения попали помещения, которые не принадлежат выбранному объекту.");
   }
 
-  const { error: disableError } = await supabase
-    .from("object_rooms")
-    .update({ rounds_enabled: false })
-    .eq("object_id", objectId);
-  if (disableError) throw disableError;
-
-  if (normalizedRoomIds.length) {
-    const { error: enableError } = await supabase
-      .from("object_rooms")
-      .update({ rounds_enabled: true })
-      .eq("object_id", objectId)
-      .in("id", normalizedRoomIds);
-    if (enableError) throw enableError;
-  }
+  const { error: saveError } = await supabase.rpc("rounds_save_room_selection", {
+    _object_id: objectId,
+    _enabled_room_ids: normalizedRoomIds,
+  });
+  if (saveError) throw saveError;
 
   return {
     objectId,
@@ -406,6 +410,26 @@ export async function getRoundsArchiveForProfile(
   const dateTo = filters?.dateTo?.trim() || toOperationalDate(new Date(), getRoundsProjectTimeZone());
   const requestedObjectId = filters?.objectId?.trim();
   const objectIds = requestedObjectId ? accessibleObjectIds.filter((id) => id === requestedObjectId) : accessibleObjectIds;
+  if (!objectIds.length) {
+    return { objects, rows: [] as RoundsArchiveRow[] };
+  }
+
+  const roomQuery = filters?.query?.trim().toLowerCase() ?? "";
+  let matchedRoomIds: string[] | null = null;
+
+  if (roomQuery) {
+    const { data: roomsData, error: roomsError } = await supabase
+      .from("object_rooms")
+      .select("id")
+      .in("object_id", objectIds)
+      .ilike("name", toContainsPattern(roomQuery));
+    if (roomsError) throw roomsError;
+
+    matchedRoomIds = ((roomsData ?? []) as Array<{ id: string }>).map((row) => row.id);
+    if (!matchedRoomIds.length) {
+      return { objects, rows: [] as RoundsArchiveRow[] };
+    }
+  }
 
   let query = supabase
     .from("rounds_checkins")
@@ -418,6 +442,8 @@ export async function getRoundsArchiveForProfile(
   query = query.in("object_id", objectIds);
   if (filters?.roomId?.trim()) query = query.eq("room_id", filters.roomId.trim());
   if (filters?.technicianId?.trim()) query = query.eq("checked_in_by_user_id", filters.technicianId.trim());
+  if (filters?.technicianQuery?.trim()) query = query.ilike("checked_in_by_display_name", toContainsPattern(filters.technicianQuery.trim().toLowerCase()));
+  if (matchedRoomIds) query = query.in("room_id", matchedRoomIds);
 
   const { data, error } = await query;
   if (error) throw error;
@@ -429,11 +455,7 @@ export async function getRoundsArchiveForProfile(
       .filter((item): item is string => Boolean(item))
   );
 
-  const technicianQuery = filters?.technicianQuery?.trim().toLowerCase() ?? "";
-  const roomQuery = filters?.query?.trim().toLowerCase() ?? "";
   const rows = ((data ?? []) as ArchiveQueryRow[])
-    .filter((row) => technicianQuery === "" || row.checked_in_by_display_name.toLowerCase().includes(technicianQuery))
-    .filter((row) => roomQuery === "" || resolveName(row.room).toLowerCase().includes(roomQuery))
     .map((row) => ({
       id: row.id,
       operational_date: row.operational_date,

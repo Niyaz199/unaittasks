@@ -1,5 +1,4 @@
 import { requireProfile } from "@/lib/auth";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   canAccessPprCalendarScreens,
   listPprCalendarSystemsForProfile,
@@ -40,13 +39,12 @@ export default async function PprCalendarPage({
   const requestedObjectId = typeof search.object === "string" && search.object ? search.object : undefined;
   const requestedGroupId = typeof search.group === "string" && search.group ? search.group : undefined;
   const requestedSystemId = typeof search.system === "string" && search.system ? search.system : undefined;
+  const requestedTab = search.tab === "month" ? "month" : "year";
 
-  const { profile } = await requireProfile();
+  const { profile, supabase } = await requireProfile();
   if (!canAccessPprCalendarScreens(profile.role)) {
     return <div className="empty-state">Доступ к календарю ППР запрещён.</div>;
   }
-
-  const supabase = await createSupabaseServerClient();
   const systems = await listPprCalendarSystemsForProfile(supabase, profile);
   const objects = [...new Map(
     systems
@@ -86,11 +84,8 @@ export default async function PprCalendarPage({
       ? requestedSystemId
       : undefined;
   const normalizedPlanMonth = normalizePlanMonth(requestedMonth);
-  const selectedGroupSystemIds = selectedGroupId
-    ? systemsForObject.filter((system) => system.system_group_id === selectedGroupId).map((system) => system.id)
-    : [];
 
-  const [yearGroupOverview, yearSystemOverview, monthPlansRaw, monthPlanItemsRaw] = await Promise.all([
+  const [yearGroupOverview, yearSystemOverview, monthPlans, monthPlanItems] = await Promise.all([
     listPprCalendarYearOverviewByGroupForProfile(supabase, profile, { year: requestedYear, objectId: selectedObjectId }),
     selectedGroupId
       ? listPprCalendarYearOverviewBySystemForProfile(supabase, profile, {
@@ -103,21 +98,15 @@ export default async function PprCalendarPage({
       planMonth: normalizedPlanMonth,
       systemId: selectedSystemId,
       objectId: selectedObjectId,
+      systemGroupId: selectedGroupId,
     }),
     listPprMonthPlanItemsForProfile(supabase, profile, {
       planMonth: normalizedPlanMonth,
       systemId: selectedSystemId,
       objectId: selectedObjectId,
+      systemGroupId: selectedGroupId,
     }),
   ]);
-  const monthPlans =
-    selectedSystemId || !selectedGroupId
-      ? monthPlansRaw
-      : monthPlansRaw.filter((plan) => selectedGroupSystemIds.includes(plan.system_id));
-  const monthPlanItems =
-    selectedSystemId || !selectedGroupId
-      ? monthPlanItemsRaw
-      : monthPlanItemsRaw.filter((item) => selectedGroupSystemIds.includes(item.system_id));
 
   return (
     <section className="grid">
@@ -140,6 +129,7 @@ export default async function PprCalendarPage({
         selectedObjectId={selectedObjectId}
         selectedGroupId={selectedGroupId}
         selectedSystemId={selectedSystemId}
+        initialTab={requestedTab}
       />
     </section>
   );

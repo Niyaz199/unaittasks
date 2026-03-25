@@ -1,7 +1,6 @@
 import { requireProfile } from "@/lib/auth";
 import { listFloorsForProfile } from "@/lib/floors";
 import { listRoomTypesForProfile } from "@/lib/room-types";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { listObjectRoomManageableObjectsForProfile, listObjectRoomsForProfile } from "@/lib/object-rooms";
 import { canAccessPprStructureScreens } from "@/lib/ppr/queries";
 import { PageHeader } from "@/components/ui/page-header";
@@ -14,21 +13,22 @@ export default async function PprRoomsPage({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const search = searchParams ? await searchParams : {};
-  const { profile } = await requireProfile();
+  const { profile, supabase } = await requireProfile();
   if (!canAccessPprStructureScreens(profile.role)) {
     return <div className="empty-state">Доступ к структуре ППР запрещён.</div>;
   }
 
-  const supabase = await createSupabaseServerClient();
-  const [objects, rooms, floors, roomTypes] = await Promise.all([
-    listObjectRoomManageableObjectsForProfile(supabase, profile),
-    listObjectRoomsForProfile(supabase, profile),
-    listFloorsForProfile(supabase, profile),
+  const objects = await listObjectRoomManageableObjectsForProfile(supabase, profile);
+  const requestedObjectId = typeof search.objectId === "string" ? search.objectId : "";
+  const initialObjectId = objects.some((item) => item.id === requestedObjectId) ? requestedObjectId : "";
+  const initialFloorId = typeof search.floorId === "string" ? search.floorId : "";
+
+  const [rooms, floors, roomTypes] = await Promise.all([
+    initialObjectId ? listObjectRoomsForProfile(supabase, profile, { objectId: initialObjectId }) : Promise.resolve([]),
+    initialObjectId ? listFloorsForProfile(supabase, profile, { objectId: initialObjectId }) : Promise.resolve([]),
     listRoomTypesForProfile(supabase, profile),
   ]);
 
-  const initialObjectId = typeof search.objectId === "string" ? search.objectId : "";
-  const initialFloorId = typeof search.floorId === "string" ? search.floorId : "";
 
   return (
     <section className="grid">

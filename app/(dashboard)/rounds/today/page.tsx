@@ -1,5 +1,4 @@
 import { requireProfile } from "@/lib/auth";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { BackButton } from "@/components/ui/back-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { canReadRoundsReports } from "@/lib/rounds/permissions";
@@ -13,7 +12,7 @@ export default async function RoundsTodayPage({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const search = searchParams ? await searchParams : {};
-  const { profile } = await requireProfile();
+  const { profile, supabase } = await requireProfile();
 
   if (!canReadRoundsReports(profile.role)) {
     return (
@@ -24,7 +23,6 @@ export default async function RoundsTodayPage({
     );
   }
 
-  const supabase = await createSupabaseServerClient();
   const data = await getRoundsTodayForProfile(supabase, profile, {
     objectId: typeof search.objectId === "string" ? search.objectId : undefined,
     operationalDate: typeof search.operationalDate === "string" ? search.operationalDate : undefined,

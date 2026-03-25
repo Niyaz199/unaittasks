@@ -1,5 +1,4 @@
 import { requireProfile } from "@/lib/auth";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { BackButton } from "@/components/ui/back-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { canManageRoundsConfig } from "@/lib/rounds/permissions";
@@ -12,7 +11,7 @@ export default async function RoundsQrPage({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const search = searchParams ? await searchParams : {};
-  const { profile } = await requireProfile();
+  const { profile, supabase } = await requireProfile();
 
   if (!canManageRoundsConfig(profile.role)) {
     return (
@@ -23,7 +22,6 @@ export default async function RoundsQrPage({
     );
   }
 
-  const supabase = await createSupabaseServerClient();
   const roomIdValue = typeof search.roomId === "string" ? [search.roomId] : Array.isArray(search.roomId) ? search.roomId : undefined;
   const rooms = await getRoundsPrintRowsForProfile(supabase, profile, {
     objectId: typeof search.objectId === "string" ? search.objectId : undefined,

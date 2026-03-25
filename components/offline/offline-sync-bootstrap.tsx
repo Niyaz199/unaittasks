@@ -1,23 +1,18 @@
 "use client";
 
 import { useEffect } from "react";
-import { flushQueue } from "@/lib/offline/queue";
-import { flushRoundsQueue, pruneSyncedRoundsCheckins, retryErroredRoundsCheckins } from "@/lib/offline/rounds-queue";
+import { runOfflineSync } from "@/lib/offline/sync-coordinator";
 
 export function OfflineSyncBootstrap() {
   useEffect(() => {
-    const runSync = async () => {
-      await pruneSyncedRoundsCheckins();
-      await retryErroredRoundsCheckins();
-      await Promise.all([flushQueue(), flushRoundsQueue()]);
-    };
+    const runSync = () => void runOfflineSync().catch(() => undefined);
 
-    void runSync();
-    const handleOnline = () => void runSync();
-    const handleFocus = () => void runSync();
+    runSync();
+    const handleOnline = () => runSync();
+    const handleFocus = () => runSync();
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        void runSync();
+        runSync();
       }
     };
 

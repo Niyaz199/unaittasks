@@ -1,5 +1,4 @@
 import { requireProfile } from "@/lib/auth";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { listObjectRoomsForProfile } from "@/lib/object-rooms";
 import {
   canAccessPprStructureScreens,
@@ -11,19 +10,28 @@ import { PageHeader } from "@/components/ui/page-header";
 import { BackButton } from "@/components/ui/back-button";
 import { PprEquipmentAdmin } from "@/components/ppr/equipment/ppr-equipment-admin";
 
-export default async function PprEquipmentPage() {
-  const { profile } = await requireProfile();
+export default async function PprEquipmentPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const search = searchParams ? await searchParams : {};
+  const { profile, supabase } = await requireProfile();
   if (!canAccessPprStructureScreens(profile.role)) {
     return <div className="empty-state">Доступ к оборудованию ППР запрещён.</div>;
   }
 
-  const supabase = await createSupabaseServerClient();
-  const [objects, systems, rooms, equipment] = await Promise.all([
-    listPprManageableObjectsForProfile(supabase, profile),
-    listPprSystemsForProfile(supabase, profile),
-    listObjectRoomsForProfile(supabase, profile),
-    listPprEquipmentForProfile(supabase, profile),
-  ]);
+  const objects = await listPprManageableObjectsForProfile(supabase, profile);
+  const requestedObjectId = typeof search.objectId === "string" ? search.objectId : "";
+  const selectedObjectId = objects.some((item) => item.id === requestedObjectId) ? requestedObjectId : "";
+
+  const [systems, rooms, equipment] = selectedObjectId
+    ? await Promise.all([
+        listPprSystemsForProfile(supabase, profile, { objectId: selectedObjectId }),
+        listObjectRoomsForProfile(supabase, profile, { objectId: selectedObjectId }),
+        listPprEquipmentForProfile(supabase, profile, { objectId: selectedObjectId }),
+      ])
+    : [[], [], []];
 
   return (
     <section className="grid">
@@ -45,6 +53,7 @@ export default async function PprEquipmentPage() {
           room_type_name: Array.isArray(item.room_type) ? item.room_type[0]?.name ?? null : item.room_type?.name ?? null,
           is_active: item.is_active,
         }))}
+        initialFilterObjectId={selectedObjectId}
       />
     </section>
   );

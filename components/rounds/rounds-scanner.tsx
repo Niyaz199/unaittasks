@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { loadRoundsScannerSnapshot, saveRoundsScannerSnapshot } from "@/lib/offline/rounds-queue";
 import { extractRoundsToken } from "@/lib/rounds/token";
+import { useRoundsScannerConfig } from "@/components/rounds/rounds-scanner-config-provider";
 import { RoundsSyncStatus } from "@/components/rounds/rounds-sync-status";
 
 type BarcodeDetectorLike = {
@@ -24,12 +24,12 @@ export function RoundsScanner() {
   const streamRef = useRef<MediaStream | null>(null);
   const detectorRef = useRef<BarcodeDetectorLike | null>(null);
   const timerRef = useRef<number | null>(null);
+  const { snapshot } = useRoundsScannerConfig();
 
   const [manualValue, setManualValue] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isDetectorAvailable, setIsDetectorAvailable] = useState(false);
-  const [snapshotUpdatedAt, setSnapshotUpdatedAt] = useState<string | null>(null);
 
   const stopCamera = useCallback(() => {
     if (timerRef.current) {
@@ -106,27 +106,6 @@ export function RoundsScanner() {
 
   useEffect(() => {
     setIsDetectorAvailable(Boolean(window.BarcodeDetector));
-    void loadRoundsScannerSnapshot().then((snapshot) => {
-      if (snapshot) setSnapshotUpdatedAt(snapshot.updatedAt);
-    });
-
-    if (navigator.onLine) {
-      void fetch("/api/rounds/config")
-        .then((response) => response.ok ? response.json() : null)
-        .then((payload) => {
-          if (!payload?.ok) return;
-          const snapshot = {
-            projectTimeZone: payload.projectTimeZone,
-            objects: payload.scannerObjects,
-            rooms: payload.scannerRooms,
-            updatedAt: new Date().toISOString(),
-          };
-          setSnapshotUpdatedAt(snapshot.updatedAt);
-          return saveRoundsScannerSnapshot(snapshot);
-        })
-        .catch(() => null);
-    }
-
     return () => stopCamera();
   }, [stopCamera]);
 
@@ -140,8 +119,8 @@ export function RoundsScanner() {
           <div className="text-soft">
             Сценарий техника: scan → подтвердить помещение → комментарий/фото по необходимости → сохранить → следующий QR.
           </div>
-          {snapshotUpdatedAt ? (
-            <div className="text-soft">Локальная конфигурация обновлена: {new Date(snapshotUpdatedAt).toLocaleString("ru-RU")}</div>
+          {snapshot?.updatedAt ? (
+            <div className="text-soft">Локальная конфигурация обновлена: {new Date(snapshot.updatedAt).toLocaleString("ru-RU")}</div>
           ) : (
             <div className="text-soft">Локальная конфигурация пока не кэширована. Для первого запуска нужен интернет.</div>
           )}

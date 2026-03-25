@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   canAccessPprTaskScreens,
   getPprTaskByIdForProfile,
+  getPprTaskAttachmentsReadModelForProfile,
   listPprTaskAssigneeCandidatesForProfile,
   listPprTaskCommentsForProfile,
   listPprTaskWorkItemsForProfile,
@@ -25,7 +25,7 @@ import { PprTaskDetails } from "@/components/ppr/tasks/ppr-task-details";
 
 export default async function PprTaskDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { profile } = await requireProfile();
+  const { profile, supabase } = await requireProfile();
 
   if (!canAccessPprTaskScreens(profile.role)) {
     return (
@@ -36,7 +36,6 @@ export default async function PprTaskDetailsPage({ params }: { params: Promise<{
     );
   }
 
-  const supabase = await createSupabaseServerClient();
   const task = await getPprTaskByIdForProfile(supabase, profile, id);
 
   if (!task) {
@@ -44,10 +43,11 @@ export default async function PprTaskDetailsPage({ params }: { params: Promise<{
   }
 
   const actor = await buildPprTaskActor(supabase, profile);
-  const [workItems, assigneeCandidates, comments] = await Promise.all([
+  const [workItems, assigneeCandidates, comments, attachments] = await Promise.all([
     listPprTaskWorkItemsForProfile(supabase, profile, id),
     listPprTaskAssigneeCandidatesForProfile(supabase, profile, id),
     listPprTaskCommentsForProfile(supabase, profile, id),
+    getPprTaskAttachmentsReadModelForProfile(supabase, profile, id),
   ]);
   const permissions = {
     canAssign: canAssignPprTaskExecutor(actor, task),
@@ -72,6 +72,8 @@ export default async function PprTaskDetailsPage({ params }: { params: Promise<{
         workItems={workItems}
         assigneeCandidates={assigneeCandidates}
         comments={comments}
+        taskAttachments={attachments.taskAttachments}
+        commentAttachmentsById={attachments.commentAttachmentsById}
         permissions={permissions}
       />
     </section>

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { writeAudit } from "@/lib/audit";
-import { runPprCronStep } from "@/lib/ppr/scheduler";
+import { runPprCronOrchestration } from "@/lib/ppr/scheduler";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 const schema = z
@@ -56,7 +56,8 @@ export async function POST(request: Request) {
       dateTo: payload.date_to,
       runId: payload.run_id,
     };
-    const carryover = await runPprCronStep(supabase, "ppr_carryover_plan_items", input);
+    const result = await runPprCronOrchestration(supabase, input);
+    const carryover = result.carryover;
 
     await writeAudit({
       supabase,
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
       meta: cronMeta("carryover", payload.run_id, payload.date_from, payload.date_to, carryover),
     });
 
-    const materialization = await runPprCronStep(supabase, "ppr_materialize_plan_items", input);
+    const materialization = result.materialization;
     await writeAudit({
       supabase,
       actorId: null,
@@ -77,7 +78,7 @@ export async function POST(request: Request) {
       meta: cronMeta("materialization", payload.run_id, payload.date_from, payload.date_to, materialization),
     });
 
-    const sync = await runPprCronStep(supabase, "ppr_sync_plan_item_statuses", input);
+    const sync = result.sync;
     await writeAudit({
       supabase,
       actorId: null,
@@ -86,8 +87,6 @@ export async function POST(request: Request) {
       entityId: payload.run_id,
       meta: cronMeta("plan_item_sync", payload.run_id, payload.date_from, payload.date_to, sync),
     });
-
-    const result = { carryover, materialization, sync };
 
     await writeAudit({
       supabase,
