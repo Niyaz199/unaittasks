@@ -1,11 +1,24 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { BackButton } from "@/components/ui/back-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { RoundsScannerConfigProvider } from "@/components/rounds/rounds-scanner-config-provider";
-import { RoundsEntryForm } from "@/components/rounds/rounds-entry-form";
-import { RoundsScanner } from "@/components/rounds/rounds-scanner";
+
+const RoundsEntryForm = dynamic(
+  () => import("@/components/rounds/rounds-entry-form").then((module) => module.RoundsEntryForm),
+  {
+    loading: () => <div className="section-card text-soft">Подготавливаем подтверждение помещения...</div>,
+  }
+);
+
+const RoundsScanner = dynamic(
+  () => import("@/components/rounds/rounds-scanner").then((module) => module.RoundsScanner),
+  {
+    loading: () => <div className="section-card text-soft">Подготавливаем сканер...</div>,
+  }
+);
 
 export function RoundsScanScreen({ userId }: { userId: string }) {
   const searchParams = useSearchParams();

@@ -1,9 +1,16 @@
+import dynamic from "next/dynamic";
 import { requireProfile } from "@/lib/auth";
 import { BackButton } from "@/components/ui/back-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { canManageRoundsConfig } from "@/lib/rounds/permissions";
 import { getRoundsPrintRowsForProfile } from "@/lib/rounds/queries";
-import { RoundsQrBoard } from "@/components/rounds/rounds-qr-board";
+
+const RoundsQrBoard = dynamic(
+  () => import("@/components/rounds/rounds-qr-board").then((module) => module.RoundsQrBoard),
+  {
+    loading: () => <div className="section-card text-soft">Подготавливаем QR-доску...</div>,
+  }
+);
 
 export default async function RoundsQrPage({
   searchParams,

@@ -1,3 +1,4 @@
+import dynamic from "next/dynamic";
 import { Badge } from "@/components/ui/badge";
 import type {
   PprTaskAttachmentWithUrl,
@@ -7,9 +8,27 @@ import type {
   PprTaskWorkItemRow,
 } from "@/lib/ppr/queries";
 import { pprTaskStatusMeta } from "@/lib/ppr/presentation";
-import { PprTaskLifecycleControls } from "@/components/ppr/tasks/ppr-task-lifecycle-controls";
-import { PprTaskCommentForm } from "@/components/ppr/tasks/ppr-task-comment-form";
-import { PprTaskAttachmentsGallery } from "@/components/ppr/tasks/ppr-task-attachments-gallery";
+
+const PprTaskLifecycleControls = dynamic(
+  () => import("@/components/ppr/tasks/ppr-task-lifecycle-controls").then((module) => module.PprTaskLifecycleControls),
+  {
+    loading: () => <div className="section-card text-soft">Подготавливаем lifecycle-действия...</div>,
+  }
+);
+
+const PprTaskCommentForm = dynamic(
+  () => import("@/components/ppr/tasks/ppr-task-comment-form").then((module) => module.PprTaskCommentForm),
+  {
+    loading: () => <div className="section-card text-soft">Подготавливаем форму комментария...</div>,
+  }
+);
+
+const PprTaskAttachmentsGallery = dynamic(
+  () => import("@/components/ppr/tasks/ppr-task-attachments-gallery").then((module) => module.PprTaskAttachmentsGallery),
+  {
+    loading: () => <div className="text-soft">Загружаем вложения...</div>,
+  }
+);
 
 function unwrapRelation<T>(value: T | T[] | null | undefined) {
   return Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
@@ -160,7 +179,7 @@ export function PprTaskDetails({
           <div className="text-soft">Добавление комментариев и фото для текущей роли недоступно.</div>
         )}
 
-        <PprTaskAttachmentsGallery attachments={taskAttachments} />
+        {taskAttachments.length ? <PprTaskAttachmentsGallery attachments={taskAttachments} /> : null}
 
         <div className="comment-feed">
           {comments.map((comment) => {
@@ -173,7 +192,7 @@ export function PprTaskDetails({
                   <span className="text-soft">{new Date(comment.created_at).toLocaleString("ru-RU")}</span>
                 </div>
                 <div className="comment-body">{comment.body}</div>
-                <PprTaskAttachmentsGallery attachments={commentAttachments} />
+                {commentAttachments.length ? <PprTaskAttachmentsGallery attachments={commentAttachments} /> : null}
               </div>
             );
           })}
