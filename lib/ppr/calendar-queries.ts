@@ -1,13 +1,10 @@
 import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { unwrapRelation, type RelationValue } from "@/lib/relation-normalization";
 import type { Profile } from "@/lib/types";
 import { assertPprCalendarQueryAccess, listPprManageableObjectsForProfile } from "@/lib/ppr/access";
 
-type PprCalendarRawTemplateRelation = { norm_hours: number | null } | Array<{ norm_hours: number | null }> | null;
-
-function unwrapRelation<T>(value: T | T[] | null | undefined) {
-  return Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
-}
+type PprCalendarRawTemplateRelation = RelationValue<{ norm_hours: number | null }>;
 
 function buildCalendarMonthKeys(year: number) {
   return Array.from({ length: 12 }, (_, index) => `${year}-${String(index + 1).padStart(2, "0")}`);

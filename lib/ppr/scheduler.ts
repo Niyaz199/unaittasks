@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { unwrapRelation, type RelationValue } from "@/lib/relation-normalization";
 
 type AssignmentForPlan = {
   id: string;
@@ -7,8 +8,8 @@ type AssignmentForPlan = {
   template_id: string;
   start_date: string;
   period_months: number;
-  equipment: { id: string; system_id: string } | Array<{ id: string; system_id: string }> | null;
-  template: { id: string; system_id: string } | Array<{ id: string; system_id: string }> | null;
+  equipment: RelationValue<{ id: string; system_id: string }>;
+  template: RelationValue<{ id: string; system_id: string }>;
 };
 
 const PPR_MONTH_PLAN_BATCH_SIZE = 500;
@@ -129,7 +130,7 @@ export async function generateMonthPlanForSystem(
   if (assignmentsError) throw assignmentsError;
 
   const rows = ((assignments ?? []) as AssignmentForPlan[]).filter((assignment) => {
-    const equipment = Array.isArray(assignment.equipment) ? assignment.equipment[0] : assignment.equipment;
+    const equipment = unwrapRelation(assignment.equipment);
     return equipment?.system_id === input.systemId;
   });
 
@@ -150,8 +151,8 @@ export async function generateMonthPlanForSystem(
       const dueDate = calculateAssignmentDueDateForPlanMonth(assignment.start_date, assignment.period_months, planMonthKey);
       if (!dueDate) return null;
 
-      const equipment = Array.isArray(assignment.equipment) ? assignment.equipment[0] : assignment.equipment;
-      const template = Array.isArray(assignment.template) ? assignment.template[0] : assignment.template;
+      const equipment = unwrapRelation(assignment.equipment);
+      const template = unwrapRelation(assignment.template);
       if (!equipment || !template) return null;
 
       return {
@@ -212,10 +213,6 @@ type ChecklistSnapshotItem = {
   title: string;
   description: string | null;
 };
-
-function resolveSingle<T>(value: T | T[] | null | undefined) {
-  return Array.isArray(value) ? value[0] ?? null : (value ?? null);
-}
 
 export async function materializePlanItemsInRange(supabase: SupabaseClient, input: MaterializeInput) {
   const result = await runPprCronStep(supabase, "ppr_materialize_plan_items", {

@@ -1,10 +1,9 @@
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { NamedRelation } from "@/lib/relation-normalization";
 import type { Profile } from "@/lib/types";
 import { canManageFloorsDirectory, canReadFloorsDirectory } from "@/lib/auth";
 import { listObjectRoomManageableObjectsForProfile, listObjectRoomReadableObjectsForProfile } from "@/lib/object-rooms";
-
-type ObjectRelation = { name: string } | Array<{ name: string }> | null;
 
 export type FloorRow = {
   id: string;
@@ -15,7 +14,7 @@ export type FloorRow = {
   created_at: string;
   updated_at: string;
   usage_count: number;
-  object: ObjectRelation;
+  object: NamedRelation;
 };
 
 const floorSortKeywordMap = new Map<string, number>([

@@ -1,14 +1,14 @@
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { hasScopedObjectAccessForProfile, listScopedObjectsForProfile } from "@/lib/object-access";
+import type { NamedRelation, RelationValue } from "@/lib/relation-normalization";
 import type { Profile } from "@/lib/types";
 
 const OBJECT_ROOM_READ_ROLES = new Set(["admin", "chief", "lead", "engineer", "object_engineer"]);
 const OBJECT_ROOM_MANAGE_ROLES = new Set(["admin", "chief", "lead", "object_engineer"]);
 
-type NamedRelation = { name: string } | Array<{ name: string }> | null;
-type FloorRelation = { id: string; name: string; sort_order: number; is_active: boolean } | Array<{ id: string; name: string; sort_order: number; is_active: boolean }> | null;
-type RoomTypeRelation = { id: string; name: string; is_active: boolean } | Array<{ id: string; name: string; is_active: boolean }> | null;
+type FloorRelation = RelationValue<{ id: string; name: string; sort_order: number; is_active: boolean }>;
+type RoomTypeRelation = RelationValue<{ id: string; name: string; is_active: boolean }>;
 
 export type ObjectRoomRow = {
   id: string;

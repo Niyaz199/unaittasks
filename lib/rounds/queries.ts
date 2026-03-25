@@ -1,5 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listScopedObjectsForProfile } from "@/lib/object-access";
+import {
+  resolveRelationName,
+  resolveRelationNameWithFallback,
+  type NamedRelation,
+  type RelationValue,
+} from "@/lib/relation-normalization";
 import type { Profile } from "@/lib/types";
 import { getRoundsProjectTimeZone } from "@/lib/rounds/constants";
 import { toOperationalDate } from "@/lib/rounds/date";
@@ -15,8 +21,7 @@ import type {
   RoundsTodayRow,
 } from "@/lib/rounds/types";
 
-type NamedRelation = { name: string } | Array<{ name: string }> | null;
-type FloorRelation = { name: string; sort_order?: number | null } | Array<{ name: string; sort_order?: number | null }> | null;
+type FloorRelation = RelationValue<{ name: string; sort_order?: number | null }>;
 
 type ConfigRoomRow = {
   id: string;
@@ -56,16 +61,6 @@ type TodayCheckinRow = {
   comment: string | null;
   photo_storage_path: string | null;
 };
-
-function resolveName(value: NamedRelation) {
-  if (Array.isArray(value)) return value[0]?.name ?? "—";
-  return value?.name ?? "—";
-}
-
-function resolveFloorName(value: FloorRelation, fallback: string | null) {
-  if (Array.isArray(value)) return value[0]?.name ?? fallback ?? "—";
-  return value?.name ?? fallback ?? "—";
-}
 
 function toContainsPattern(value: string) {
   return `%${value}%`;
@@ -177,9 +172,9 @@ export async function listRoundsConfigRoomsForProfile(
     .map((room) => ({
       id: room.id,
       object_id: room.object_id,
-      object_name: resolveName(room.object),
+      object_name: resolveRelationName(room.object),
       room_name: room.name,
-      floor_name: resolveFloorName(room.floor_ref, room.floor),
+      floor_name: resolveRelationNameWithFallback(room.floor_ref, room.floor),
       is_active: room.is_active,
       rounds_enabled: room.rounds_enabled,
       room_qr_token: qrByRoomId.get(room.id)?.qr_token ?? null,
@@ -317,9 +312,9 @@ export async function getRoundsTodayForProfile(
       return {
         room_id: room.id,
         object_id: room.object_id,
-        object_name: resolveName(room.object),
+        object_name: resolveRelationName(room.object),
         room_name: room.name,
-        floor_name: resolveFloorName(room.floor_ref, room.floor),
+        floor_name: resolveRelationNameWithFallback(room.floor_ref, room.floor),
         rounds_enabled: true,
         status: checkin ? "checked_in" : "missing",
         checked_in_at: checkin?.scanned_at_device ?? null,
@@ -413,8 +408,8 @@ export async function getRoundsArchiveForProfile(
       operational_date: row.operational_date,
       room_id: row.room_id,
       object_id: row.object_id,
-      object_name: resolveName(row.object),
-      room_name: resolveName(row.room),
+      object_name: resolveRelationName(row.object),
+      room_name: resolveRelationName(row.room),
       checked_in_by_user_id: row.checked_in_by_user_id,
       checked_in_by_display_name: row.checked_in_by_display_name,
       scanned_at_device: row.scanned_at_device,
