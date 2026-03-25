@@ -3,12 +3,14 @@ import { signOutAction } from "@/app/actions/auth-actions";
 import { NavShell } from "@/components/dashboard/nav-shell";
 import { OfflineSyncBootstrap } from "@/components/offline/offline-sync-bootstrap";
 import { MobileTabs } from "@/components/dashboard/mobile-tabs";
+import { RegisterSW } from "@/components/pwa/register-sw";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { profile } = await requireProfile();
 
   return (
     <div className="admin-shell">
+      <RegisterSW />
       <OfflineSyncBootstrap />
       <aside className="admin-sidebar desktop-only">
         <div className="grid">

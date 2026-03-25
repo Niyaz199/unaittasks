@@ -1,6 +1,7 @@
 import { requireProfile } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/ui/page-header";
+import { PushOptInCard } from "@/components/pwa/push-opt-in-card";
 
 export default async function ProfilePage() {
   const { profile, user } = await requireProfile();
@@ -18,6 +19,7 @@ export default async function ProfilePage() {
           На мобильном можно установить приложение через меню браузера (Добавить на главный экран).
         </div>
       </div>
+      <PushOptInCard />
     </section>
   );
 }
