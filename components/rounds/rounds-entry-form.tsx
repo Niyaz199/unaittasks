@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PhotoPicker, type PickedFile } from "@/components/tasks/photo-picker";
 import { enqueueRoundsCheckin } from "@/lib/offline/rounds-queue";
-import { compressRoundsPhoto } from "@/lib/rounds/client-photo";
+import { prepareRoundsPhoto, type PreparedRoundsPhoto } from "@/lib/rounds/client-photo";
 import { toOperationalDate } from "@/lib/rounds/date";
 import { extractRoundsToken } from "@/lib/rounds/token";
 import { useRoundsScannerConfig } from "@/components/rounds/rounds-scanner-config-provider";
@@ -39,6 +39,16 @@ type ResolveTokenPayload = {
   error?: string;
 };
 
+type PhotoPreparationStatus = "idle" | "preparing" | "ready";
+
+function buildPhotoPreparationKey(file: File) {
+  return `${file.name}:${file.size}:${file.type}:${file.lastModified}`;
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 export function RoundsEntryForm({ token, userId }: Props) {
   const router = useRouter();
   const { snapshot, isLoading } = useRoundsScannerConfig();
@@ -49,9 +59,29 @@ export function RoundsEntryForm({ token, userId }: Props) {
   const [message, setMessage] = useState<string | null>(null);
   const [isError, setIsError] = useState(false);
   const [lookupState, setLookupState] = useState<LookupState>("unknown");
+  const [photoPreparationStatus, setPhotoPreparationStatus] = useState<PhotoPreparationStatus>("idle");
   const [pending, startTransition] = useTransition();
+  const photoPreparationRef = useRef<{
+    key: string | null;
+    controller: AbortController | null;
+    promise: Promise<PreparedRoundsPhoto> | null;
+    result: PreparedRoundsPhoto | null;
+  }>({
+    key: null,
+    controller: null,
+    promise: null,
+    result: null,
+  });
+  const photoPreparationSeqRef = useRef(0);
+  const currentPhotoKeyRef = useRef<string | null>(null);
 
   const normalizedToken = useMemo(() => extractRoundsToken(token), [token]);
+  const currentPhoto = photoFiles[0]?.file ?? null;
+  const currentPhotoKey = useMemo(
+    () => (currentPhoto ? buildPhotoPreparationKey(currentPhoto) : null),
+    [currentPhoto]
+  );
+  currentPhotoKeyRef.current = currentPhotoKey;
 
   useEffect(() => {
     let cancelled = false;
@@ -113,10 +143,105 @@ export function RoundsEntryForm({ token, userId }: Props) {
     return fallback;
   }
 
+  function clearPhotoPreparation() {
+    photoPreparationSeqRef.current += 1;
+    photoPreparationRef.current.controller?.abort();
+    photoPreparationRef.current = {
+      key: null,
+      controller: null,
+      promise: null,
+      result: null,
+    };
+    setPhotoPreparationStatus("idle");
+  }
+
+  async function ensurePreparedPhoto(file: File) {
+    const key = buildPhotoPreparationKey(file);
+    const current = photoPreparationRef.current;
+
+    if (current.key === key) {
+      if (current.result) return current.result;
+      if (current.promise) return current.promise;
+    }
+
+    current.controller?.abort();
+
+    const controller = new AbortController();
+    const seq = ++photoPreparationSeqRef.current;
+    setPhotoPreparationStatus("preparing");
+
+    const promise = prepareRoundsPhoto(file, { signal: controller.signal })
+      .then((result) => {
+        if (controller.signal.aborted || currentPhotoKeyRef.current !== key || photoPreparationSeqRef.current !== seq) {
+          throw new DOMException("Photo processing aborted", "AbortError");
+        }
+
+        photoPreparationRef.current = {
+          key,
+          controller: null,
+          promise: Promise.resolve(result),
+          result,
+        };
+        setPhotoPreparationStatus("ready");
+        return result;
+      })
+      .catch((error) => {
+        if (controller.signal.aborted || isAbortError(error)) {
+          throw error;
+        }
+
+        const fallbackResult: PreparedRoundsPhoto = {
+          file,
+          strategy: "passthrough",
+          didFallback: true,
+        };
+
+        if (currentPhotoKeyRef.current === key && photoPreparationSeqRef.current === seq) {
+          photoPreparationRef.current = {
+            key,
+            controller: null,
+            promise: Promise.resolve(fallbackResult),
+            result: fallbackResult,
+          };
+          setPhotoPreparationStatus("ready");
+        }
+
+        return fallbackResult;
+      });
+
+    photoPreparationRef.current = {
+      key,
+      controller,
+      promise,
+      result: null,
+    };
+
+    return promise;
+  }
+
+  useEffect(() => {
+    if (!currentPhoto) {
+      clearPhotoPreparation();
+      return;
+    }
+
+    void ensurePreparedPhoto(currentPhoto).catch((error) => {
+      if (!isAbortError(error)) {
+        setPhotoPreparationStatus("idle");
+      }
+    });
+  }, [currentPhoto]);
+
+  useEffect(() => {
+    return () => {
+      photoPreparationRef.current.controller?.abort();
+    };
+  }, []);
+
   async function persistOffline(input?: {
     scannedAtDevice: string;
     clientEventId: string;
-    compressedFile: File | null;
+    preparedPhoto: PreparedRoundsPhoto | null;
   }) {
     if (!room) {
       setError("Помещение не найдено в локальной конфигурации.");
@@ -124,7 +249,8 @@ export function RoundsEntryForm({ token, userId }: Props) {
     }
 
     const scannedAtDevice = input?.scannedAtDevice ?? new Date().toISOString();
-    const compressedFile = input?.compressedFile ?? (photoFiles[0] ? await compressRoundsPhoto(photoFiles[0].file) : null);
+    const preparedPhoto = input?.preparedPhoto ?? (currentPhoto ? await ensurePreparedPhoto(currentPhoto) : null);
+    const compressedFile = preparedPhoto?.file ?? null;
     const clientEventId = input?.clientEventId ?? crypto.randomUUID();
     await enqueueRoundsCheckin({
       clientEventId,
@@ -158,7 +284,8 @@ export function RoundsEntryForm({ token, userId }: Props) {
 
     const scannedAtDevice = new Date().toISOString();
     const clientEventId = crypto.randomUUID();
-    const compressedFile = photoFiles[0] ? await compressRoundsPhoto(photoFiles[0].file) : null;
+    const preparedPhoto = currentPhoto ? await ensurePreparedPhoto(currentPhoto) : null;
+    const compressedFile = preparedPhoto?.file ?? null;
     const formData = new FormData();
     formData.set("room_id", room.room_id);
     formData.set("client_event_id", clientEventId);
@@ -193,7 +320,7 @@ export function RoundsEntryForm({ token, userId }: Props) {
       setPhotoFiles([]);
       window.setTimeout(() => router.replace("/rounds/scan"), 900);
     } catch {
-      await persistOffline({ scannedAtDevice, clientEventId, compressedFile });
+      await persistOffline({ scannedAtDevice, clientEventId, preparedPhoto });
     }
   }
 
@@ -236,6 +363,9 @@ export function RoundsEntryForm({ token, userId }: Props) {
               disabled={pending}
               label="Добавить фото"
             />
+            {currentPhoto && photoPreparationStatus === "preparing" ? (
+              <div className="text-soft">Подготавливаем фото...</div>
+            ) : null}
 
             <div className="row" style={{ flexWrap: "wrap" }}>
               <button className="btn btn-accent" type="button" onClick={handleSubmit} disabled={pending}>
