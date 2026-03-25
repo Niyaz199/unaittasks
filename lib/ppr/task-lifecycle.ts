@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { hasScopedObjectAccessForProfile, listScopedObjectIdsForProfile } from "@/lib/object-access";
 import type { Profile } from "@/lib/types";
 import {
   canAssignExecutorToPprTask,
@@ -38,16 +39,7 @@ export async function listPprActorAccessibleObjectIds(
   supabase: SupabaseClient,
   profile: Pick<Profile, "id" | "role">
 ) {
-  if (profile.role !== "lead" && profile.role !== "object_engineer") {
-    return [];
-  }
-
-  const { data, error } = await supabase
-    .from("user_objects")
-    .select("object_id")
-    .eq("user_id", profile.id);
-  if (error) throw error;
-  return (data ?? []).map((item) => item.object_id);
+  return listScopedObjectIdsForProfile(supabase, profile, "ppr_manage");
 }
 
 export async function buildPprTaskActor(
@@ -89,13 +81,13 @@ export async function assertPprTaskAssigneeCandidate(
     throw new Error("Выбранный исполнитель недопустим для ППР-заявки");
   }
 
-  const { count, error: accessError } = await supabase
-    .from("user_objects")
-    .select("object_id", { count: "exact", head: true })
-    .eq("user_id", assigneeId)
-    .eq("object_id", objectId);
-  if (accessError) throw accessError;
-  if ((count ?? 0) === 0) {
+  const hasAccess = await hasScopedObjectAccessForProfile(
+    supabase,
+    { id: profile.id, role: profile.role },
+    "ppr_execute",
+    objectId
+  );
+  if (!hasAccess) {
     throw new Error("Исполнитель должен иметь доступ к объекту ППР-заявки");
   }
 

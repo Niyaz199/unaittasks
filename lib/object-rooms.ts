@@ -1,12 +1,11 @@
-import { cache } from "react";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { hasScopedObjectAccessForProfile, listScopedObjectsForProfile } from "@/lib/object-access";
 import type { Profile } from "@/lib/types";
 
 const OBJECT_ROOM_READ_ROLES = new Set(["admin", "chief", "lead", "engineer", "object_engineer"]);
 const OBJECT_ROOM_MANAGE_ROLES = new Set(["admin", "chief", "lead", "object_engineer"]);
 
-type ObjectRow = { id: string; name: string };
 type NamedRelation = { name: string } | Array<{ name: string }> | null;
 type FloorRelation = { id: string; name: string; sort_order: number; is_active: boolean } | Array<{ id: string; name: string; sort_order: number; is_active: boolean }> | null;
 type RoomTypeRelation = { id: string; name: string; is_active: boolean } | Array<{ id: string; name: string; is_active: boolean }> | null;
@@ -59,42 +58,6 @@ function isSchemaCacheError(error: unknown) {
   return code === "PGRST204" || code === "PGRST205" || message.toLowerCase().includes("schema cache");
 }
 
-const listObjectScopedObjects = cache(
-  async (
-    supabase: SupabaseClient,
-    profileId: string,
-    role: Profile["role"],
-    mode: "read" | "manage"
-  ): Promise<ObjectRow[]> => {
-    if (role === "admin" || role === "chief") {
-      const { data, error } = await supabase.from("objects").select("id,name").order("name", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as ObjectRow[];
-    }
-
-    const canProceed =
-      mode === "manage"
-        ? role === "lead" || role === "object_engineer"
-        : role === "lead" || role === "engineer" || role === "object_engineer";
-    if (!canProceed) {
-      return [];
-    }
-
-    type UserObjectRow = { objects: ObjectRow | null };
-    const { data: scopedData, error: scopedError } = await supabase
-      .from("user_objects")
-      .select("objects(id,name)")
-      .eq("user_id", profileId);
-    if (scopedError) throw scopedError;
-
-    const rows = ((scopedData ?? []) as unknown as UserObjectRow[])
-      .map((row) => row.objects)
-      .filter((row): row is ObjectRow => row !== null);
-
-    return rows.sort((a, b) => a.name.localeCompare(b.name, "ru"));
-  }
-);
-
 export async function listObjectRoomReadableObjectsForProfile(
   supabase: SupabaseClient,
   profile: Pick<Profile, "id" | "role">
@@ -103,7 +66,7 @@ export async function listObjectRoomReadableObjectsForProfile(
     throw new Error("Недостаточно прав для чтения справочника помещений");
   }
 
-  return listObjectScopedObjects(supabase, profile.id, profile.role, "read");
+  return listScopedObjectsForProfile(supabase, profile, "object_rooms_read");
 }
 
 export async function listObjectRoomManageableObjectsForProfile(
@@ -114,7 +77,7 @@ export async function listObjectRoomManageableObjectsForProfile(
     throw new Error("Недостаточно прав для управления справочником помещений");
   }
 
-  return listObjectScopedObjects(supabase, profile.id, profile.role, "manage");
+  return listScopedObjectsForProfile(supabase, profile, "object_rooms_manage");
 }
 
 export async function listObjectRoomsForProfile(
@@ -197,9 +160,7 @@ export async function getObjectRoomByIdForProfile(
   if (error) throw error;
   if (!data) return null;
 
-  const readableObjects = await listObjectRoomReadableObjectsForProfile(supabase, profile);
-  const canAccess =
-    profile.role === "admin" || profile.role === "chief" || readableObjects.some((item) => item.id === data.object_id);
+  const canAccess = await hasScopedObjectAccessForProfile(supabase, profile, "object_rooms_read", data.object_id);
   if (!canAccess) return null;
 
   const { data: qrCode, error: qrError } = await supabase
@@ -241,7 +202,6 @@ export async function regenerateObjectRoomQrCodeForProfile(
     throw new Error("Недостаточно прав для регенерации QR помещения");
   }
 
-  const manageableObjects = await listObjectRoomManageableObjectsForProfile(supabase, profile);
   const { data: room, error: roomError } = await supabase
     .from("object_rooms")
     .select("id,object_id")
@@ -252,8 +212,7 @@ export async function regenerateObjectRoomQrCodeForProfile(
     throw new Error("Помещение не найдено");
   }
 
-  const canManage =
-    profile.role === "admin" || profile.role === "chief" || manageableObjects.some((item) => item.id === room.object_id);
+  const canManage = await hasScopedObjectAccessForProfile(supabase, profile, "object_rooms_manage", room.object_id);
   if (!canManage) {
     throw new Error("Помещение недоступно для регенерации QR");
   }

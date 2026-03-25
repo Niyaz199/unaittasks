@@ -1,5 +1,5 @@
-import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { listScopedObjectsForProfile } from "@/lib/object-access";
 import type { Profile } from "@/lib/types";
 import { getRoundsProjectTimeZone } from "@/lib/rounds/constants";
 import { toOperationalDate } from "@/lib/rounds/date";
@@ -88,73 +88,25 @@ async function listActiveRoomQrMap(supabase: SupabaseClient, roomIds: string[]) 
   );
 }
 
-const listRoundsScopedObjects = cache(
-  async (
-    supabase: SupabaseClient,
-    profileId: string,
-    role: Profile["role"],
-    mode: "scan" | "read" | "manage"
-  ): Promise<RoundsObjectOption[]> => {
-    if (role === "admin" || role === "chief") {
-      const { data, error } = await supabase.from("objects").select("id,name").order("name", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as RoundsObjectOption[];
-    }
-
-    if (mode !== "scan" && role === "tech") {
-      return [];
-    }
-
-    const result = new Map<string, RoundsObjectOption>();
-
-    if (role === "lead" || role === "engineer" || role === "object_engineer" || role === "tech") {
-      type UserObjectRow = { objects: RoundsObjectOption | null };
-      const { data, error } = await supabase
-        .from("user_objects")
-        .select("objects(id,name)")
-        .eq("user_id", profileId);
-      if (error) throw error;
-
-      for (const row of ((data ?? []) as unknown as UserObjectRow[])) {
-        if (row.objects) result.set(row.objects.id, row.objects);
-      }
-    }
-
-    if (role === "object_engineer") {
-      const { data, error } = await supabase
-        .from("objects")
-        .select("id,name")
-        .eq("object_engineer_id", profileId);
-      if (error) throw error;
-
-      for (const row of (data ?? []) as RoundsObjectOption[]) {
-        result.set(row.id, row);
-      }
-    }
-
-    return [...result.values()].sort((left, right) => left.name.localeCompare(right.name, "ru"));
-  }
-);
-
 export async function listRoundsReadableObjectsForProfile(supabase: SupabaseClient, profile: Pick<Profile, "id" | "role">) {
   if (!canReadRoundsReports(profile.role)) {
     throw new Error("Недостаточно прав для просмотра обходов");
   }
-  return listRoundsScopedObjects(supabase, profile.id, profile.role, "read");
+  return (await listScopedObjectsForProfile(supabase, profile, "rounds_read")) as RoundsObjectOption[];
 }
 
 export async function listRoundsManageableObjectsForProfile(supabase: SupabaseClient, profile: Pick<Profile, "id" | "role">) {
   if (!canManageRoundsConfig(profile.role)) {
     throw new Error("Недостаточно прав для настройки обходов");
   }
-  return listRoundsScopedObjects(supabase, profile.id, profile.role, "manage");
+  return (await listScopedObjectsForProfile(supabase, profile, "rounds_manage")) as RoundsObjectOption[];
 }
 
 export async function listRoundsScannerObjectsForProfile(supabase: SupabaseClient, profile: Pick<Profile, "id" | "role">) {
   if (!canUseRoundsScanner(profile.role)) {
     throw new Error("Недостаточно прав для работы со сканером обходов");
   }
-  return listRoundsScopedObjects(supabase, profile.id, profile.role, "scan");
+  return (await listScopedObjectsForProfile(supabase, profile, "rounds_scan")) as RoundsObjectOption[];
 }
 
 export async function getRoundsScannerConfigForProfile(supabase: SupabaseClient, profile: Pick<Profile, "id" | "role">) {

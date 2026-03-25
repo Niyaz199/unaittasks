@@ -1,5 +1,5 @@
-import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { listScopedObjectsForProfile, type ScopedObjectRow } from "@/lib/object-access";
 import type { Profile } from "@/lib/types";
 
 const STRUCTURE_MANAGER_ROLES = new Set(["admin", "chief", "lead", "object_engineer"]);
@@ -12,14 +12,7 @@ const QR_LAYER_ROLES = new Set(["admin", "chief", "lead", "engineer", "object_en
 
 export const RESPONSIBLE_ROLES = new Set(["lead", "engineer", "object_engineer"]);
 
-export type PprManageableObjectRow = {
-  id: string;
-  name: string;
-};
-
-type UserObjectRow = {
-  objects: PprManageableObjectRow | null;
-};
+export type PprManageableObjectRow = ScopedObjectRow;
 
 export function canAccessPprStructureScreens(role: Profile["role"]) {
   return STRUCTURE_MANAGER_ROLES.has(role);
@@ -91,33 +84,10 @@ export function assertPprQrQueryAccess(role: Profile["role"]) {
   }
 }
 
-const listPprManageableObjectsCached = cache(
-  async (supabase: SupabaseClient, profileId: string, role: Profile["role"]): Promise<PprManageableObjectRow[]> => {
-    if (role === "admin" || role === "chief") {
-      const { data, error } = await supabase.from("objects").select("id,name").order("name", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as PprManageableObjectRow[];
-    }
-
-    if (role !== "lead" && role !== "object_engineer") {
-      return [];
-    }
-
-    const { data, error } = await supabase.from("user_objects").select("objects(id,name)").eq("user_id", profileId);
-    if (error) throw error;
-
-    const rows = ((data ?? []) as unknown as UserObjectRow[])
-      .map((row) => row.objects)
-      .filter((row): row is PprManageableObjectRow => row !== null);
-
-    return rows.sort((a, b) => a.name.localeCompare(b.name, "ru"));
-  }
-);
-
 export async function listPprManageableObjectsForProfile(
   supabase: SupabaseClient,
   profile: Pick<Profile, "id" | "role">
 ): Promise<PprManageableObjectRow[]> {
   assertPprStructureQueryAccess(profile.role);
-  return listPprManageableObjectsCached(supabase, profile.id, profile.role);
+  return listScopedObjectsForProfile(supabase, profile, "ppr_manage");
 }
