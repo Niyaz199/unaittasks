@@ -298,7 +298,11 @@ Scanner flow mobile-first:
 
 - `RegisterSW` подключён в `app/(dashboard)/layout.tsx`, а не в публичном layout;
 - `sw.js` использует раздельные cache buckets для `shell`, `static`, `data`;
+- shell-маршруты сейчас включают `"/my"`, `"/rounds"` и `"/rounds/scan"`;
 - HTML navigation, static assets и data/API имеют разные стратегии кэширования;
+- shell кэшируется только для валидного HTML-ответа без redirect, с совпадающим final URL;
+- `sw.js` не сохраняет login/redirect fallback под ключом `"/my"`;
+- для offline navigation используется точный cached shell, а для прочих маршрутов безопасный fallback ведёт на `"/my"` без подмены HTML чужого route;
 - критичные data-paths не получают “тихий” stale fallback;
 - push не подписывается автоматически;
 - push opt-in вынесен в профиль и запускается только по явному действию пользователя.
@@ -429,6 +433,7 @@ docker compose up --build
 ## 13. Текущие ограничения
 
 - `PWA` и offline есть, но приложение не является fully-offline: большинство HTML/API-запросов по-прежнему ориентированы на сеть.
+- Уже установленное PWA может открываться офлайн на ранее подготовленных shell-маршрутах `"/my"`, `"/rounds"` и `"/rounds/scan"`, но это не означает universal offline для всех страниц App Router.
 - Offline-поддержка не покрывает весь `PPR`, справочники и административные операции.
 - Push-сценарии сейчас в основном относятся к обычному модулю задач; отдельного PPR push-контура нет.
 - `middleware.ts` по-прежнему не включает `/ppr/*` и `/rounds/*` в `matcher`, поэтому доступ в эти модули обеспечивается server-side guards, query layer и RLS.

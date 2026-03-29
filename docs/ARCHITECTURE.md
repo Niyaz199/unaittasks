@@ -342,7 +342,20 @@ Relation payloads из Supabase нормализуются через `lib/relat
 - static assets;
 - data/API requests.
 
+Shell-маршруты сейчас ограничены `"/my"`, `"/rounds"` и `"/rounds/scan"`.
+
+Для shell-кэша service worker сохраняет только валидный HTML-ответ:
+
+- `response.ok`;
+- без `redirected`;
+- с `content-type: text/html`;
+- с final URL, совпадающим с ожидаемым route.
+
+Это нужно, чтобы не сохранить login-page или redirect fallback под ключом `"/my"` при защищённой навигации через `middleware.ts`.
+
 Критичные data-paths возвращают явный `503 SW_OFFLINE`, а не молча stale cache.
+
+Для offline navigation service worker сначала ищет точный cached shell, а для прочих маршрутов использует безопасный fallback на `"/my"` без подмены HTML чужого route под текущий URL.
 
 ### Push
 
@@ -401,6 +414,7 @@ Offline queue покрывает:
 - `middleware.ts` защищает только часть приложения и не является универсальным gatekeeper для `PPR`/`Rounds`.
 - Offline-поддержка не является универсальной для всех доменов.
 - `service worker` не делает приложение fully-offline.
+- Уже установленное PWA может стартовать офлайн на ранее подготовленных shell-маршрутах, но `App Router`/`RSC` и большинство server-driven экранов всё ещё ориентированы на сеть.
 - Права доступа остаются многослойными: UI guards, page guards, API guards, query layer и RLS.
 
 ## 12. Практические правила для изменений

@@ -1,13 +1,12 @@
-const CACHE_VERSION = "v4";
+const CACHE_VERSION = "v5";
 const CACHE_PREFIX = "ops-tasker";
 const SHELL_CACHE_NAME = `${CACHE_PREFIX}-shell-${CACHE_VERSION}`;
 const STATIC_CACHE_NAME = `${CACHE_PREFIX}-static-${CACHE_VERSION}`;
 const DATA_CACHE_NAME = `${CACHE_PREFIX}-data-${CACHE_VERSION}`;
 
-const SHELL_ROUTES = ["/rounds", "/rounds/scan"];
+const SHELL_ROUTES = ["/my", "/rounds", "/rounds/scan"];
 const STATIC_ROUTES = ["/manifest.webmanifest", "/icon.svg"];
-const OFFLINE_FALLBACK_ROUTE = "/rounds";
-const OFFLINE_SCAN_ROUTE = "/rounds/scan";
+const OFFLINE_FALLBACK_ROUTE = "/my";
 const CRITICAL_DATA_PREFIXES = ["/api/", "/_next/data/"];
 
 function isHttpRequest(url) {
@@ -38,25 +37,66 @@ function isCriticalDataRequest(url) {
   return CRITICAL_DATA_PREFIXES.some((prefix) => url.pathname.startsWith(prefix));
 }
 
-function isCacheableShellRoute(url) {
-  return url.origin === self.location.origin && !url.search && SHELL_ROUTES.includes(url.pathname);
+function getShellCacheKey(url) {
+  if (url.origin !== self.location.origin) return null;
+  return SHELL_ROUTES.includes(url.pathname) ? url.pathname : null;
 }
 
-function getNavigationFallback(url) {
-  return url.pathname.startsWith("/rounds/scan") ? OFFLINE_SCAN_ROUTE : OFFLINE_FALLBACK_ROUTE;
+function isCacheableShellRoute(url) {
+  return getShellCacheKey(url) !== null && !url.search;
+}
+
+function getNavigationFallback() {
+  return OFFLINE_FALLBACK_ROUTE;
 }
 
 async function cacheResponse(cacheName, cacheKey, response) {
-  if (!response || !response.ok) return;
-  const cache = await caches.open(cacheName);
-  await cache.put(cacheKey, response.clone());
+  if (!response || !response.ok) return false;
+
+  try {
+    const responseClone = response.clone();
+    const cache = await caches.open(cacheName);
+    await cache.put(cacheKey, responseClone);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isValidShellResponse(expectedPathname, response) {
+  if (!response || !response.ok || response.redirected) return false;
+
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("text/html")) return false;
+
+  if (!response.url) return false;
+
+  try {
+    const finalUrl = new URL(response.url);
+    return finalUrl.origin === self.location.origin && finalUrl.pathname === expectedPathname;
+  } catch {
+    return false;
+  }
+}
+
+async function cacheShellResponse(route, response) {
+  if (!isValidShellResponse(route, response)) return false;
+  return cacheResponse(SHELL_CACHE_NAME, route, response);
+}
+
+async function precacheShellRoute(route) {
+  try {
+    const response = await fetch(route, { cache: "no-store" });
+    await cacheShellResponse(route, response);
+  } catch {
+    // Ignore shell precache misses. Existing valid shell entries stay intact.
+  }
 }
 
 async function precache() {
-  const shellCache = await caches.open(SHELL_CACHE_NAME);
   const staticCache = await caches.open(STATIC_CACHE_NAME);
   await Promise.all([
-    shellCache.addAll(SHELL_ROUTES),
+    ...SHELL_ROUTES.map((route) => precacheShellRoute(route)),
     staticCache.addAll(STATIC_ROUTES),
   ]);
 }
@@ -74,23 +114,31 @@ async function cleanupCaches() {
 async function handleNavigationRequest(event) {
   const request = event.request;
   const url = new URL(request.url);
+  const shellCacheKey = getShellCacheKey(url);
 
   try {
     const preloadResponse = event.preloadResponse ? await event.preloadResponse : null;
     const networkResponse = preloadResponse ?? (await fetch(request));
 
-    if (isCacheableShellRoute(url)) {
-      event.waitUntil(cacheResponse(SHELL_CACHE_NAME, url.pathname, networkResponse));
+    if (shellCacheKey && isCacheableShellRoute(url)) {
+      event.waitUntil(cacheShellResponse(shellCacheKey, networkResponse));
     }
 
     return networkResponse;
   } catch {
     const cache = await caches.open(SHELL_CACHE_NAME);
-    const exactMatch = isCacheableShellRoute(url) ? await cache.match(url.pathname) : null;
+    const exactMatch = shellCacheKey ? await cache.match(shellCacheKey) : null;
     if (exactMatch) return exactMatch;
 
-    const fallback = await cache.match(getNavigationFallback(url));
-    return fallback ?? Response.error();
+    const fallbackRoute = getNavigationFallback();
+    const fallback = await cache.match(fallbackRoute);
+    if (!fallback) return Response.error();
+
+    if (url.pathname === fallbackRoute) {
+      return fallback;
+    }
+
+    return Response.redirect(new URL(fallbackRoute, self.location.origin).toString(), 302);
   }
 }
 

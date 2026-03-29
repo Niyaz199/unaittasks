@@ -267,7 +267,9 @@
 - `manifest.webmanifest`;
 - регистрация service worker в dashboard-контуре;
 - раздельные cache buckets `shell/static/data`;
-- более предсказуемый offline fallback для `Rounds`;
+- safe shell cache для `"/my"`, `"/rounds"` и `"/rounds/scan"`;
+- защита от кэширования login/redirect fallback под ключом `"/my"`;
+- безопасный offline fallback без подмены HTML чужого маршрута;
 - push opt-in из профиля;
 - queue в `localforage`;
 - единый offline sync coordinator;
@@ -289,6 +291,7 @@ Offline-поддержка сейчас покрывает:
 
 Не покрыто offline-механизмом:
 
+- произвольные App Router-маршруты вне подготовленного shell;
 - весь `PPR`;
 - справочники;
 - административные операции;
