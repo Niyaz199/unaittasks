@@ -2,31 +2,40 @@
 
 ## 1. Общий статус
 
-PPR остается отдельным vertical slice внутри `unaittasks`, но доменная модель уже переведена на исправленную архитектуру:
+`PPR` остаётся отдельным vertical slice внутри проекта и уже работает на актуальной shared-архитектуре:
 
-- `group -> system -> equipment`
-- shared rooms через `object_rooms`
-- без `subsystem` в рабочем коде приложения
+- `group -> system -> equipment`;
+- shared rooms через `object_rooms`;
+- без `subsystem` в рабочем коде;
+- с room card и общим room QR;
+- с разрезанным query layer и вынесенными shared helpers.
 
 ## 2. Что реализовано
 
 - shared-layer помещений:
   - `lib/object-rooms.ts`
+  - `lib/object-room-qr.ts`
   - `app/actions/object-room-actions.ts`
-  - страница `/ppr/rooms` использует общий справочник
+  - `/ppr/rooms`
+  - `/ppr/rooms/[id]`
+  - `/ppr/rooms/qr/[token]`
 - PPR directory layer:
   - оборудование привязано к `system` и `room`
-  - подсистемный UI удален
+  - подсистемный UI удалён
 - templates и assignments:
   - шаблоны работают на уровне системы
-  - совместимость назначений проверяется по системе
+  - совместимость назначений проверяется по системе и объекту
 - calendar и task-layer:
   - query, scheduler и UI больше не используют `subsystem`
+  - календарь декомпозирован и облегчён
+  - карточка ППР-заявки читает attachments через server-side read model
+- query/helper layer:
+  - `lib/ppr/queries.ts` сохранён как public barrel
+  - внутри используются `access`, `structure-queries`, `calendar-queries`, `task-queries`, `task-read-models`
+  - shared helpers вынесены в `lib/object-access.ts` и `lib/relation-normalization.ts`
 - DB:
-  - добавлены `0019_object_rooms_and_ppr_system_refactor.sql`
-  - добавлены `0020_ppr_cleanup_legacy_structure.sql`
-- docs:
-  - базовые PPR-документы переписаны под новую модель
+  - shared room layer, room QR и rounds-compatible room model уже применены
+  - PPR продолжает работать поверх этой общей модели
 
 ## 3. Что считается legacy
 
@@ -35,9 +44,11 @@ PPR остается отдельным vertical slice внутри `unaittasks`
 - `ppr_subsystems`
 - `ppr_rooms`
 - любые формы и экраны, требующие `subsystem_id`
+- предположение, что комнаты существуют только внутри ППР
 
-## 4. Что важно для merge
+## 4. Что важно для текущего состояния
 
-- `main` не должен получать старую архитектуру ППР
-- при merge нужно брать уже refactored вариант `feature/ppr`
-- shared rooms следует рассматривать как часть ядра проекта, а не как PPR-specific таблицу
+- shared rooms следует рассматривать как часть ядра проекта, а не как PPR-specific таблицу;
+- room QR является общим QR помещения, а не отдельным “rounds only” сценарием;
+- любые изменения в комнатах нужно проверять одновременно для `PPR` и `Rounds`;
+- `PPR` и обычные `tasks` остаются независимыми доменами даже после общей архитектурной уборки.

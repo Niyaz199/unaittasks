@@ -1,24 +1,24 @@
 # Архитектура проекта
 
-> Документ описывает фактическую архитектуру репозитория на текущем этапе и согласован с `README.md`. Если поведение в коде и в этом файле расходится, источником истины считается код.
+> Документ описывает фактическую архитектуру репозитория на текущем этапе и согласован с `README.md`. Если код и документ расходятся, источником истины считается код.
 
 ## 1. Общая картина
 
-Проект состоит из двух прикладных контуров:
+Проект состоит из трёх прикладных контуров и одного shared-слоя:
 
-- классический контур эксплуатационных задач;
-- контур ППР с отдельной структурой объектов, планированием и lifecycle ППР-заявок.
+- обычные эксплуатационные задачи;
+- модуль ППР;
+- модуль обходов помещений;
+- shared-слой объектов, помещений, этажей, типов помещений, ролей, auth, audit, storage и PWA/offline-инфраструктуры.
 
 Технически это одно приложение на `Next.js 15` с `App Router`, где:
 
 - страницы и серверные компоненты живут в `app/`;
 - интерактивный UI вынесен в `components/`;
-- бизнес-правила и запросы к данным сосредоточены в `lib/`;
-- `route handlers` и `server actions` параллельно используются как два механизма записи;
-- источником данных выступает `Supabase` (`Auth`, `Postgres`, `RLS`, `Storage`);
-- на клиенте есть `PWA`-обвязка и частичная offline-очередь.
-
-Важно: проект уже не является “только задачником”. ППР-модуль сопоставим по размеру с основным контуром задач и имеет собственные страницы, API routes, server actions, доменную модель, миграции и сквозные процессы.
+- query/permission/data logic сосредоточены в `lib/`;
+- запись идёт через комбинацию `route handlers` и `server actions`;
+- источником данных выступает `Supabase` (`Auth`, `Postgres`, `RLS`, `Storage`, `RPC`);
+- в авторизованном dashboard-контуре есть `PWA`, offline queue и mobile navigation.
 
 ## 2. Архитектура по слоям
 
@@ -27,57 +27,60 @@
 UI строится вокруг server-first подхода:
 
 - страницы в `app/` по умолчанию серверные;
-- клиентские компоненты используются только там, где нужен браузерный API, локальное состояние, drag-and-drop или offline-логика;
-- единый dashboard-shell собирается в `app/(dashboard)/layout.tsx`.
+- клиентские компоненты используются там, где нужен браузерный API, локальное состояние, drag-and-drop, offline-синк или scanner/photo flow;
+- единый shell собирается в `app/(dashboard)/layout.tsx`.
 
 Основные UI-пакеты:
 
 - `components/tasks/*` — обычные задачи;
-- `components/ppr/*` — ППР;
-- `components/dashboard/*` — навигация и shell;
+- `components/ppr/*` — ППР, room details, calendar, task details;
+- `components/rounds/*` — scanner, today/config/archive/qr UI;
+- `components/dashboard/*` — sidebar и mobile navigation;
 - `components/ui/*` — примитивы;
-- `components/pwa/*` и `components/offline/*` — инфраструктурные клиентские компоненты.
+- `components/pwa/*`, `components/offline/*` — service worker, push opt-in и sync bootstrap.
 
-### 2.2 Маршруты и orchestration-слой
+### 2.2 Transport/orchestration-слой
 
-`app/` совмещает три разных механизма:
+`app/` совмещает три механизма:
 
 - страницы и layouts;
 - `app/api/*` для JSON/FormData API;
 - `app/actions/*` для `server actions`.
 
-Это означает, что orchestration-логика в проекте частично дублируется:
+На практике:
 
-- классические задачи имеют и `server actions`, и `API routes` для похожих операций;
-- ППР-структура и админские сценарии в основном опираются на `server actions`;
-- ППР lifecycle в основном вынесен в `API routes`, но часть операций остаётся в `server actions`, например закрытие ППР-заявки и генерация календарного плана.
+- обычные задачи используют и `API routes`, и `server actions`;
+- справочники и часть admin/PPR-форм опираются на `server actions`;
+- интерактивные сценарии `PPR task lifecycle`, `Rounds scanner`, `Rounds config` идут через `API routes`;
+- `PPR calendar` использует смешанный подход: page + actions + scheduler/API cron.
 
 ### 2.3 Доменный слой
 
 Бизнес-логика в `lib/` разделена по доменам:
 
 - `lib/tasks.ts`, `lib/task-permissions.ts`, `lib/task-sort.ts`, `lib/task-presentation.ts` — обычные задачи;
-- `lib/ppr/*` — ППР-домен;
-- `lib/auth.ts`, `lib/api-auth.ts` — аутентификация и роль/профиль;
-- `lib/attachments.ts`, `lib/ppr/files.ts` — storage и signed URLs;
-- `lib/offline/queue.ts` — offline queue;
+- `lib/ppr/*` — ППР;
+- `lib/rounds/*` — обходы;
+- `lib/object-rooms.ts`, `lib/floors.ts`, `lib/room-types.ts` — shared rooms/directories;
+- `lib/object-access.ts` — единый shared object-scope access layer;
+- `lib/relation-normalization.ts` — общий слой relation unwrap/name normalization;
+- `lib/auth.ts`, `lib/api-auth.ts` — request-scoped auth/session helpers;
+- `lib/offline/*` — очереди и sync coordinator;
 - `lib/audit.ts`, `lib/push.ts` — сквозная инфраструктура.
-
-Доменные модули используются и страницами, и API, и server actions, но не всегда одинаково глубоко: часть правил лежит в `lib/*`, а часть повторяется на уровне handlers.
 
 ### 2.4 Данные и интеграции
 
 Хранилище построено на Supabase:
 
-- `Auth` — сессии и пользователи;
+- `Auth` — сессии;
 - `profiles` — прикладной профиль пользователя и роль;
 - `Postgres + RLS` — основная доменная модель;
-- `Storage` — файлы обычных задач и ППР;
-- `RPC` — pause/archive/PPR cron-операции.
+- `Storage` — `task-attachments`, `ppr-files`, `rounds-files`;
+- `RPC` — pause/archive, calendar/materialization и rounds scanner/config logic.
 
 Приложение использует три клиента Supabase:
 
-- `lib/supabase/server.ts` — SSR и server actions;
+- `lib/supabase/server.ts` — SSR и actions;
 - `lib/supabase/browser.ts` — клиентский доступ, когда он нужен;
 - `lib/supabase/admin.ts` — service role для системных операций.
 
@@ -87,58 +90,37 @@ UI строится вокруг server-first подхода:
 
 Содержит:
 
-- `layout.tsx` — корневой layout с `RegisterSW`;
-- `(dashboard)/layout.tsx` — авторизованный shell, `OfflineSyncBootstrap`, боковое меню и мобильные табы;
-- страницы классического контура задач;
-- страницы ППР под `/ppr`;
+- `(dashboard)/layout.tsx` — авторизованный shell, `RegisterSW`, `OfflineSyncBootstrap`, sidebar и mobile tabs;
+- страницы модулей `Tasks`, `PPR`, `Rounds`, справочников и профиля;
 - `app/api/*` — API routes;
 - `app/actions/*` — server actions.
 
-Ключевая деталь: `OfflineSyncBootstrap` находится не в корневом layout, а в dashboard layout. Offline-синк работает только в авторизованном контуре приложения.
+Ключевая деталь:
+
+- `RegisterSW` и offline bootstrap подключены в dashboard layout;
+- service worker и queue orchestration активируются только в авторизованном контуре.
 
 ### `components/`
 
-Слой UI-компонентов.
-
-- `tasks/` — формы, карточки, списки, фильтры, offline-aware status/comment UI;
-- `ppr/` — dashboard, каталоги, календарь, QR, карточки ППР-заявок;
-- `dashboard/` — навигация;
-- `ui/` — базовые примитивы;
-- `pwa/` — регистрация service worker и push-подписки;
-- `offline/` — bootstrap синка очереди.
+- `tasks/` — списки, карточки, формы, offline-aware task UI;
+- `ppr/` — dashboard, справочники, room/equipment details, calendar, task details;
+- `rounds/` — scanner config provider, entry form, today/config boards, QR board;
+- `dashboard/` — main nav и mobile launcher;
+- `pwa/` — service worker registration и push opt-in;
+- `offline/` — bootstrap синка.
 
 ### `lib/`
 
 Главный слой прикладной логики.
 
-- `auth.ts` — получение профиля, role guards, базовые capability-функции;
-- `api-auth.ts` — унифицированное получение `{ user, profile, supabase }` для API routes;
-- `floors.ts`, `room-types.ts`, `object-rooms.ts` — глобальные справочники этажей, типов помещений и модель помещений объектов;
-- `tasks.ts` — списки и чтение задач;
-- `task-permissions.ts` — матрица доступа и допустимых переходов по обычным задачам;
-- `ppr/queries.ts` — основной query-layer ППР;
-- `ppr/permissions.ts` — права доступа по слоям ППР;
-- `ppr/task-lifecycle.ts` — lifecycle ППР-заявок;
-- `ppr/scheduler.ts` — генерация и cron-оркестрация планирования;
-- `offline/queue.ts` — IndexedDB/localforage очередь.
+Ключевые точки:
 
-### `supabase/`
-
-Содержит SQL-миграции и seed.
-
-Важно: фактический набор миграций уже включает не только базовые задачи, но и большой пакет миграций ППР и глобальных справочников вплоть до `0021_global_room_directories.sql`.
-
-### `public/`
-
-PWA-ассеты:
-
-- `manifest.webmanifest`;
-- `sw.js`;
-- `icon.svg`.
-
-### `docs/`
-
-Текущие проектные документы. `README.md` даёт общий обзор, а этот файл фиксирует более прикладную архитектурную модель.
+- `auth.ts` — `getRequestSession()`, `requireProfile()`, request-scoped reuse session/profile;
+- `api-auth.ts` — reuse того же request session в API routes;
+- `object-access.ts` — единый shared object-scope helper для `PPR`, `Rounds`, `object_rooms`;
+- `relation-normalization.ts` — shared helper layer для relation payloads;
+- `ppr/queries.ts` — barrel export поверх нескольких PPR query submodules;
+- `offline/sync-coordinator.ts` — единый coordinator для task + rounds offline sync.
 
 ## 4. Реально используемые контуры
 
@@ -154,77 +136,79 @@ PWA-ассеты:
 
 Данные и права обслуживаются через `lib/tasks.ts` и `lib/task-permissions.ts`.
 
-### Контур 2. ППР
+### Контур 2. Shared rooms/directories
+
+Главные страницы:
+
+- `/directories/floors`
+- `/directories/room-types`
+- `/ppr/rooms`
+- `/ppr/rooms/[id]`
+- `/ppr/rooms/qr/[token]`
+
+Shared rooms теперь обслуживают одновременно:
+
+- room directory для ППР;
+- room card;
+- общий room QR flow;
+- `Rounds config/today/archive/scanner`.
+
+### Контур 3. ППР
 
 Главные подмодули:
 
-- глобально переиспользуемая структура помещений: `/directories/floors`, `/directories/room-types`;
-- структура: `/ppr/system-groups`, `/ppr/systems`, `/ppr/rooms`, `/ppr/equipment`;
+- структура: `/ppr/system-groups`, `/ppr/systems`, `/ppr/equipment`, `/ppr/rooms`;
 - планирование: `/ppr/templates`, `/ppr/assignments`, `/ppr/calendar`;
 - исполнение: `/ppr/tasks`, `/ppr/my`, `/ppr/archive`, `/ppr/tasks/[id]`;
 - QR-entry: `/ppr/qr/[token]`.
 
-Этот контур использует свой доменный пакет `lib/ppr/*`, свои API routes и собственную модель таблиц/миграций.
+Внутри `lib/ppr/*` query layer уже не монолитный:
 
-### Контур 3. Обходы
+- `access.ts`
+- `structure-queries.ts`
+- `calendar-queries.ts`
+- `task-queries.ts`
+- `task-read-models.ts`
+
+Публичный import `@/lib/ppr/queries` сохранён как barrel.
+
+### Контур 4. Обходы
 
 Главные подмодули:
 
-- scanner flow: `/rounds/scan` и deep-link `/rounds/scan?token=...`;
-- контроль исполнения: `/rounds/today`, `/rounds/archive`;
+- home: `/rounds`;
+- scanner flow: `/rounds/scan`, `/rounds/entry/[token]`, `/rounds/scan?token=...`;
+- отчётность: `/rounds/today`, `/rounds/archive`;
 - конфигурация: `/rounds/config`, `/rounds/qr`.
 
-Этот контур использует общий справочник `object_rooms`, отдельный доменный пакет `lib/rounds/*`, свои API routes `app/api/rounds/*` и отдельную offline-очередь `lib/offline/rounds-queue.ts`.
+Этот контур использует:
 
-### Контур 4. Справочники и администрирование
+- shared `object_rooms`;
+- shared room QR через `object_room_qr_codes`;
+- доменный пакет `lib/rounds/*`;
+- отдельную offline-очередь `lib/offline/rounds-queue.ts`.
 
-- `/users`
-- `/objects`
-- `/directories/floors`
-- `/directories/room-types`
-- `/audit`
-- `/profile`
+## 5. Навигация и модульная модель
 
-Это не отдельный домен, а обслуживающий контур вокруг двух основных модулей.
+Desktop navigation организована секциями:
 
-## 5. Где есть дублирование логики
+- `Задачи`
+- `ППР`
+- `Обходы`
+- `Справочники`
+- `Сервис`
 
-### Обычные задачи
+Клик по родительскому пункту `ППР` или `Обходы`:
 
-Для обычных задач существует двойной путь записи:
+- открывает главную страницу модуля;
+- одновременно раскрывает список подразделов;
+- не требует отдельного дублирующего подпункта “Модуль ...”.
 
-- `server actions` в `app/actions/task-actions.ts`;
-- `API routes` в `app/api/tasks/*`.
+На мобильном:
 
-На практике:
-
-- формы создания и часть административных сценариев опираются на `server actions`;
-- интерактивные и offline-aware действия клиента чаще идут через `API routes`;
-- статус, комментарии и часть team-операций существуют в обоих представлениях.
-
-Следствие: документация и изменения должны учитывать, что часть правил поддерживается в двух местах.
-
-### ППР
-
-У ППР разделение более выражено:
-
-- справочники, шаблоны, назначения и часть календаря идут через `server actions`;
-- lifecycle ППР-заявок в основном живёт в `app/api/ppr/tasks/*`;
-- закрытие ППР-заявки осталось `server action` (`closePprTaskAction`).
-
-То есть ППР не полностью “API-first” и не полностью “actions-first”.
-
-### Права
-
-Права частично распределены между:
-
-- `lib/auth.ts`;
-- `lib/task-permissions.ts`;
-- `lib/ppr/permissions.ts`;
-- `lib/ppr/queries.ts` с access-gates на уровне выборок;
-- RLS-политиками в Supabase.
-
-Это осознанное многослойное ограничение, но из-за него важно синхронно обновлять код и документацию.
+- есть отдельный launcher `Задачи / ППР / Обходы`;
+- сохранены быстрые табы `Мои / Новые / Архив / Справ. или Профиль`;
+- доступ к базовому task-модулю не исчезает при наличии PPR/Rounds.
 
 ## 6. Связи между слоями
 
@@ -233,295 +217,196 @@ PWA-ассеты:
 Типичный путь чтения:
 
 1. Страница вызывает `requireProfile()`.
-2. Получает серверный Supabase client.
+2. Получает server Supabase client из `getRequestSession()`.
 3. Вызывает query-layer из `lib/*`.
 4. Передаёт данные в `components/*`.
 
-### Клиентский UI -> запись
-
-Есть два варианта:
-
-1. Через `server action` из формы.
-2. Через `fetch` в `app/api/*`.
-
-Для интерактивных операций второй вариант используется чаще, особенно там, где нужен offline fallback или немедленный JSON-ответ.
-
-### API routes / actions -> Supabase
+### API / action -> данные
 
 Handlers используют:
 
 - `getApiSession()` для API routes;
-- `requireProfile()` + `createSupabaseServerClient()` для server actions.
+- `requireProfile()` + server client для actions.
 
 Дальше вызывается:
 
-- либо query/permission-логика из `lib/*`;
-- либо прямой запрос к таблицам/RPC с локальной проверкой условий.
+- query/permission logic из `lib/*`;
+- либо RPC/SQL операции с локальной валидацией payload и scope.
 
-### Файлы
+### Shared object scope
 
-Для файлов путь такой:
+Object-scoped access теперь централизован в `lib/object-access.ts`.
 
-1. Клиент отправляет `FormData`.
-2. Handler валидирует тип/размер/количество.
-3. Файл уходит в приватный bucket.
-4. Метаданные пишутся в таблицу.
-5. На чтении пользователю выдаётся signed URL.
+Этим пользуются:
 
-Buckets:
+- `object_rooms`;
+- `PPR access`;
+- `Rounds queries`;
+- `PPR task lifecycle`.
 
-- `task-attachments` — обычные задачи;
-- `ppr-files` — ППР.
+Это уменьшило дублирование `user_objects`-логики и выровняло поведение между модулями.
 
-### Offline и PWA
+### Relation normalization
 
-`RegisterSW` включён глобально, а offline queue подключается только в dashboard layout.
+Relation payloads из Supabase нормализуются через `lib/relation-normalization.ts`.
 
-Итог:
+Этим пользуются:
 
-- PWA-обвязка доступна всему приложению;
-- offline sync фактически относится к авторизованному контуру обычных задач.
+- `Rounds query layer`;
+- `object_rooms`;
+- `PPR calendar/scheduler`;
+- часть shared read models.
 
 ## 7. Ключевые сквозные процессы
 
-### 7.1 Смена статуса обычной задачи
-
-Основной интерактивный путь:
-
-1. `StatusControl` или `TaskActionMenu`.
-2. Если сети нет, действие ставится в `offline/queue.ts`.
-3. Если сеть есть, вызывается `POST /api/tasks/[id]/status`.
-4. API route проверяет сессию, читает задачу, сверяет права через `canChangeStatus`.
-5. Проверяет допустимость перехода через `canTransitionTaskStatus`.
-6. Обновляет `tasks`, пишет `audit_log`.
-
-Отдельная ветка:
-
-- переход в `paused` идёт не через `/status`, а через `/pause`;
-- переход `new -> accepted` также существует как `takeTaskInWork` server action.
-
-Вывод: lifecycle обычных задач размазан между несколькими entry points.
-
-### 7.2 Комментарий к обычной задаче
-
-Основной путь:
-
-1. `CommentForm`.
-2. При офлайне — `enqueueAction(type: "add_comment")`.
-3. При онлайне — `POST /api/tasks/[id]/comments`.
-4. Route проверяет право чтения задачи.
-5. Вставляет комментарий, пишет audit, запускает push наблюдателям.
-6. Вложения при наличии отправляются отдельным запросом в `/attachments`.
-
-Замечание: комментарий может быть создан без текста только в составе API-схемы? Нет. Для обычных задач API сейчас принимает `body` как строку и затем `trim()`, поэтому бизнес-ожидание “комментарий только с фото” зависит от текущего поведения формы и обработчика вложений, а не от отдельной доменной модели комментария.
-
-### 7.3 Смена статуса ППР-заявки
+### 7.1 Room QR -> room card / rounds scanner
 
 Путь:
 
-1. Клиент вызывает `POST /api/ppr/tasks/[id]/status`.
-2. Route получает задачу через `getPprTaskByIdForProfile`.
-3. Формируется PPR-actor через `buildPprTaskActor`.
-4. Проверяются `canStartPprTask` или `canCompletePprTask`.
-5. При переходе в `done` дополнительно проверяются evidence: минимум 1 комментарий и 1 фото.
-6. Обновляется `ppr_tasks`, пишется audit.
+1. Помещение создаётся в `object_rooms`.
+2. Для него автоматически появляется активный room QR в `object_room_qr_codes`.
+3. `/ppr/rooms/qr/[token]` резолвит token в room card `/ppr/rooms/[id]`.
+4. Тот же token может использоваться в `Rounds scanner`.
+5. Scanner route уже проверяет состояние помещения для обходов: `enabled / disabled / inactive / configured / invalid`.
 
-### 7.4 Закрытие и отмена ППР-заявки
+### 7.2 Rounds scan -> resolve -> confirm -> sync
 
-- отмена идёт через `POST /api/ppr/tasks/[id]/cancel`;
-- закрытие идёт через `closePprTaskAction`.
+Путь:
 
-Обе операции синхронизируют статусы с `ppr_month_plan_items`.
+1. Пользователь открывает `/rounds/scan` или deep-link `/rounds/entry/[token]`.
+2. `RoundsEntryForm` ищет помещение в локальном snapshot.
+3. При необходимости делает fallback в `/api/rounds/resolve/[token]`.
+4. При submit вызывает `/api/rounds/checkins` или ставит check-in в offline queue.
+5. `runOfflineSync()` координирует отложенную отправку.
 
-Это важная архитектурная особенность: финализация ППР lifecycle не сосредоточена в одном transport-слое.
+### 7.3 Rounds config -> save -> read -> print QR
 
-### 7.5 Права доступа
+Путь:
 
-Проверки идут в несколько слоёв:
+1. `/rounds/config` читает только доступные объекты.
+2. После выбора объекта UI переключается в `object -> floors -> rooms`.
+3. Сохранение идёт через `/api/rounds/config`.
+4. Source of truth — `object_rooms.rounds_enabled`.
+5. `/rounds/qr` строится уже по сохранённому состоянию.
 
-1. `middleware.ts` защищает часть dashboard-маршрутов по cookie.
-2. Страницы вызывают `requireProfile()` и дополнительно фильтруют доступ.
-3. API routes вызывают `getApiSession()`.
-4. Доменный слой применяет `can*`-проверки.
-5. На данных работает RLS.
+### 7.4 PPR task details -> comments -> attachments
 
-Критичная деталь:
+Путь:
 
-- `middleware.ts` не включает `/ppr` в `matcher`;
-- доступ к ППР обеспечивается не middleware, а server-side проверками в страницах, API и actions.
+1. Страница читает task, work items, assignee candidates, comments и attachment read model server-side.
+2. `PprTaskDetails` рендерит карточку, lifecycle controls, comment form и galleries.
+3. Комментарии пишутся через `/api/ppr/tasks/[id]/comments`.
+4. Attachments пишутся через `/api/ppr/tasks/[id]/attachments`.
 
-### 7.6 Offline sync
+После remediation attachment waterfall из карточки убран.
 
-Сейчас offline queue покрывает:
+### 7.5 PPR calendar -> month plan -> materialization
 
-- `update_status` обычных задач;
-- `add_comment` обычных задач.
-- `rounds_checkin` в модуле обходов, включая фото.
+Путь:
 
-`OfflineSyncBootstrap`:
+1. `/ppr/calendar` читает systems, year overview, month plans и month plan items.
+2. UI разбит на year view, month section, filters drawer и item drawers.
+3. Месячный план генерируется через `generatePprMonthPlanAction`.
+4. Carryover/materialization/sync статусов оркестрируются scheduler/cron слоем.
 
-- запускает `flushQueue()` при mount;
-- слушает событие `online`;
-- повторно отправляет отложенные запросы.
+## 8. Performance и remediation-состояние
 
-Очередь не покрывает:
+Уже внесены ключевые улучшения:
 
-- ППР;
-- файлы;
-- паузу;
-- team management;
-- справочники;
-- админские операции.
+- выравнивание прав `Rounds config` и data layer;
+- единый offline sync coordinator вместо параллельных запусков;
+- server-side attachment read model для `PPR task details`;
+- перенос части фильтрации ближе к data/query layer;
+- request-scoped reuse сессии и профиля;
+- reuse одного server Supabase client на тяжёлых SSR-экранах;
+- dedupe scanner config fetch и более узкий payload;
+- декомпозиция тяжёлого `PprCalendar`;
+- object-scoped loading для тяжёлых screens `PPR rooms/equipment` и `Rounds config`;
+- route-level `loading.tsx` для тяжёлых экранов;
+- module-level `error.tsx` для `PPR` и `Rounds`;
+- selective lazy loading тяжёлых client-only блоков.
 
-### 7.7 PWA и push
+## 9. PWA, offline и mobile
 
-Путь push-подписки:
+### Service worker
 
-1. `RegisterSW` регистрирует `sw.js`.
-2. При наличии VAPID-ключа запрашивает push subscription.
-3. Отправляет подписку в `/api/push/subscribe`.
-4. Route сохраняет её в `push_subscriptions`.
+`public/sw.js` использует раздельные cache buckets:
 
-Путь отправки push:
+- `shell`
+- `static`
+- `data`
 
-1. Код вызывает `sendPushToUser`.
-2. Используется admin client.
-3. `web-push` отправляет уведомления по подпискам.
-4. `sw.js` показывает notification и открывает URL.
+Стратегии разделены для:
 
-Push сейчас реально используются в контуре обычных задач. Для ППР выделенных push-сценариев нет.
+- HTML navigation;
+- static assets;
+- data/API requests.
 
-## 8. API routes и server actions
+Критичные data-paths возвращают явный `503 SW_OFFLINE`, а не молча stale cache.
 
-### Основные API routes
+### Push
 
-Обычные задачи:
+Путь push-подписки теперь такой:
 
-- `/api/tasks/[id]/status`
-- `/api/tasks/[id]/pause`
-- `/api/tasks/[id]/comments`
-- `/api/tasks/[id]/history`
-- `/api/tasks/[id]/team`
-- `/api/tasks/[id]/attachments`
-- `/api/tasks/[id]/archive`
+1. `RegisterSW` только регистрирует `sw.js`.
+2. Явный opt-in происходит из `PushOptInCard` в профиле.
+3. Только после действия пользователя запрашивается `Notification.requestPermission()`.
+4. Подписка сохраняется в `/api/push/subscribe`.
 
-Push и cron:
+Push сейчас реально используются в task-контуре. Для ППР и обходов отдельного push-контура нет.
 
-- `/api/push/subscribe`
-- `/api/push/test`
-- `/api/push/send-assignment`
-- `/api/cron/archive`
+### Offline sync
 
-ППР:
+Offline queue покрывает:
 
-- `/api/ppr/tasks/[id]/status`
-- `/api/ppr/tasks/[id]/assign`
-- `/api/ppr/tasks/[id]/cancel`
-- `/api/ppr/tasks/[id]/comments`
-- `/api/ppr/tasks/[id]/attachments`
-- `/api/ppr/tasks/[id]/reschedule`
-- `/api/ppr/qr/[token]`
-- `/api/ppr/cron/run`
+- `update_status` и `add_comment` для обычных задач;
+- `rounds_checkin` с фото для обходов.
 
-Обходы:
+`runOfflineSync()`:
 
-- `/api/rounds/config`
-- `/api/rounds/today`
-- `/api/rounds/archive`
-- `/api/rounds/checkins`
-- `/api/rounds/qr/[token]`
-- `/api/rounds/qr/generate`
+- синхронизирует task queue и rounds queue;
+- не допускает параллельный flush;
+- умеет повторный запуск после in-flight цикла.
 
-### Основные server actions
+### Фото в обходах
 
-Обычные задачи:
+В `Rounds` фото подготавливается до submit:
 
-- `takeTaskInWork`
-- `updateTaskStatus`
-- `pauseTask`
-- `addTaskComment`
-- `createTaskAction`
-- `addTaskTeamMemberAction`
-- `removeTaskTeamMemberAction`
+- основной путь — background prepare / worker;
+- fallback — безопасный `passthrough`, если worker недоступен;
+- stale state при быстрой замене/удалении фото отсечён на уровне sequence/key checks.
 
-Справочники и auth:
+## 10. Тестовый контур
 
-- `signOutAction`
-- user/object actions
+Добавлен минимальный `Playwright` smoke/e2e baseline:
 
-ППР:
+- auth redirect;
+- UI login;
+- `Rounds config` save/read;
+- room QR resolve + scanner confirm flow;
+- `PPR task details`;
+- `PPR calendar` month route;
+- optional/manual-only smoke на month generation.
 
-- directory actions;
-- template actions;
-- calendar actions;
-- `closePprTaskAction`.
+Тестовый слой живёт отдельно от production-кода:
 
-## 9. Модель данных на уровне доменов
+- `playwright.config.ts`
+- `tests/e2e/*`
+- `tests/e2e/README.md`
 
-### Общий контур
+## 11. Ограничения текущей архитектуры
 
-Базовые сущности:
+- Обычные задачи и ППР используют похожие бизнес-концепции, но остаются двумя независимыми доменами.
+- Часть прикладных операций по-прежнему размазана между `API routes` и `server actions`.
+- `middleware.ts` защищает только часть приложения и не является универсальным gatekeeper для `PPR`/`Rounds`.
+- Offline-поддержка не является универсальной для всех доменов.
+- `service worker` не делает приложение fully-offline.
+- Права доступа остаются многослойными: UI guards, page guards, API guards, query layer и RLS.
 
-- `profiles`
-- `objects`
-- `user_objects`
-- `tasks`
-- `task_team_members`
-- `task_comments`
-- `task_attachments`
-- `audit_log`
-- `push_subscriptions`
+## 12. Практические правила для изменений
 
-### ППР-контур
-
-Ключевые сущности по миграциям и query-layer:
-
-- `floors`
-- `room_types`
-- `ppr_system_groups`
-- `ppr_systems`
-- `object_rooms`
-- `ppr_equipment`
-- `ppr_equipment_qr_codes`
-- `ppr_work_templates`
-- `ppr_work_checklist_items`
-- `ppr_equipment_work_assignments`
-- `ppr_month_plans`
-- `ppr_month_plan_items`
-- `ppr_tasks`
-- `ppr_task_work_items`
-- `ppr_task_comments`
-- `ppr_task_attachments`
-
-### Контур обходов
-
-Ключевые сущности:
-
-- расширение `object_rooms` полями `rounds_enabled`, `rounds_qr_token`, `rounds_qr_generated_at`
-- `rounds_checkins`
-- bucket `rounds-files`
-
-Отдельно есть file-слой ППР через bucket `ppr-files` и таблицы вложений для оборудования, шаблонов и ППР-задач, но в текущем UI наиболее явно задействованы именно вложения ППР-заявок.
-
-Дополнение по помещениям:
-
-- `object_rooms` теперь использует `floor_id` и `room_type_id` как основные связи;
-- legacy-поле `object_rooms.floor` временно сохранено для безопасной миграции и fallback-отображения старых данных;
-- глобальные справочники `floors` и `room_types` архитектурно вынесены из ППР, но уже используются в `/ppr/rooms`, `/ppr/equipment` и календарных выборках.
-
-## 10. Ограничения текущей архитектуры
-
-- Обычные задачи и ППР используют похожие концепции, но реализованы разными контурами без общего абстрактного доменного слоя.
-- Часть прикладных операций дублируется между `API routes` и `server actions`.
-- `middleware.ts` защищает только часть приложения и не является универсальным gatekeeper для всех авторизованных экранов.
-- Offline-поддержка теперь охватывает часть task-flow и модуль обходов, но не является универсальной для всех доменов.
-- `service worker` по-прежнему не делает приложение fully-offline, хотя дополнительно кэширует shell обходов и fallback-навигацию для scanner flow.
-- Права доступа распределены между UI, handlers, `lib/*` и RLS, поэтому изменение одной точки без остальных может привести к рассинхрону.
-
-## 11. Практические правила для изменений
-
-- Для UI-форм с полноценным submit и revalidate естественнее использовать `server actions`.
-- Для интерактивных операций, offline fallback и JSON-ответов естественнее использовать `API routes`.
-- Любое изменение прав нужно проверять минимум в `lib/auth.ts`, `lib/task-permissions.ts` или `lib/ppr/permissions.ts`, а также в реальных entry points.
-- Изменения в lifecycle задач и ППР нужно смотреть не только в transport-слое, но и в query/permission/helpers.
-- Для PPR-изменений важно учитывать связь с `ppr_month_plan_items`, календарём и cron-оркестрацией.
+- Для interactive/offline-aware сценариев предпочтительнее `API routes`.
+- Для форм с revalidate и server-first submit естественнее `server actions`.
+- Любое изменение прав нужно проверять минимум в page-level guard, API/action entry point, query layer и RLS.
+- Для изменений в `PPR` важно учитывать не только UI, но и `scheduler`, `task-lifecycle`, `month plan` и barrel `queries`.
+- Для изменений в `Rounds` важно проверять вместе `config`, `scanner`, `today/archive`, room QR и offline queue.

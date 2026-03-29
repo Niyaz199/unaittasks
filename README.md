@@ -2,135 +2,234 @@
 
 ## 1. О проекте
 
-`Задачник эксплуатации` — это приложение на `Next.js` и `Supabase` для трёх связанных сценариев:
+`Задачник эксплуатации` — это приложение на `Next.js 15` и `Supabase` для трёх связанных прикладных контуров:
 
-- оперативные эксплуатационные задачи;
-- планово-предупредительные работы (ППР).
-- обходы помещений по QR.
+- обычные эксплуатационные задачи;
+- модуль ППР;
+- модуль обходов помещений.
 
-Проект использует `App Router`, серверные компоненты, `server actions`, `route handlers`, роли пользователей, `RLS` в Supabase, приватные storage-bucket'ы, `PWA`-обвязку и частичную offline-поддержку.
+Проект уже не является “только задачником”: `PPR` и `Rounds` живут как отдельные модульные разделы внутри общего dashboard-shell, но переиспользуют единые роли, объекты, помещения, audit, auth, storage и PWA/offline-инфраструктуру.
 
-Сейчас репозиторий уже не ограничивается только модулем задач: модуль ППР является отдельной крупной подсистемой со своими страницами, доменной логикой, API, календарём, QR-entry и набором миграций.
+## 2. Что есть в системе сейчас
 
-## 2. Основные возможности
+### Модули
 
-- Классический модуль задач: списки, фильтры, статусы, карточка задачи, команда, комментарии, история, вложения.
-- Глобальные справочники пользователей, объектов, этажей и типов помещений.
-- Журнал действий (`audit_log`) для административного контроля.
-- Модуль ППР: структура объектов, системы, помещения, оборудование, шаблоны работ, назначения, календарь, lifecycle ППР-заявок.
-- Модуль обходов: QR-помещения, мобильный scanner flow, страница `Сегодня`, архив и конфигуратор помещений.
-- QR-вход в ППР для оборудования и активных ППР-заявок.
-- QR-вход в обходы помещений через `/rounds/scan?token=...` и `/api/rounds/qr/[token]`.
-- Web Push для назначений в обычном модуле задач.
-- PWA-режим с `manifest`, `service worker` и установкой на устройство.
-- Offline-очереди в `localforage` для части задач и для модуля обходов, включая офлайн-отметки с фото.
+- `Задачи` — обычные эксплуатационные задачи с lifecycle, комментариями, историей, командой и вложениями.
+- `ППР` — структура, оборудование, шаблоны, назначения, календарь, ППР-заявки и QR-entry.
+- `Обходы` — отдельный модуль с модульной главной страницей, scanner flow, `Сегодня`, `Архив`, `Конфигуратор` и `QR помещений`.
+- `Справочники` — пользователи, объекты, этажи, типы помещений и общий справочник помещений.
+- `Сервис` — профиль и журнал действий.
+
+### Навигация
+
+Desktop-навигация устроена по секциям:
+
+- `Задачи`
+- `ППР`
+- `Обходы`
+- `Справочники`
+- `Сервис`
+
+Клик по родительским пунктам `ППР` и `Обходы` открывает главную страницу модуля и одновременно оставляет раскрытым список реальных подразделов. Дублирующие подпункты вида “Модуль ППР” или “Модуль Обходов” удалены.
+
+На мобильном:
+
+- сохранён быстрый доступ к базовому модулю `Задачи`;
+- добавлен отдельный launcher модулей `Задачи / ППР / Обходы`;
+- нижняя мобильная навигация остаётся компактной и не перегружена модульными разделами.
 
 ## 3. Модуль задач
 
-Обычный модуль задач расположен вокруг страниц:
+Основные маршруты:
 
-- `/my` — основной рабочий список;
-- `/new` — новые задачи;
-- `/archive` — архив;
-- `/tasks/create` — создание задачи;
-- `/tasks/[id]` — карточка задачи.
+- `/my`
+- `/new`
+- `/archive`
+- `/tasks/create`
+- `/tasks/[id]`
 
 Что реализовано:
 
-- Статусы `new -> accepted -> in_progress -> paused -> done`.
-- Назначение ответственного и управление командой задачи.
-- Фильтры по статусу, приоритету, объекту, исполнителю, участнику команды и срокам.
-- Сортировка и клиентская группировка списка.
-- Комментарии и история изменений в карточке задачи.
-- Фото-вложения к задаче и к комментариям.
-- Ручной архив для `admin/chief` и автоархив через RPC/cron после `36` часов для завершённых задач.
-- Push-уведомление при назначении исполнителя.
+- статусы `new -> accepted -> in_progress -> paused -> done`;
+- назначение ответственного и управление командой;
+- фильтры, сортировка и группировка;
+- комментарии и история;
+- фото-вложения к задаче и к комментариям;
+- ручной архив для `admin/chief`;
+- автоархив завершённых задач через cron/RPC;
+- push-уведомления для task-flow.
 
-Вложения обычных задач хранятся в приватном bucket `task-attachments`, а пользователю выдаются через signed URL.
+Вложения обычных задач хранятся в приватном bucket `task-attachments`, а на чтении выдаются через signed URL.
 
-## 4. Модуль ППР
+## 4. Помещения и общий QR
 
-Модуль ППР расположен под `/ppr` и уже разбит на несколько подслоёв.
+`object_rooms` — это общий справочник помещений объекта, который используется сразу несколькими модулями.
+
+Сейчас для помещений реализовано:
+
+- общий справочник `/ppr/rooms`;
+- карточка помещения `/ppr/rooms/[id]`;
+- QR-entry `/ppr/rooms/qr/[token]`;
+- общий QR помещения, не привязанный только к обходам;
+- автоматическое создание room QR при создании помещения;
+- ручная регенерация QR из карточки помещения;
+- отдельный флаг участия в обходах `object_rooms.rounds_enabled`.
+
+Важно:
+
+- QR помещения теперь считается shared-сущностью;
+- он уже используется в `Rounds`, а архитектурно подготовлен и для других сценариев;
+- участие помещения в обходах определяется не наличием QR, а отдельным флагом `rounds_enabled`.
+
+## 5. Модуль ППР
+
+Модуль ППР расположен под `/ppr`.
 
 ### Структура и справочники
 
-- `/directories/floors` — глобальный справочник этажей, привязанных к объектам.
-- `/directories/room-types` — глобальный справочник типов помещений.
-- `/ppr/system-groups` — глобальный справочник групп систем.
-- `/ppr/systems` — системы ППР с объектом, группой и ответственным.
-- `/ppr/rooms` — общий справочник помещений объектов с выбором этажа и типа помещения из глобальных справочников.
-- `/ppr/equipment` и `/ppr/equipment/[id]` — оборудование, карточка оборудования и QR-код.
+- `/ppr`
+- `/ppr/system-groups`
+- `/ppr/systems`
+- `/ppr/rooms`
+- `/ppr/equipment`
+- `/ppr/equipment/[id]`
+- `/ppr/templates`
+- `/ppr/templates/[id]`
+- `/ppr/assignments`
 
-### Планирование
+### Календарь и планирование
 
-- `/ppr/templates` и `/ppr/templates/[id]` — шаблоны периодических работ.
-- `/ppr/assignments` — назначения шаблонов на конкретное оборудование.
-- `/ppr/calendar` — годовой обзор, месячные планы и переносы внутри месяца.
-
-В коде ППР есть отдельные сущности для:
-
-- шаблонов работ с периодичностью, базовой датой, нормо-часами, методикой и чек-листом;
-- месячных планов и позиций плана;
+- `/ppr/calendar` — годовой обзор и monthly operational-календарь;
+- генерация month plan по системе;
+- переносы внутри месяца;
 - materialization позиций плана в ППР-заявки;
-- cron-оркестрации через `/api/ppr/cron/run` и RPC-функции Supabase.
+- cron orchestration через `/api/ppr/cron/run`.
 
-### Исполнение ППР
+После remediation календарь:
 
-- `/ppr/tasks` — общий реестр активных ППР-заявок;
-- `/ppr/my` — ППР-заявки, где пользователь является исполнителем;
-- `/ppr/archive` — архив закрытых и отменённых ППР-заявок;
-- `/ppr/tasks/[id]` — карточка ППР-заявки.
+- декомпозирован на smaller UI units;
+- переведён на более лёгкий server-first data shaping;
+- получил route-level `loading.tsx` и module-level `error.tsx`;
+- использует selective lazy loading для тяжёлых client частей.
+
+### ППР-заявки
+
+- `/ppr/tasks`
+- `/ppr/my`
+- `/ppr/archive`
+- `/ppr/tasks/[id]`
 
 Lifecycle ППР-заявки:
 
-- `new -> in_progress -> done -> closed`;
-- возможна отмена в `cancelled`;
-- перенос допустим для `new` и `in_progress`;
-- завершение в `done` требует минимум один комментарий и минимум одно фото.
+- `new -> in_progress -> done -> closed`
+- возможна отмена в `cancelled`
+- перенос допустим для `new` и `in_progress`
+- завершение в `done` требует минимум один комментарий и минимум одно фото
 
-Для ППР-заявки реализованы:
-
-- назначение исполнителя;
-- комментарии;
-- фото-вложения;
-- snapshot work items из шаблонов;
-- синхронизация статусов с позициями месячного плана.
+Карточка ППР-заявки теперь использует server-side attachment read model вместо старого waterfall по комментариям.
 
 ### QR-entry
 
-Реализованы:
+- `/ppr/qr/[token]`
+- `/api/ppr/qr/[token]`
 
-- `/ppr/qr/[token]` — безопасная точка входа по токену;
-- `/api/ppr/qr/[token]` — серверный redirect;
-- разрешение QR в карточку оборудования или активной ППР-заявки.
+QR ППР по-прежнему ведёт в карточку оборудования или активной ППР-заявки. Отдельно от этого теперь существует room QR flow через карточку помещения.
 
-Примечание: инфраструктура `ppr-files` и миграции предусматривают хранение файлов ППР шире, чем только задачи, но в текущем UI явно задействованы именно фото-вложения ППР-заявок.
+### Архитектура PPR query layer
 
-## 5. Модуль обходов
+Публичный контракт `@/lib/ppr/queries` сохранён, но внутри слой разрезан на bounded submodules:
 
-Модуль обходов расположен под `/rounds`.
+- `lib/ppr/access.ts`
+- `lib/ppr/structure-queries.ts`
+- `lib/ppr/calendar-queries.ts`
+- `lib/ppr/task-queries.ts`
+- `lib/ppr/task-read-models.ts`
 
-Реализованы:
+Рядом вынесены shared helpers:
 
-- `/rounds/scan` — mobile-first сценарий техника;
-- `/rounds/today` — статус обходов по помещениям за текущую операционную дату;
-- `/rounds/archive` — архив исторических отметок;
-- `/rounds/config` — массовый конфигуратор включения помещений в обходы;
-- `/rounds/qr` — печать и выгрузка QR помещений.
+- `lib/object-access.ts` — единый object-scope access layer;
+- `lib/relation-normalization.ts` — общий слой relation unwrap/name normalization.
 
-Бизнес-правила:
+## 6. Модуль обходов
 
-- используется общий справочник `object_rooms`;
-- помещение включается в обходы через `object_rooms.rounds_enabled`;
-- QR хранится в `object_rooms.rounds_qr_token` и `object_rooms.rounds_qr_generated_at`;
+Модуль обходов расположен под `/rounds` и имеет собственную главную страницу `/rounds`.
+
+Основные разделы:
+
+- `/rounds`
+- `/rounds/scan`
+- `/rounds/entry/[token]` -> redirect в `/rounds/scan?token=...`
+- `/rounds/today`
+- `/rounds/archive`
+- `/rounds/config`
+- `/rounds/qr`
+
+### Scanner flow
+
+Scanner flow mobile-first:
+
+- открытие `/rounds/scan`;
+- deep-link по токену через `/rounds/scan?token=...` или `/rounds/entry/[token]`;
+- сначала попытка разрешить помещение из локального snapshot;
+- fallback через `/api/rounds/resolve/[token]`, если snapshot ещё не знает токен;
+- подтверждение отметки с комментарием и опциональным фото;
+- online submit в `/api/rounds/checkins` или уход в offline-очередь.
+
+Для room QR resolve сервер различает несколько состояний:
+
+- помещение найдено и доступно;
+- помещение найдено, но не включено в обходы;
+- помещение неактивно;
+- scanner config устарела;
+- токен не найден.
+
+### Today / Archive
+
+`/rounds/today` и `/rounds/config` работают по общей UX-логике:
+
+- выбор объекта;
+- затем переключение по этажам;
+- затем список помещений только выбранного этажа.
+
+`Today` показывает:
+
+- помещение;
+- статус отметки;
+- кто отметил;
+- время;
+- наличие комментария и фото.
+
+`Archive` остаётся табличным экраном с фильтрами по объекту, периоду, технику и помещению.
+
+### Конфигуратор обходов
+
+`/rounds/config`:
+
+- читает только доступные объекты;
+- до выбора объекта не грузит длинный cross-object список;
+- сохраняет `rounds_enabled` через `/api/rounds/config`;
+- поддерживает single-object и batch payload;
+- показывает partial-save ошибки, если часть объектов не сохранилась;
+- использует те же сохранённые данные как source of truth для `Today`, `Archive`, `Scanner` и `QR`.
+
+### QR помещений
+
+`/rounds/qr`:
+
+- печатная форма и поштучная выгрузка общих QR-кодов;
+- использует только помещения с `rounds_enabled = true`;
+- отдельный endpoint “сгенерировать QR для обходов” больше не является рабочим сценарием: QR создаётся автоматически на уровне комнаты.
+
+### Бизнес-правила
+
+- помещения участвуют в обходах через `object_rooms.rounds_enabled`;
 - факт обхода хранится в `rounds_checkins`;
 - повторный check-in за день заменяет предыдущий только если `incoming.scanned_at_device >= existing.scanned_at_device`;
-- для техников есть отдельный scanner read-model через RPC `rounds_list_scanner_config` и `rounds_resolve_room_qr_token`;
-- offline flow модуля обходов хранит локальную очередь отметок и фото в `localforage`, а синхронизацию запускает при старте, `online`, возврате вкладки в фокус и вручную.
+- scanner flow использует shared room QR, но право на отметку и видимость помещений ограничены объектным скоупом и ролью.
 
-## 6. Роли и права
+## 7. Роли и права
 
-Общие роли в системе:
+Поддерживаются роли:
 
 - `admin`
 - `chief`
@@ -139,7 +238,7 @@ Lifecycle ППР-заявки:
 - `object_engineer`
 - `tech`
 
-### Обычный модуль задач
+### Задачи
 
 | Роль | Права |
 |------|-------|
@@ -150,202 +249,135 @@ Lifecycle ППР-заявки:
 | `object_engineer` | работа с задачами своего объекта, управление командой в объектном скоупе |
 | `tech` | доступ только к назначенным задачам и участию в команде |
 
-### Модуль ППР
+### ППР
 
 | Роль | Права в ППР |
 |------|-------------|
 | `admin` | полный доступ ко всем экранам и операциям |
 | `chief` | полный доступ ко всем экранам и операциям |
-| `lead` | группы систем, структура, шаблоны, назначения, календарь, ППР-заявки, QR |
+| `lead` | структура, шаблоны, назначения, календарь, ППР-заявки, QR |
 | `engineer` | ППР-заявки, QR, участие в исполнении; календарь только для систем, где пользователь ответственен |
 | `object_engineer` | структура, шаблоны, назначения, календарь и ППР-заявки в пределах доступных объектов |
 | `tech` | только слой ППР-заявок и QR без доступа к структуре и планированию |
 
-Отдельно:
-
-- `audit`, пользователи и объекты доступны только `admin/chief`;
-- типы помещений доступны на чтение `admin/chief/lead/object_engineer`, а управляются `admin/chief`;
-- этажи доступны `admin/chief/lead/object_engineer`, управление этажами ограничено объектным скоупом;
-- группы систем ППР доступны `admin/chief/lead`;
-- структура ППР доступна `admin/chief/lead/object_engineer`;
-- шаблоны и назначения ППР доступны `admin/chief/lead/object_engineer`;
-- календарь ППР доступен `admin/chief/lead/object_engineer`, а для `engineer` ограничен ответственностью по системе.
-
-### Модуль обходов
+### Обходы
 
 | Роль | Права в обходах |
 |------|------------------|
 | `admin` | полный доступ ко всем экранам и QR |
 | `chief` | полный доступ ко всем экранам и QR |
-| `lead` | today, archive, config, QR в доступных объектах |
-| `engineer` | today, archive, config, QR в доступных объектах |
-| `object_engineer` | today, archive, config, QR в доступных объектах |
-| `tech` | только scanner flow и сохранение собственных отметок |
+| `lead` | `today`, `archive`, `config`, `qr` в доступных объектах |
+| `engineer` | `today`, `archive`, `config`, `qr` в доступных объектах |
+| `object_engineer` | `today`, `archive`, `config`, `qr` в доступных объектах |
+| `tech` | scanner flow и сохранение собственных отметок |
 
-## 6. Архитектура проекта
+## 8. Архитектура и уже внесённые улучшения
 
-Проект организован по доменным слоям.
+Проект организован по доменным слоям:
 
-### UI и маршруты
+- `app/` — страницы, `route handlers`, `server actions`;
+- `components/` — UI;
+- `lib/` — бизнес-логика и query layer;
+- `supabase/` — миграции, SQL и seed;
+- `public/` — `manifest` и `service worker`.
 
-- `app/` содержит страницы `App Router`, `route handlers` и `server actions`;
-- `app/(dashboard)` — основной авторизованный shell;
-- `app/api/tasks/*`, `app/api/ppr/*`, `app/api/rounds/*` — HTTP API для операций из клиентских компонентов;
-- `app/actions/*` — серверные действия для форм и административных сценариев.
+Ключевые изменения после remediation:
 
-### Доменные компоненты
+- request-scoped auth/session reuse через `getRequestSession()` и `getApiSession()`;
+- единый shared object-scope слой `lib/object-access.ts`;
+- единый relation normalization helper layer `lib/relation-normalization.ts`;
+- разрезание `lib/ppr/queries.ts` на подмодули при сохранении barrel contract;
+- server-side attachment read model для карточки ППР-заявки;
+- dedupe scanner config fetch и более узкий payload `/api/rounds/config`;
+- object-scoped загрузка тяжёлых экранов `PPR rooms/equipment` и `Rounds config`;
+- route-level `loading.tsx`, module-level `error.tsx` и selective lazy loading на тяжёлых маршрутах.
 
-- `components/tasks/*` — UI обычного модуля задач;
-- `components/ppr/*` — UI модуля ППР;
-- `components/rounds/*` — UI модуля обходов;
-- `components/dashboard/*`, `components/ui/*`, `components/pwa/*`, `components/offline/*` — общий shell и инфраструктурные компоненты.
+## 9. Offline, PWA и mobile
 
-### Бизнес-логика
+### Service worker и push
 
-- `lib/auth.ts`, `lib/api-auth.ts` — получение профиля, сессии и базовых проверок доступа;
-- `lib/floors.ts`, `lib/room-types.ts`, `lib/object-rooms.ts` — глобальные справочники этажей, типов помещений и сами помещения;
-- `lib/tasks.ts`, `lib/task-permissions.ts`, `lib/task-sort.ts`, `lib/task-presentation.ts` — логика обычных задач;
-- `lib/ppr/*` — доменная модель ППР: выборки, права, lifecycle, scheduler, QR, presentation, validators;
-- `lib/rounds/*` — доменная модель обходов: права, QR, today/archive/config query-layer, файлы и date-логика;
-- `lib/audit.ts` — запись действий в журнал;
-- `lib/attachments.ts` и `lib/ppr/files.ts` — работа с storage и signed URLs;
-- `lib/offline/queue.ts`, `lib/offline/rounds-queue.ts` — offline-очереди.
+- `RegisterSW` подключён в `app/(dashboard)/layout.tsx`, а не в публичном layout;
+- `sw.js` использует раздельные cache buckets для `shell`, `static`, `data`;
+- HTML navigation, static assets и data/API имеют разные стратегии кэширования;
+- критичные data-paths не получают “тихий” stale fallback;
+- push не подписывается автоматически;
+- push opt-in вынесен в профиль и запускается только по явному действию пользователя.
 
-### Данные и инфраструктура
+### Offline
 
-- `Supabase Auth` — аутентификация;
-- `Postgres + RLS` — основное хранилище и разграничение доступа;
-- `Supabase Storage` — вложения обычных задач, файлов ППР и фото обходов;
-- `public/sw.js` + `public/manifest.webmanifest` — PWA-часть;
-- `Dockerfile`, `docker-compose.yml`, `Caddyfile` — контейнерный запуск и reverse proxy.
+Offline-поддержка сейчас покрывает:
 
-### Потоки данных
+- `update_status` и `add_comment` в обычных задачах;
+- `rounds_checkin` в модуле обходов, включая фото.
 
-Основной путь выглядит так:
+Синхронизация:
 
-1. Страница или server action получает профиль пользователя.
-2. Доменный слой в `lib/*` проверяет права и формирует запросы к Supabase.
-3. Изменения пишутся в БД и при необходимости в `audit_log`.
-4. Для файлов используются приватные bucket'ы и signed URL.
-5. Для части операций обычных задач и для обходов клиент умеет ставить действия в offline-очередь.
+- координируется через единый `lib/offline/sync-coordinator.ts`;
+- запускается при mount, `online`, `focus`, `visibilitychange` и вручную;
+- параллельный sync не должен идти одновременно.
 
-## 7. Структура каталогов
+### Фото в обходах
 
-```text
-app/
-  (dashboard)/
-    my, new, archive, tasks, users, objects, audit, profile
-    directories/
-      floors, room-types
-    ppr/
-      system-groups, systems, rooms, equipment, templates
-      assignments, calendar, tasks, my, archive, qr
-    rounds/
-      scan, today, archive, config, qr
-  actions/
-    auth-actions.ts
-    task-actions.ts
-    user-actions.ts
-    floor-actions.ts
-    object-room-actions.ts
-    ppr-directory-actions.ts
-    ppr-template-actions.ts
-    ppr-calendar-actions.ts
-    ppr-task-actions.ts
-    room-type-actions.ts
-  api/
-    tasks/*
-    push/*
-    cron/archive
-    ppr/*
-    rounds/*
+Фото в `Rounds` подготавливается в фоне:
 
-components/
-  auth/
-  dashboard/
-  dictionaries/
-  offline/
-  ppr/
-  pwa/
-  tasks/
-  ui/
+- основной путь — через worker / background prepare;
+- есть безопасный fallback без worker;
+- submit не делает повторную полную компрессию;
+- форма защищена от stale state при быстрой замене или удалении фото.
 
-lib/
-  auth.ts
-  api-auth.ts
-  audit.ts
-  attachments.ts
-  floors.ts
-  objects.ts
-  object-rooms.ts
-  room-types.ts
-  tasks.ts
-  task-permissions.ts
-  task-sort.ts
-  task-presentation.ts
-  offline/queue.ts
-  ppr/
-    files.ts
-    permissions.ts
-    presentation.ts
-    qr.ts
-    queries.ts
-    scheduler.ts
-    task-lifecycle.ts
-    types.ts
-    validators.ts
-  supabase/
-    admin.ts
-    browser.ts
-    server.ts
+### Mobile navigation
 
-supabase/
-  migrations/
-    0001_init.sql
-    ...
-    0020_ppr_cleanup_legacy_structure.sql
-  seed.sql
-  push_subscriptions.sql
+- быстрый вход в `Задачи`, `ППР` и `Обходы`;
+- нижняя навигация остаётся компактной;
+- модульные entry points не ломают доступ к обычным задачам.
 
-public/
-  manifest.webmanifest
-  sw.js
-  icon.svg
+## 10. Тестирование
+
+В проекте добавлен минимальный `Playwright` smoke/e2e baseline.
+
+Покрываются сценарии:
+
+- auth redirect и UI login;
+- `Rounds config` save/read;
+- room QR resolve и scanner confirm flow;
+- `PPR task details` с комментариями;
+- `PPR calendar` month route;
+- optional/manual-only smoke на month generation.
+
+Команды:
+
+```bash
+npm run test:e2e:install
+npm run test:e2e
+npm run test:e2e:headed
 ```
 
-## 8. Offline и PWA
+Data-driven env для smoke:
 
-Что есть сейчас:
+- `E2E_EMAIL`
+- `E2E_PASSWORD`
+- `E2E_ROUNDS_OBJECT_NAME`
+- `E2E_ROUNDS_ROOM_NAME`
+- `E2E_ROUNDS_TOKEN`
+- `E2E_PPR_TASK_ID`
+- `E2E_PPR_CALENDAR_SYSTEM_NAME`
 
-- регистрация `service worker` в корневом layout;
-- `manifest.webmanifest` и режим `standalone`;
-- подписка на push через браузерный `PushManager`;
-- queue на `localforage` с автосинком при событии `online`.
+Детали описаны в `tests/e2e/README.md`.
 
-Что реально уходит в offline-очередь:
-
-- `update_status` для обычных задач;
-- `add_comment` для обычных задач.
-
-Что важно понимать:
-
-- offline-очередь не покрывает ППР, вложения, справочники и административные операции;
-- `service worker` кэширует в основном статические ассеты (`manifest`, `icon`, `/_next/static/*`);
-- полноценный offline-browse всех экранов сейчас не реализован.
-
-## 9. Технологии
+## 11. Технологии
 
 - `Next.js 15`
 - `React 19`
 - `TypeScript`
-- `Supabase` (`Auth`, `Postgres`, `RLS`, `Storage`, `SSR client`)
+- `Supabase` (`Auth`, `Postgres`, `RLS`, `Storage`, `RPC`)
 - `Zod`
 - `localforage`
 - `web-push`
 - `qrcode.react`
+- `Playwright`
 - `Docker` + `Caddy`
 
-## 10. Запуск проекта
+## 12. Запуск проекта
 
 ### Локально
 
@@ -371,7 +403,7 @@ npm run dev
 
 ### База данных
 
-Репозиторий содержит миграции `supabase/migrations/0001_init.sql` ... `0021_global_room_directories.sql`.
+Репозиторий содержит миграции обычного task-контра, PPR, shared room layer, room QR и модуля обходов, включая доступ/QR-fix миграции `0022`–`0026`.
 
 Рекомендуемый способ применения:
 
@@ -383,13 +415,6 @@ supabase db push
 
 ### Docker
 
-В репозитории есть:
-
-- `Dockerfile` c `next build` и `output: "standalone"`;
-- `docker-compose.yml` для `app` и `caddy`.
-
-Запуск:
-
 ```bash
 docker compose up --build
 ```
@@ -397,16 +422,14 @@ docker compose up --build
 ### Cron и push
 
 - `/api/cron/archive` архивирует завершённые обычные задачи;
-- `/api/ppr/cron/run` запускает шаги ППР cron-оркестрации;
+- `/api/ppr/cron/run` запускает carryover/materialization/sync для ППР;
 - для cron-маршрутов используется заголовок `x-cron-secret`;
-- push начнёт работать только после настройки VAPID-переменных.
+- push реально активируется только после настройки VAPID и явного opt-in на устройстве.
 
-## 11. Текущие ограничения и заметки
+## 13. Текущие ограничения
 
-- `offline` поддержка частичная и относится только к части операций обычных задач.
-- `PWA` есть, но это не fully-offline приложение: большинство HTML/API-запросов всегда идут в сеть.
-- Push-уведомления заведены для обычного модуля задач; отдельных push-сценариев для ППР в коде сейчас нет.
-- В `middleware.ts` защищены маршруты обычного dashboard-контура, но `/ppr`-маршруты не входят в `matcher`; доступ к ППР всё равно проверяется на уровне страниц, API и server actions.
-- Для обычных вложений есть поле `cleanup_after`, но автоматическое физическое удаление файлов пока не реализовано.
-- Справочник помещений уже использует глобальные `Этажи` и `Типы помещений` и явно подготовлен под будущий модуль обходов, которого в текущем репозитории ещё нет.
+- `PWA` и offline есть, но приложение не является fully-offline: большинство HTML/API-запросов по-прежнему ориентированы на сеть.
+- Offline-поддержка не покрывает весь `PPR`, справочники и административные операции.
+- Push-сценарии сейчас в основном относятся к обычному модулю задач; отдельного PPR push-контура нет.
+- `middleware.ts` по-прежнему не включает `/ppr/*` и `/rounds/*` в `matcher`, поэтому доступ в эти модули обеспечивается server-side guards, query layer и RLS.
 - В `object_rooms` временно сохранено legacy-поле `floor` как fallback для безопасной миграции и обратной совместимости.
