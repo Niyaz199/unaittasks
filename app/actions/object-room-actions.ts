@@ -7,10 +7,44 @@ import { writeAudit } from "@/lib/audit";
 import {
   canManageObjectRooms,
   listObjectRoomManageableObjectsForProfile,
+  normalizeObjectRoomName,
   objectRoomFormSchema,
+  sanitizeObjectRoomName,
 } from "@/lib/object-rooms";
 
 type SupabaseServer = Awaited<ReturnType<typeof createSupabaseServerClient>>;
+type ObjectRoomActionResult = { ok: true } | { ok: false; error: string };
+
+const OBJECT_ROOM_UNIQUE_CONSTRAINTS = new Set([
+  "object_rooms_object_floor_normalized_name_unique",
+  "object_rooms_object_id_name_key",
+]);
+
+function normalizeDbError(error: unknown): never {
+  const code = typeof error === "object" && error && "code" in error ? String((error as { code?: string }).code ?? "") : "";
+  const constraint =
+    typeof error === "object" && error && "constraint" in error
+      ? String((error as { constraint?: string }).constraint ?? "")
+      : "";
+  const message =
+    typeof error === "object" && error && "message" in error ? String((error as { message?: string }).message ?? "") : "";
+
+  if (
+    code === "23505" &&
+    (OBJECT_ROOM_UNIQUE_CONSTRAINTS.has(constraint) ||
+      [...OBJECT_ROOM_UNIQUE_CONSTRAINTS].some((item) => message.includes(item)))
+  ) {
+    throw new Error("Помещение с таким названием уже существует на выбранном объекте и этаже");
+  }
+
+  if (code === "PGRST205") {
+    throw new Error(
+      "Supabase ещё не обновил schema cache для таблицы помещений. Выполните `NOTIFY pgrst, 'reload schema';` в SQL Editor и повторите попытку."
+    );
+  }
+
+  throw error instanceof Error ? error : new Error("Не удалось сохранить помещение");
+}
 
 function assertObjectAllowed(role: string, managedObjectIds: string[], objectId: string) {
   if (role === "admin" || role === "chief") return;
@@ -114,21 +148,32 @@ export async function createObjectRoomAction(formData: FormData) {
   assertObjectAllowed(profile.role, managedObjectIds, payload.objectId);
   const floor = await resolveFloorSelection(supabase, payload.floorId, payload.objectId);
   const roomType = await resolveRoomTypeSelection(supabase, payload.roomTypeId);
+  const normalizedName = normalizeObjectRoomName(payload.name);
 
-  const { data, error } = await supabase
-    .from("object_rooms")
-    .insert({
-      object_id: payload.objectId,
-      name: payload.name.trim(),
-      floor: floor.name,
-      floor_id: floor.id,
-      room_type_id: roomType.id,
-      description: payload.description?.trim() || null,
-      is_active: payload.isActive,
-    })
-    .select("id")
-    .single();
-  if (error) throw error;
+  if (!normalizedName) {
+    throw new Error("Название помещения пустое после нормализации");
+  }
+
+  let data: { id: string };
+  try {
+    const result = await supabase
+      .from("object_rooms")
+      .insert({
+        object_id: payload.objectId,
+        name: sanitizeObjectRoomName(payload.name),
+        floor: floor.name,
+        floor_id: floor.id,
+        room_type_id: roomType.id,
+        description: payload.description?.trim() || null,
+        is_active: payload.isActive,
+      })
+      .select("id")
+      .single();
+    if (result.error) throw result.error;
+    data = result.data;
+  } catch (error) {
+    normalizeDbError(error);
+  }
 
   await writeAudit({
     actorId: profile.id,
@@ -170,20 +215,29 @@ export async function updateObjectRoomAction(formData: FormData) {
   const currentRoom = await assertRoomManageable(supabase, profile.role, managedObjectIds, roomId);
   const floor = await resolveFloorSelection(supabase, payload.floorId, payload.objectId, currentRoom.floor_id);
   const roomType = await resolveRoomTypeSelection(supabase, payload.roomTypeId, currentRoom.room_type_id);
+  const normalizedName = normalizeObjectRoomName(payload.name);
 
-  const { error } = await supabase
-    .from("object_rooms")
-    .update({
-      object_id: payload.objectId,
-      name: payload.name.trim(),
-      floor: floor.name,
-      floor_id: floor.id,
-      room_type_id: roomType.id,
-      description: payload.description?.trim() || null,
-      is_active: payload.isActive,
-    })
-    .eq("id", roomId);
-  if (error) throw error;
+  if (!normalizedName) {
+    throw new Error("Название помещения пустое после нормализации");
+  }
+
+  try {
+    const { error } = await supabase
+      .from("object_rooms")
+      .update({
+        object_id: payload.objectId,
+        name: sanitizeObjectRoomName(payload.name),
+        floor: floor.name,
+        floor_id: floor.id,
+        room_type_id: roomType.id,
+        description: payload.description?.trim() || null,
+        is_active: payload.isActive,
+      })
+      .eq("id", roomId);
+    if (error) throw error;
+  } catch (error) {
+    normalizeDbError(error);
+  }
 
   await writeAudit({
     actorId: profile.id,
@@ -207,4 +261,28 @@ export async function updateObjectRoomAction(formData: FormData) {
   revalidatePath("/rounds/today");
   revalidatePath("/rounds/archive");
   revalidatePath("/rounds/qr");
+}
+
+export async function createObjectRoomActionSafe(formData: FormData): Promise<ObjectRoomActionResult> {
+  try {
+    await createObjectRoomAction(formData);
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Не удалось создать помещение",
+    };
+  }
+}
+
+export async function updateObjectRoomActionSafe(formData: FormData): Promise<ObjectRoomActionResult> {
+  try {
+    await updateObjectRoomAction(formData);
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Не удалось сохранить помещение",
+    };
+  }
 }

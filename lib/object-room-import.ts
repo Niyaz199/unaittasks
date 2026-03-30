@@ -1,3 +1,5 @@
+import { normalizeObjectRoomName, sanitizeObjectRoomName } from "@/lib/object-rooms";
+
 export const OBJECT_ROOM_IMPORT_TEMPLATE_HEADERS = ["object", "floor", "name", "type", "status", "description"] as const;
 
 export const OBJECT_ROOM_IMPORT_ALLOWED_STATUSES = ["active", "inactive"] as const;
@@ -84,11 +86,15 @@ export function normalizeImportLookupValue(value: string) {
 }
 
 export function normalizeObjectRoomImportName(value: string) {
-  return normalizeImportWhitespace(value);
+  return normalizeObjectRoomName(value);
 }
 
-export function buildObjectRoomImportDuplicateKey(objectId: string, roomName: string) {
-  return `${objectId}::${normalizeObjectRoomImportName(roomName)}`;
+export function sanitizeObjectRoomImportName(value: string) {
+  return sanitizeObjectRoomName(value);
+}
+
+export function buildObjectRoomImportDuplicateKey(objectId: string, floorId: string, roomName: string) {
+  return `${objectId}::${floorId}::${normalizeObjectRoomImportName(roomName)}`;
 }
 
 export function isObjectRoomImportRowEmpty(row: ObjectRoomImportRawRow) {

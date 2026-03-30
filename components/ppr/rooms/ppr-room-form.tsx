@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { PprFormGroup } from "@/components/ppr/ui/ppr-modal";
 
 type ObjectOption = { id: string; name: string };
@@ -19,7 +19,7 @@ type RoomFormValues = {
 };
 
 type Props = {
-  action: (formData: FormData) => void | Promise<void>;
+  action: (formData: FormData) => Promise<{ ok: true } | { ok: false; error: string }>;
   objects: ObjectOption[];
   floors: FloorOption[];
   roomTypes: RoomTypeOption[];
@@ -54,6 +54,8 @@ export function PprRoomForm({
   const [selectedObjectId, setSelectedObjectId] = useState(values.object_id);
   const [selectedFloorId, setSelectedFloorId] = useState(values.floor_id);
   const [selectedRoomTypeId, setSelectedRoomTypeId] = useState(values.room_type_id);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   const availableFloors = useMemo(
     () =>
@@ -108,10 +110,37 @@ export function PprRoomForm({
     activeFloorsForObject.length > 0 &&
     activeRoomTypes.length > 0;
 
+  function handleFormChange() {
+    if (submitError) setSubmitError(null);
+    onChange?.();
+  }
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitError(null);
+
+    const formData = new FormData(event.currentTarget);
+    startTransition(async () => {
+      const result = await action(formData);
+      if (!result.ok) {
+        setSubmitError(result.error);
+        return;
+      }
+
+      onSubmitted?.();
+    });
+  }
+
   return (
-    <form action={action} onSubmit={onSubmitted} onChange={onChange} className="ppr-modal-content">
+    <form onSubmit={handleSubmit} onChange={handleFormChange} className="ppr-modal-content">
       <div className="ppr-modal-body grid">
         {roomId ? <input type="hidden" name="room_id" value={roomId} /> : null}
+
+        {submitError ? (
+          <div className="section-card" role="alert" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+            {submitError}
+          </div>
+        ) : null}
 
         <PprFormGroup label="Объект">
           <select
@@ -120,6 +149,7 @@ export function PprRoomForm({
             required
             value={selectedObjectId}
             onChange={(event) => setSelectedObjectId(event.target.value)}
+            disabled={isPending}
           >
             <option value="" disabled>
               Выберите объект
@@ -133,7 +163,14 @@ export function PprRoomForm({
         </PprFormGroup>
 
         <PprFormGroup label="Название помещения">
-          <input className="input" name="name" defaultValue={values.name} placeholder="Например: Серверная 1" required />
+          <input
+            className="input"
+            name="name"
+            defaultValue={values.name}
+            placeholder="Например: Серверная 1"
+            required
+            disabled={isPending}
+          />
         </PprFormGroup>
 
         <PprFormGroup label="Этаж">
@@ -151,7 +188,7 @@ export function PprRoomForm({
               required
               value={selectedFloorId}
               onChange={(event) => setSelectedFloorId(event.target.value)}
-              disabled={!selectedObjectId}
+              disabled={!selectedObjectId || isPending}
             >
               <option value="" disabled>
                 {selectedObjectId ? "Выберите этаж" : "Сначала выберите объект"}
@@ -181,6 +218,7 @@ export function PprRoomForm({
               required
               value={selectedRoomTypeId}
               onChange={(event) => setSelectedRoomTypeId(event.target.value)}
+              disabled={isPending}
             >
               <option value="" disabled>
                 Выберите тип помещения
@@ -202,18 +240,19 @@ export function PprRoomForm({
             rows={3}
             defaultValue={values.description}
             placeholder="Дополнительная техническая информация"
+            disabled={isPending}
           />
         </PprFormGroup>
 
         <label className="row" style={{ alignItems: "center", gap: "0.5rem" }}>
-          <input type="checkbox" name="is_active" defaultChecked={values.is_active} />
+          <input type="checkbox" name="is_active" defaultChecked={values.is_active} disabled={isPending} />
           Активно
         </label>
       </div>
 
       <div className="ppr-modal-footer">
-        <button className="btn btn-accent" type="submit" disabled={!canSubmit}>
-          {submitLabel}
+        <button className="btn btn-accent" type="submit" disabled={!canSubmit || isPending}>
+          {isPending ? "Сохраняем..." : submitLabel}
         </button>
       </div>
     </form>

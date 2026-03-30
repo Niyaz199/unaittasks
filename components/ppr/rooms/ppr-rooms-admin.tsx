@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createObjectRoomAction, updateObjectRoomAction } from "@/app/actions/object-room-actions";
+import { createObjectRoomActionSafe, updateObjectRoomActionSafe } from "@/app/actions/object-room-actions";
 import { DataTable } from "@/components/ui/data-table";
 import { PprModal } from "@/components/ppr/ui/ppr-modal";
 import { PprPageShell } from "@/components/ppr/ui/ppr-page-shell";
@@ -341,11 +341,15 @@ export function PprRoomsAdmin({
 
       <PprModal open={isCreateOpen} onClose={() => { setIsCreateOpen(false); setIsDirty(false); }} title="Новое помещение" isDirty={isDirty}>
         <PprRoomForm
-          action={createObjectRoomAction}
+          action={createObjectRoomActionSafe}
           objects={formObjects}
           floors={floors}
           roomTypes={roomTypes}
-          onSubmitted={() => { setIsCreateOpen(false); setIsDirty(false); }}
+          onSubmitted={() => {
+            router.refresh();
+            setIsCreateOpen(false);
+            setIsDirty(false);
+          }}
           onChange={() => setIsDirty(true)}
           submitLabel="Создать"
         />
@@ -354,12 +358,16 @@ export function PprRoomsAdmin({
       <PprModal open={Boolean(editingRoom)} onClose={() => { setEditingId(null); setIsDirty(false); }} title="Редактирование помещения" isDirty={isDirty}>
         {editingRoom ? (
           <PprRoomForm
-            action={updateObjectRoomAction}
+            action={updateObjectRoomActionSafe}
             roomId={editingRoom.id}
             objects={formObjects}
             floors={floors}
             roomTypes={roomTypes}
-            onSubmitted={() => { setEditingId(null); setIsDirty(false); }}
+            onSubmitted={() => {
+              router.refresh();
+              setEditingId(null);
+              setIsDirty(false);
+            }}
             onChange={() => setIsDirty(true)}
             submitLabel="Сохранить"
             initialValues={{

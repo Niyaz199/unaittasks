@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     let skipped = validation.summary.skippedCount;
 
     for (const row of validation.readyRows) {
-      const duplicateKey = buildObjectRoomImportDuplicateKey(row.objectId, row.name);
+      const duplicateKey = buildObjectRoomImportDuplicateKey(row.objectId, row.floorId, row.name);
       if (existingRoomKeys.has(duplicateKey)) {
         skipped += 1;
         continue;

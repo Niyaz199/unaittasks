@@ -11,7 +11,7 @@ import {
   isObjectRoomImportRowEmpty,
   normalizeImportLookupValue,
   normalizeImportWhitespace,
-  normalizeObjectRoomImportName,
+  sanitizeObjectRoomImportName,
   OBJECT_ROOM_IMPORT_ALLOWED_STATUSES,
   OBJECT_ROOM_IMPORT_MAX_FILE_SIZE_BYTES,
   OBJECT_ROOM_IMPORT_MAX_ROWS,
@@ -46,6 +46,7 @@ type RoomTypeLookupRow = {
 type ExistingRoomLookupRow = {
   id: string;
   object_id: string;
+  floor_id: string | null;
   name: string;
 };
 
@@ -220,7 +221,7 @@ export async function buildObjectRoomImportValidationContext(
   const [{ data: floors, error: floorsError }, roomTypes, { data: existingRooms, error: roomsError }] = await Promise.all([
     supabase.from("floors").select("id,object_id,name,is_active").in("object_id", managedObjectIds),
     listRoomTypesForProfile(supabase, profile),
-    supabase.from("object_rooms").select("id,object_id,name").in("object_id", managedObjectIds),
+    supabase.from("object_rooms").select("id,object_id,floor_id,name").in("object_id", managedObjectIds),
   ]);
 
   if (floorsError) throw floorsError;
@@ -251,7 +252,8 @@ export async function buildObjectRoomImportValidationContext(
 
   const existingRoomKeys = new Set<string>();
   for (const room of ((existingRooms ?? []) as ExistingRoomLookupRow[])) {
-    existingRoomKeys.add(buildObjectRoomImportDuplicateKey(room.object_id, room.name));
+    if (!room.floor_id) continue;
+    existingRoomKeys.add(buildObjectRoomImportDuplicateKey(room.object_id, room.floor_id, room.name));
   }
 
   return { objectsByLookup, floorsByLookup, roomTypesByLookup, existingRoomKeys };
@@ -269,7 +271,7 @@ export function validateObjectRoomImportRows(
   for (const rawRow of rawRows) {
     const objectValue = normalizeImportWhitespace(rawRow.object);
     const floorValue = normalizeImportWhitespace(rawRow.floor);
-    const nameValue = normalizeObjectRoomImportName(rawRow.name);
+    const nameValue = sanitizeObjectRoomImportName(rawRow.name);
     const typeValue = normalizeImportWhitespace(rawRow.type);
     const statusValue = normalizeImportWhitespace(rawRow.status);
     const descriptionValue = normalizeImportWhitespace(rawRow.description);
@@ -328,8 +330,8 @@ export function validateObjectRoomImportRows(
     let outcome: ObjectRoomImportPreviewRow["outcome"] = "ready";
     let reason: ObjectRoomImportPreviewRow["reason"] = "valid";
 
-    if (!messages.length && resolvedObject && resolvedObject !== null) {
-      const duplicateKey = buildObjectRoomImportDuplicateKey(resolvedObject.id, nameValue);
+    if (!messages.length && resolvedObject && resolvedObject !== null && resolvedFloor && resolvedFloor !== null && resolvedRoomType && resolvedRoomType !== null) {
+      const duplicateKey = buildObjectRoomImportDuplicateKey(resolvedObject.id, resolvedFloor.id, nameValue);
       const firstSeenRow = fileSeenKeys.get(duplicateKey);
 
       if (firstSeenRow) {
@@ -339,18 +341,18 @@ export function validateObjectRoomImportRows(
       } else if (context.existingRoomKeys.has(duplicateKey)) {
         outcome = "skip";
         reason = "duplicate_in_db";
-        messages.push("Помещение с таким названием уже существует для выбранного объекта.");
+        messages.push("Помещение с таким названием уже существует для выбранных объекта и этажа.");
       } else {
         fileSeenKeys.set(duplicateKey, rawRow.rowNumber);
         readyRows.push({
           rowNumber: rawRow.rowNumber,
           objectId: resolvedObject.id,
           objectName: resolvedObject.name,
-          floorId: resolvedFloor!.id,
-          floorName: resolvedFloor!.name,
+          floorId: resolvedFloor.id,
+          floorName: resolvedFloor.name,
           name: nameValue,
-          roomTypeId: resolvedRoomType!.id,
-          roomTypeName: resolvedRoomType!.name,
+          roomTypeId: resolvedRoomType.id,
+          roomTypeName: resolvedRoomType.name,
           description: descriptionValue || null,
           isActive: resolvedStatus ?? true,
         });

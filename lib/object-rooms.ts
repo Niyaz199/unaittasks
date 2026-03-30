@@ -43,6 +43,14 @@ export const objectRoomFormSchema = z.object({
   isActive: z.boolean().default(true),
 });
 
+export function sanitizeObjectRoomName(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+export function normalizeObjectRoomName(value: string) {
+  return sanitizeObjectRoomName(value).toLowerCase();
+}
+
 export function canReadObjectRooms(role: Profile["role"]) {
   return OBJECT_ROOM_READ_ROLES.has(role);
 }
