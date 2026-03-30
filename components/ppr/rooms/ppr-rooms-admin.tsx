@@ -15,6 +15,10 @@ const PprRoomForm = dynamic(
   () => import("@/components/ppr/rooms/ppr-room-form").then((module) => module.PprRoomForm),
   { loading: () => <div className="section-card text-soft">Загрузка формы помещения...</div> }
 );
+const PprRoomImportModal = dynamic(
+  () => import("@/components/ppr/rooms/ppr-room-import-modal").then((module) => module.PprRoomImportModal),
+  { loading: () => <div className="section-card text-soft">Загрузка импорта помещений...</div> }
+);
 
 type RoomRow = {
   id: string;
@@ -78,6 +82,7 @@ export function PprRoomsAdmin({
 }) {
   const router = useRouter();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
 
@@ -264,6 +269,14 @@ export function PprRoomsAdmin({
               <option value="inactive">Неактивные</option>
             </select>
 
+            <a className="btn btn-ghost" href="/templates/object-rooms-import-template.xlsx" download>
+              Скачать шаблон
+            </a>
+
+            <button className="btn" type="button" onClick={() => setIsImportOpen(true)}>
+              Импорт
+            </button>
+
             <button className="btn btn-accent" type="button" onClick={() => setIsCreateOpen(true)} disabled={!hasSelectedObject}>
               + Добавить
             </button>
@@ -360,6 +373,13 @@ export function PprRoomsAdmin({
           />
         ) : null}
       </PprModal>
+
+      <PprRoomImportModal
+        open={isImportOpen}
+        onClose={() => {
+          setIsImportOpen(false);
+        }}
+      />
     </>
   );
 }

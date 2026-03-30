@@ -62,8 +62,35 @@ type TodayCheckinRow = {
   photo_storage_path: string | null;
 };
 
+type SupabaseLikeError = {
+  message?: string;
+  code?: string;
+  details?: string | null;
+  hint?: string | null;
+};
+
 function toContainsPattern(value: string) {
   return `%${value}%`;
+}
+
+function toReadableError(error: unknown, fallback: string) {
+  if (error instanceof Error) {
+    return error;
+  }
+
+  if (error && typeof error === "object") {
+    const { message, code, details, hint } = error as SupabaseLikeError;
+    const segments = [
+      typeof message === "string" && message.trim() ? message.trim() : fallback,
+      typeof code === "string" && code.trim() ? `code: ${code.trim()}` : null,
+      typeof details === "string" && details.trim() ? `details: ${details.trim()}` : null,
+      typeof hint === "string" && hint.trim() ? `hint: ${hint.trim()}` : null,
+    ].filter((value): value is string => Boolean(value));
+
+    return new Error(segments.join(" | "));
+  }
+
+  return new Error(fallback);
 }
 
 async function listActiveRoomQrMap(supabase: SupabaseClient, roomIds: string[]) {
@@ -217,7 +244,9 @@ export async function saveRoundsRoomSelection(
     _object_id: objectId,
     _enabled_room_ids: normalizedRoomIds,
   });
-  if (saveError) throw saveError;
+  if (saveError) {
+    throw toReadableError(saveError, "Не удалось сохранить конфигурацию обходов");
+  }
 
   return {
     objectId,
@@ -247,7 +276,7 @@ export async function saveRoundsRoomSelectionBatch(
     } catch (error) {
       failed.push({
         objectId,
-        error: error instanceof Error ? error.message : "Не удалось сохранить конфигурацию объекта",
+        error: toReadableError(error, "Не удалось сохранить конфигурацию объекта").message,
       });
     }
   }

@@ -153,6 +153,15 @@ Shared rooms теперь обслуживают одновременно:
 - общий room QR flow;
 - `Rounds config/today/archive/scanner`.
 
+На `"/ppr/rooms"` также есть MVP-импорт помещений:
+
+- через `CSV` или `XLSX`-шаблон;
+- в два шага: `preview/validate` -> `commit`;
+- только для доступных пользователю объектов из `object_rooms_manage`;
+- без обновления существующих записей;
+- с duplicate detection по `object_id + normalized(name)`, где `normalized(name)` = `trim + collapse spaces`;
+- с единым server-side validation pipeline после parse-слоя независимо от формата файла.
+
 ### Контур 3. ППР
 
 Главные подмодули:

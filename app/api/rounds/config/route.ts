@@ -18,6 +18,23 @@ const batchSaveSchema = z.object({
   operations: z.array(saveSchema).min(1),
 });
 
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
+    const details = "details" in error && typeof error.details === "string" ? error.details : null;
+    const hint = "hint" in error && typeof error.hint === "string" ? error.hint : null;
+    const code = "code" in error && typeof error.code === "string" ? error.code : null;
+    return [error.message, code ? `code: ${code}` : null, details ? `details: ${details}` : null, hint ? `hint: ${hint}` : null]
+      .filter((value): value is string => Boolean(value))
+      .join(" | ");
+  }
+
+  return "Unknown error";
+}
+
 function revalidateRoundsPaths() {
   revalidatePath("/rounds");
   revalidatePath("/rounds/config");
@@ -40,7 +57,7 @@ export async function GET() {
       scannerRooms: scanner.rooms,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
+    const message = getErrorMessage(error);
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
@@ -91,7 +108,7 @@ export async function POST(request: Request) {
     revalidateRoundsPaths();
     return NextResponse.json({ ok: true, result });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
+    const message = getErrorMessage(error);
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

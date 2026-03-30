@@ -1,0 +1,2 @@
+# Допустимые значения status: active,inactive
+object,floor,name,type,status,description
