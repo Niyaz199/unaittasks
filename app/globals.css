@@ -2780,6 +2780,69 @@ textarea {
 }
 
 /* ============================================================
+   Rounds Today Evidence Cell
+   ============================================================ */
+.rounds-evidence-cell {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.rounds-evidence-cell--table {
+  max-width: 22rem;
+}
+
+.rounds-evidence-section {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.rounds-comment-text {
+  min-width: 0;
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rounds-comment-text--clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.rounds-inline-action,
+.rounds-photo-action {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  width: fit-content;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.rounds-inline-action:hover,
+.rounds-inline-action:focus-visible,
+.rounds-photo-action:hover,
+.rounds-photo-action:focus-visible {
+  text-decoration: underline;
+}
+
+.rounds-inline-action:focus-visible,
+.rounds-photo-action:focus-visible {
+  outline: none;
+}
+
+/* ============================================================
    Attachments Gallery
    ============================================================ */
 .att-gallery {
