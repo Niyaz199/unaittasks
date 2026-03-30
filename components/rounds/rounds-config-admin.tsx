@@ -188,7 +188,7 @@ export function RoundsConfigAdmin({ objects, rooms, initialObjectId = "", initia
             {pending ? "Сохранение..." : "Сохранить конфигурацию"}
           </button>
           <Link
-            href={( `/rounds/qr${filterObjectId ? `?objectId=${encodeURIComponent(filterObjectId)}` : ""}`) as Route}
+            href={( `/rounds/qr${filterObjectId ? `?object=${encodeURIComponent(filterObjectId)}` : ""}`) as Route}
             className="btn btn-ghost"
             style={{ pointerEvents: !filterObjectId ? "none" : "auto", opacity: !filterObjectId ? 0.5 : 1 }}
           >
@@ -250,7 +250,7 @@ export function RoundsConfigAdmin({ objects, rooms, initialObjectId = "", initia
                       {room.room_qr_token ? (
                         <div className="grid" style={{ gap: "0.35rem" }}>
                           <Badge tone="success">Общий QR готов</Badge>
-                          <Link href={`/rounds/qr?objectId=${encodeURIComponent(room.object_id)}&roomId=${encodeURIComponent(room.id)}`} className="text-soft">
+                          <Link href={`/rounds/qr?object=${encodeURIComponent(room.object_id)}&roomId=${encodeURIComponent(room.id)}`} className="text-soft">
                             Просмотр
                           </Link>
                         </div>

@@ -3,7 +3,7 @@ import { requireProfile } from "@/lib/auth";
 import { BackButton } from "@/components/ui/back-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { canManageRoundsConfig } from "@/lib/rounds/permissions";
-import { getRoundsPrintRowsForProfile } from "@/lib/rounds/queries";
+import { getRoundsPrintRowsForProfile, listRoundsConfigRoomsForProfile } from "@/lib/rounds/queries";
 
 const RoundsQrBoard = dynamic(
   () => import("@/components/rounds/rounds-qr-board").then((module) => module.RoundsQrBoard),
@@ -29,11 +29,21 @@ export default async function RoundsQrPage({
     );
   }
 
+  const selectedObjectId =
+    typeof search.object === "string" ? search.object : typeof search.objectId === "string" ? search.objectId : undefined;
+  const selectedFloorName = typeof search.floor === "string" ? search.floor : undefined;
   const roomIdValue = typeof search.roomId === "string" ? [search.roomId] : Array.isArray(search.roomId) ? search.roomId : undefined;
-  const rooms = await getRoundsPrintRowsForProfile(supabase, profile, {
-    objectId: typeof search.objectId === "string" ? search.objectId : undefined,
-    roomIds: roomIdValue,
-  });
+  const [filterData, rooms] = await Promise.all([
+    listRoundsConfigRoomsForProfile(supabase, profile, { objectId: selectedObjectId }),
+    getRoundsPrintRowsForProfile(supabase, profile, {
+      objectId: selectedObjectId,
+      floorName: selectedFloorName,
+      roomIds: roomIdValue,
+    }),
+  ]);
+  const floorOptions = Array.from(
+    new Set(filterData.rooms.filter((room) => room.rounds_enabled && room.room_qr_token).map((room) => room.floor_name))
+  ).sort((left, right) => left.localeCompare(right, "ru", { numeric: true }));
 
   return (
     <section className="grid">
@@ -42,7 +52,13 @@ export default async function RoundsQrPage({
         description="Печатная форма и поштучная выгрузка общих QR-кодов помещений, участвующих в обходах."
         actions={<BackButton fallback="/rounds/config" label="← К конфигуратору" />}
       />
-      <RoundsQrBoard rooms={rooms} />
+      <RoundsQrBoard
+        rooms={rooms}
+        objects={filterData.objects}
+        floorOptions={floorOptions}
+        selectedObjectId={selectedObjectId ?? ""}
+        selectedFloorName={selectedFloorName ?? ""}
+      />
     </section>
   );
 }

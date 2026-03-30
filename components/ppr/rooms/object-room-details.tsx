@@ -51,6 +51,10 @@ export function ObjectRoomDetails({
   qrCode: ActiveQrCode;
   canRegenerateQr: boolean;
 }) {
+  const objectName = resolveName(room.object);
+  const floorName = resolveFloor(room.floor_ref, room.floor);
+  const roomTypeName = resolveRoomType(room.room_type);
+
   return (
     <div className="td-page">
       <div className="td-hero" style={{ gap: "0.75rem" }}>
@@ -65,21 +69,21 @@ export function ObjectRoomDetails({
         </div>
 
         <div className="text-soft" style={{ fontSize: "0.9rem", marginBottom: "0.25rem", opacity: 0.8 }}>
-          {resolveName(room.object)} • {resolveFloor(room.floor_ref, room.floor)} • {resolveRoomType(room.room_type)}
+          {objectName} • {floorName} • {roomTypeName}
         </div>
 
         <div className="td-meta-grid">
           <div className="td-meta-item">
             <span className="td-meta-label">Объект</span>
-            <span className="td-meta-value">{resolveName(room.object)}</span>
+            <span className="td-meta-value">{objectName}</span>
           </div>
           <div className="td-meta-item">
             <span className="td-meta-label">Этаж</span>
-            <span className="td-meta-value">{resolveFloor(room.floor_ref, room.floor)}</span>
+            <span className="td-meta-value">{floorName}</span>
           </div>
           <div className="td-meta-item">
             <span className="td-meta-label">Тип помещения</span>
-            <span className="td-meta-value">{resolveRoomType(room.room_type)}</span>
+            <span className="td-meta-value">{roomTypeName}</span>
           </div>
           <div className="td-meta-item">
             <span className="td-meta-label">Дата создания</span>
@@ -107,7 +111,14 @@ export function ObjectRoomDetails({
               Общий QR помещения создается автоматически и может использоваться не только в обходах, но и в других модулях.
             </div>
             <div style={{ marginTop: "0.5rem" }}>
-              <ObjectRoomQrBlock roomId={room.id} roomName={room.name} qrCode={qrCode} canRegenerate={canRegenerateQr} />
+              <ObjectRoomQrBlock
+                roomId={room.id}
+                objectName={objectName}
+                floorName={floorName}
+                roomName={room.name}
+                qrCode={qrCode}
+                canRegenerate={canRegenerateQr}
+              />
             </div>
           </div>
         </div>

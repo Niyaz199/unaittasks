@@ -453,11 +453,18 @@ export async function getRoundsArchiveForProfile(
 export async function getRoundsPrintRowsForProfile(
   supabase: SupabaseClient,
   profile: Pick<Profile, "id" | "role">,
-  options?: { objectId?: string; roomIds?: string[] }
+  options?: { objectId?: string; floorName?: string; roomIds?: string[] }
 ) {
   const { rooms } = await listRoundsConfigRoomsForProfile(supabase, profile, { objectId: options?.objectId });
+  const floorName = options?.floorName?.trim();
   const roomIds = new Set(options?.roomIds?.filter(Boolean) ?? []);
-  return rooms.filter((room) => room.rounds_enabled && room.room_qr_token && (!roomIds.size || roomIds.has(room.id)));
+  return rooms.filter(
+    (room) =>
+      room.rounds_enabled &&
+      room.room_qr_token &&
+      (!floorName || room.floor_name === floorName) &&
+      (!roomIds.size || roomIds.has(room.id))
+  );
 }
 
 export async function upsertRoundsCheckin(

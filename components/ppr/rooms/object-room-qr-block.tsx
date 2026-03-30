@@ -13,12 +13,14 @@ type ActiveQrCode = {
 
 type Props = {
   roomId: string;
+  objectName: string;
+  floorName: string;
   roomName: string;
   qrCode: ActiveQrCode;
   canRegenerate: boolean;
 };
 
-export function ObjectRoomQrBlock({ roomId, roomName, qrCode, canRegenerate }: Props) {
+export function ObjectRoomQrBlock({ roomId, objectName, floorName, roomName, qrCode, canRegenerate }: Props) {
   const router = useRouter();
   const [baseUrl, setBaseUrl] = useState("");
   const [copied, setCopied] = useState(false);
@@ -56,9 +58,8 @@ export function ObjectRoomQrBlock({ roomId, roomName, qrCode, canRegenerate }: P
     downloadQrPng({
       svgElement: svgRef.current,
       fileName: `room-${roomName}.png`,
+      eyebrow: `${objectName} • ${floorName}`,
       title: roomName,
-      subtitle: "Карточка помещения",
-      token: activeQr.qr_token,
     });
   }
 
@@ -93,7 +94,10 @@ export function ObjectRoomQrBlock({ roomId, roomName, qrCode, canRegenerate }: P
           }}
         >
           <QRCodeSVG value={baseUrl ? qrUrl : qrHref} size={160} level="H" includeMargin ref={svgRef} />
-          <div style={{ color: "#111827", fontWeight: 600, maxWidth: "160px", textAlign: "center", lineHeight: 1.35 }}>
+          <div style={{ color: "#4b5563", fontSize: "0.85rem", fontWeight: 500, maxWidth: "180px", textAlign: "center", lineHeight: 1.35 }}>
+            {objectName} • {floorName}
+          </div>
+          <div style={{ color: "#111827", fontWeight: 700, maxWidth: "180px", textAlign: "center", lineHeight: 1.35 }}>
             {roomName}
           </div>
         </div>

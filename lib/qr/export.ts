@@ -1,6 +1,7 @@
 type DownloadQrPngOptions = {
   svgElement: SVGSVGElement;
   fileName: string;
+  eyebrow?: string;
   title: string;
   subtitle?: string;
   token?: string;
@@ -28,7 +29,7 @@ function wrapText(context: CanvasRenderingContext2D, text: string, maxWidth: num
   return lines;
 }
 
-export function downloadQrPng({ svgElement, fileName, title, subtitle, token }: DownloadQrPngOptions) {
+export function downloadQrPng({ svgElement, fileName, eyebrow, title, subtitle, token }: DownloadQrPngOptions) {
   const svgData = new XMLSerializer().serializeToString(svgElement);
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d");
@@ -39,6 +40,7 @@ export function downloadQrPng({ svgElement, fileName, title, subtitle, token }: 
   const qrSize = width - padding * 2;
   const captionTop = padding + qrSize + 70;
   const contentWidth = width - padding * 2;
+  const eyebrowLineHeight = 32;
   const titleLineHeight = 56;
   const subtitleLineHeight = 38;
   const tokenLineHeight = 34;
@@ -57,6 +59,18 @@ export function downloadQrPng({ svgElement, fileName, title, subtitle, token }: 
     context.fillStyle = "#111827";
     context.textAlign = "center";
 
+    if (eyebrow?.trim()) {
+      context.fillStyle = "#4b5563";
+      context.font = "500 24px sans-serif";
+      const eyebrowLines = wrapText(context, eyebrow, contentWidth);
+      for (const line of eyebrowLines) {
+        context.fillText(line, width / 2, currentY, contentWidth);
+        currentY += eyebrowLineHeight;
+      }
+      currentY += 14;
+    }
+
+    context.fillStyle = "#111827";
     context.font = "600 46px sans-serif";
     const titleLines = wrapText(context, title, contentWidth);
     for (const line of titleLines) {
