@@ -10,18 +10,46 @@ import { assertManageableUserPayload, canManageUserRole, canManageUsers as canMa
 import { writeAudit } from "@/lib/audit";
 
 const schema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().email(),
   password: z.string().min(8),
-  fullName: z.string().min(2),
+  fullName: z.string().trim().min(1),
   role: z.enum(["admin", "chief", "lead", "engineer", "object_engineer", "tech"]),
   objectIds: z.array(z.string().uuid()).optional()
 });
 
 const updateSchema = z.object({
   userId: z.string().uuid(),
-  fullName: z.string().min(2),
+  fullName: z.string().trim().min(1, "Введите ФИО."),
+  email: z.string().trim().email("Укажите корректный email."),
   role: z.enum(["admin", "chief", "lead", "engineer", "object_engineer", "tech"]),
+  password: z
+    .string()
+    .transform((value) => value.trim())
+    .optional()
+    .transform((value) => (value ? value : undefined))
+    .refine((value) => value === undefined || value.length >= 8, "Новый пароль должен быть не короче 8 символов."),
+  passwordConfirm: z
+    .string()
+    .transform((value) => value.trim())
+    .optional()
+    .transform((value) => (value ? value : undefined)),
   objectIds: z.array(z.string().uuid()).optional()
+}).superRefine((payload, ctx) => {
+  if (payload.password && payload.passwordConfirm !== payload.password) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["passwordConfirm"],
+      message: "Подтверждение пароля не совпадает."
+    });
+  }
+
+  if (!payload.password && payload.passwordConfirm) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["password"],
+      message: "Введите новый пароль или очистите оба поля."
+    });
+  }
 });
 
 const deleteSchema = z.object({
@@ -30,6 +58,25 @@ const deleteSchema = z.object({
 
 function buildCreateUserErrorRedirect(message: string): Route {
   return `/users/create?error=${encodeURIComponent(message)}` as Route;
+}
+
+function isDuplicateEmailError(message: string) {
+  return /already.*registered/i.test(message) || /already exists/i.test(message) || /уже зарегистрирован/i.test(message);
+}
+
+function mapUserActionError(error: unknown, fallback: string) {
+  if (error instanceof z.ZodError) {
+    return error.issues[0]?.message ?? fallback;
+  }
+
+  if (error instanceof Error) {
+    if (isDuplicateEmailError(error.message)) {
+      return "Пользователь с таким email уже существует.";
+    }
+    return error.message;
+  }
+
+  return fallback;
 }
 
 export async function createUserAction(formData: FormData) {
@@ -56,8 +103,7 @@ export async function createUserAction(formData: FormData) {
   });
   if (authError || !created.user) {
     const rawMessage = authError?.message ?? "Ошибка создания пользователя";
-    const duplicateEmail =
-      /already.*registered/i.test(rawMessage) || /already exists/i.test(rawMessage) || /уже зарегистрирован/i.test(rawMessage);
+    const duplicateEmail = isDuplicateEmailError(rawMessage);
 
     if (duplicateEmail) {
       redirect(buildCreateUserErrorRedirect("Пользователь с таким email уже существует. Откройте список пользователей и отредактируйте его."));
@@ -101,82 +147,129 @@ export async function createUserAction(formData: FormData) {
   redirect("/users");
 }
 
-export async function updateUserAction(formData: FormData) {
-  const actor = await requireProfile();
-  const sessionSupabase = actor.supabase;
-  if (!canManageUsersByRole(actor.profile.role)) {
-    throw new Error("Нет прав на редактирование пользователей");
-  }
-
-  const payload = updateSchema.parse({
-    userId: String(formData.get("user_id") ?? ""),
-    fullName: String(formData.get("full_name") ?? ""),
-    role: String(formData.get("role") ?? ""),
-    objectIds: formData.getAll("object_ids").map(String).filter(Boolean)
-  });
-
-  if (actor.profile.id === payload.userId && payload.role !== actor.profile.role) {
-    throw new Error("Нельзя менять свою роль через этот экран");
-  }
-
-  const admin = createSupabaseAdminClient();
-  const { data: currentTarget, error: currentTargetError } = await sessionSupabase
-    .from("profiles")
-    .select("full_name,role")
-    .eq("id", payload.userId)
-    .maybeSingle();
-  if (currentTargetError) throw currentTargetError;
-  if (!currentTarget) throw new Error("\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d");
-  if (!canManageUserRole(actor.profile.role, currentTarget.role)) {
-    throw new Error("\u041d\u0435\u0442 \u043f\u0440\u0430\u0432 \u043d\u0430 \u0440\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435 \u044d\u0442\u043e\u0433\u043e \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044f");
-  }
-  const manageableObjectIds = await assertManageableUserPayload(sessionSupabase, actor.profile, payload.role, payload.objectIds ?? []);
-  const { data: previousLinks, error: previousLinksError } = await sessionSupabase
-    .from("user_objects")
-    .select("object_id")
-    .eq("user_id", payload.userId);
-  if (previousLinksError) throw previousLinksError;
-
+export async function updateUserAction(formData: FormData): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
   try {
-    const { error: profileError } = await sessionSupabase
-      .from("profiles")
-      .update({ full_name: payload.fullName, role: payload.role })
-      .eq("id", payload.userId);
-    if (profileError) throw profileError;
-
-    const { error: clearLinksError } = await sessionSupabase.from("user_objects").delete().eq("user_id", payload.userId);
-    if (clearLinksError) throw clearLinksError;
-
-    if (manageableObjectIds.length) {
-      const objectRows = manageableObjectIds.map((objectId) => ({ user_id: payload.userId, object_id: objectId }));
-      const { error: objectError } = await sessionSupabase.from("user_objects").insert(objectRows);
-      if (objectError) throw objectError;
+    const actor = await requireProfile();
+    const sessionSupabase = actor.supabase;
+    if (!canManageUsersByRole(actor.profile.role)) {
+      throw new Error("Нет прав на редактирование пользователей");
     }
+
+    const payload = updateSchema.parse({
+      userId: String(formData.get("user_id") ?? ""),
+      fullName: String(formData.get("full_name") ?? ""),
+      email: String(formData.get("email") ?? ""),
+      role: String(formData.get("role") ?? ""),
+      password: String(formData.get("password") ?? ""),
+      passwordConfirm: String(formData.get("password_confirm") ?? ""),
+      objectIds: formData.getAll("object_ids").map(String).filter(Boolean)
+    });
+
+    if (actor.profile.id === payload.userId) {
+      throw new Error("Свою учетную запись редактируйте через раздел Профиль.");
+    }
+
+    const admin = createSupabaseAdminClient();
+    const { data: currentTarget, error: currentTargetError } = await sessionSupabase
+      .from("profiles")
+      .select("full_name,role")
+      .eq("id", payload.userId)
+      .maybeSingle();
+    if (currentTargetError) throw currentTargetError;
+    if (!currentTarget) throw new Error("Пользователь не найден");
+    if (!canManageUserRole(actor.profile.role, currentTarget.role)) {
+      throw new Error("Нет прав на редактирование этого пользователя");
+    }
+
+    const { data: authTarget, error: authTargetError } = await admin.auth.admin.getUserById(payload.userId);
+    if (authTargetError) throw authTargetError;
+    if (!authTarget.user) throw new Error("Учетная запись пользователя не найдена в Auth");
+
+    const manageableObjectIds = await assertManageableUserPayload(sessionSupabase, actor.profile, payload.role, payload.objectIds ?? []);
+    const { data: previousLinks, error: previousLinksError } = await sessionSupabase
+      .from("user_objects")
+      .select("object_id")
+      .eq("user_id", payload.userId);
+    if (previousLinksError) throw previousLinksError;
+
+    try {
+      const { error: profileError } = await sessionSupabase
+        .from("profiles")
+        .update({ full_name: payload.fullName, role: payload.role })
+        .eq("id", payload.userId);
+      if (profileError) throw profileError;
+
+      const { error: clearLinksError } = await sessionSupabase.from("user_objects").delete().eq("user_id", payload.userId);
+      if (clearLinksError) throw clearLinksError;
+
+      if (manageableObjectIds.length) {
+        const objectRows = manageableObjectIds.map((objectId) => ({ user_id: payload.userId, object_id: objectId }));
+        const { error: objectError } = await sessionSupabase.from("user_objects").insert(objectRows);
+        if (objectError) throw objectError;
+      }
+    } catch (error) {
+      await admin
+        .from("profiles")
+        .update({ full_name: currentTarget.full_name, role: currentTarget.role })
+        .eq("id", payload.userId);
+      await admin.from("user_objects").delete().eq("user_id", payload.userId);
+      if ((previousLinks ?? []).length) {
+        const rollbackRows = previousLinks.map((row) => ({ user_id: payload.userId, object_id: row.object_id }));
+        await admin.from("user_objects").insert(rollbackRows);
+      }
+      throw error;
+    }
+
+    const authUpdatePayload: { email?: string; password?: string; email_confirm?: boolean } = {};
+    const currentEmail = (authTarget.user.email ?? "").trim().toLowerCase();
+    const nextEmail = payload.email.trim().toLowerCase();
+
+    if (nextEmail !== currentEmail) {
+      authUpdatePayload.email = nextEmail;
+      authUpdatePayload.email_confirm = true;
+    }
+
+    if (payload.password) {
+      authUpdatePayload.password = payload.password;
+    }
+
+    if (Object.keys(authUpdatePayload).length > 0) {
+      const { error: authUpdateError } = await admin.auth.admin.updateUserById(payload.userId, authUpdatePayload);
+      if (authUpdateError) {
+        await admin
+          .from("profiles")
+          .update({ full_name: currentTarget.full_name, role: currentTarget.role })
+          .eq("id", payload.userId);
+        await admin.from("user_objects").delete().eq("user_id", payload.userId);
+        if ((previousLinks ?? []).length) {
+          const rollbackRows = previousLinks.map((row) => ({ user_id: payload.userId, object_id: row.object_id }));
+          await admin.from("user_objects").insert(rollbackRows);
+        }
+        throw authUpdateError;
+      }
+    }
+
+    await writeAudit({
+      actorId: actor.profile.id,
+      action: "update_user",
+      entityType: "user",
+      entityId: payload.userId,
+      meta: {
+        role: payload.role,
+        email: nextEmail,
+        object_ids: manageableObjectIds,
+        password_updated: Boolean(payload.password)
+      }
+    });
+
+    revalidatePath("/users");
+    return { ok: true, message: "Данные пользователя сохранены." };
   } catch (error) {
-    await admin
-      .from("profiles")
-      .update({ full_name: currentTarget.full_name, role: currentTarget.role })
-      .eq("id", payload.userId);
-    await admin.from("user_objects").delete().eq("user_id", payload.userId);
-    if ((previousLinks ?? []).length) {
-      const rollbackRows = previousLinks.map((row) => ({ user_id: payload.userId, object_id: row.object_id }));
-      await admin.from("user_objects").insert(rollbackRows);
-    }
-    throw error;
+    return {
+      ok: false,
+      error: mapUserActionError(error, "Не удалось сохранить пользователя.")
+    };
   }
-
-  await writeAudit({
-    actorId: actor.profile.id,
-    action: "update_user",
-    entityType: "user",
-    entityId: payload.userId,
-    meta: {
-      role: payload.role,
-      object_ids: payload.objectIds ?? []
-    }
-  });
-
-  revalidatePath("/users");
 }
 
 export async function deleteUserAction(formData: FormData) {

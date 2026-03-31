@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { deleteUserAction, updateUserAction } from "@/app/actions/user-actions";
 import { canAssignObjectsToManagedUser, canManageUserRole } from "@/lib/access/users";
+import type { Role } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -11,7 +13,8 @@ import { Modal } from "@/components/ui/modal";
 type UserRow = {
   id: string;
   full_name: string;
-  role: "admin" | "chief" | "lead" | "engineer" | "object_engineer" | "tech";
+  email: string | null;
+  role: Role;
 };
 
 type ObjectRow = {
@@ -25,7 +28,7 @@ type LinkRow = {
   object_name: string;
 };
 
-function roleTone(role: UserRow["role"]) {
+function roleTone(role: Role) {
   if (role === "admin") return "danger";
   if (role === "chief") return "warning";
   if (role === "lead") return "violet";
@@ -34,8 +37,8 @@ function roleTone(role: UserRow["role"]) {
   return "info";
 }
 
-function roleLabel(role: UserRow["role"]) {
-  if (role === "admin") return "Админ";
+function roleLabel(role: Role) {
+  if (role === "admin") return "Администратор";
   if (role === "chief") return "Руководитель";
   if (role === "lead") return "Лид";
   if (role === "object_engineer") return "Инженер объекта";
@@ -52,15 +55,19 @@ export function UsersAdminList({
   currentUserId,
 }: {
   users: UserRow[];
-  actorRole: UserRow["role"];
-  availableRoles: UserRow["role"][];
+  actorRole: Role;
+  availableRoles: Role[];
   objects: ObjectRow[];
   links: LinkRow[];
   currentUserId: string;
 }) {
+  const router = useRouter();
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
-  const [editingRole, setEditingRole] = useState<UserRow["role"] | null>(null);
+  const [editingRole, setEditingRole] = useState<Role | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSuccess, setEditSuccess] = useState<string | null>(null);
+  const [editPending, startEditTransition] = useTransition();
 
   const linksByUser = useMemo(() => {
     const map = new Map<string, { ids: Set<string>; names: string[] }>();
@@ -79,6 +86,7 @@ export function UsersAdminList({
 
   useEffect(() => {
     setEditingRole(editingUser?.role ?? null);
+    setEditError(null);
   }, [editingUser]);
 
   if (!users.length) {
@@ -94,6 +102,15 @@ export function UsersAdminList({
 
   return (
     <>
+      {editSuccess ? (
+        <div
+          className="card"
+          style={{ color: "#bbf7d0", background: "#153420", borderColor: "#166534" }}
+        >
+          {editSuccess}
+        </div>
+      ) : null}
+
       <div className="desktop-only">
         <DataTable
           columns={[
@@ -105,6 +122,7 @@ export function UsersAdminList({
         >
           {users.map((user) => {
             const canManageTarget = canManageUserRole(actorRole, user.role);
+            const isSelf = user.id === currentUserId;
             return (
               <tr key={user.id}>
                 <td>{user.full_name}</td>
@@ -113,7 +131,7 @@ export function UsersAdminList({
                 </td>
                 <td>{(linksByUser.get(user.id)?.names ?? []).join(", ") || "—"}</td>
                 <td>
-                  {canManageTarget ? (
+                  {canManageTarget && !isSelf ? (
                     <div className="row">
                       <button className="btn btn-ghost" type="button" onClick={() => setEditingUserId(user.id)}>
                         {"Изменить"}
@@ -122,6 +140,8 @@ export function UsersAdminList({
                         {"Удалить"}
                       </button>
                     </div>
+                  ) : isSelf ? (
+                    <span className="text-soft">{"Свой профиль редактируется в разделе Профиль"}</span>
                   ) : (
                     <span className="text-soft">{"Нет доступа"}</span>
                   )}
@@ -135,15 +155,17 @@ export function UsersAdminList({
       <div className="mobile-cards mobile-only">
         {users.map((user) => {
           const canManageTarget = canManageUserRole(actorRole, user.role);
+          const isSelf = user.id === currentUserId;
           return (
             <div className="section-card mobile-card" key={user.id}>
               <div className="grid" style={{ gap: "0.45rem" }}>
                 <div>{user.full_name}</div>
+                <div className="text-soft">{user.email ?? "Email не задан"}</div>
                 <div>
                   <Badge tone={roleTone(user.role)}>{roleLabel(user.role)}</Badge>
                 </div>
                 <div className="text-soft">{"Объекты:"} {(linksByUser.get(user.id)?.names ?? []).join(", ") || "—"}</div>
-                {canManageTarget ? (
+                {canManageTarget && !isSelf ? (
                   <div className="row">
                     <button className="btn btn-ghost" type="button" onClick={() => setEditingUserId(user.id)}>
                       {"Изменить"}
@@ -152,6 +174,8 @@ export function UsersAdminList({
                       {"Удалить"}
                     </button>
                   </div>
+                ) : isSelf ? (
+                  <div className="text-soft">{"Свой профиль редактируется в разделе Профиль"}</div>
                 ) : (
                   <div className="text-soft">{"Нет доступа к управлению"}</div>
                 )}
@@ -163,50 +187,122 @@ export function UsersAdminList({
 
       <Modal open={Boolean(editingUser)} onClose={() => setEditingUserId(null)} title={"Редактирование пользователя"}>
         {editingUser ? (
-          <form action={updateUserAction} className="grid" onSubmit={() => setEditingUserId(null)}>
+          <form
+            className="grid"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const formData = new FormData(event.currentTarget);
+              startEditTransition(async () => {
+                setEditError(null);
+                setEditSuccess(null);
+                const result = await updateUserAction(formData);
+                if (!result.ok) {
+                  setEditError(result.error);
+                  return;
+                }
+                setEditingUserId(null);
+                setEditSuccess(result.message);
+                router.refresh();
+              });
+            }}
+          >
             <input type="hidden" name="user_id" value={editingUser.id} />
-            <div className="field-row">
-              <input className="input" name="full_name" defaultValue={editingUser.full_name} required />
-              <select
-                className="select"
-                name="role"
-                value={editingRole ?? editingUser.role}
-                onChange={(event) => setEditingRole(event.target.value as UserRow["role"])}
-              >
-                {availableRoles.map((role) => (
-                  <option key={role} value={role}>
-                    {role}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {canAssignObjects ? (
-              <div className="grid">
-                <div className="text-soft">{"Объекты управляемого пользователя:"}</div>
-                <div className="row" style={{ flexWrap: "wrap" }}>
-                  {objects.map((objectItem) => (
-                    <label
-                      key={objectItem.id}
-                      className="badge badge-neutral"
-                      style={{ display: "inline-flex", gap: 6, alignItems: "center" }}
+            <fieldset style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: "1rem" }} disabled={editPending}>
+              <div className="grid" style={{ gap: "0.75rem" }}>
+                <div className="grid" style={{ gap: "0.2rem" }}>
+                  <strong>Данные учетной записи</strong>
+                  <div className="text-soft">ФИО, email и роль управляемой учетной записи.</div>
+                </div>
+                <div className="field-grid">
+                  <label style={{ display: "grid", gap: "0.35rem" }}>
+                    <span className="text-soft" style={{ fontSize: "0.78rem" }}>ФИО</span>
+                    <input className="input" name="full_name" defaultValue={editingUser.full_name} required />
+                  </label>
+                  <label style={{ display: "grid", gap: "0.35rem" }}>
+                    <span className="text-soft" style={{ fontSize: "0.78rem" }}>Email</span>
+                    <input className="input" name="email" type="email" defaultValue={editingUser.email ?? ""} required />
+                  </label>
+                  <label style={{ display: "grid", gap: "0.35rem" }}>
+                    <span className="text-soft" style={{ fontSize: "0.78rem" }}>Роль</span>
+                    <select
+                      className="select"
+                      name="role"
+                      value={editingRole ?? editingUser.role}
+                      onChange={(event) => setEditingRole(event.target.value as Role)}
                     >
-                      <input
-                        type="checkbox"
-                        name="object_ids"
-                        value={objectItem.id}
-                        defaultChecked={linksByUser.get(editingUser.id)?.ids.has(objectItem.id)}
-                      />
-                      {objectItem.name}
-                    </label>
-                  ))}
+                      {availableRoles.map((role) => (
+                        <option key={role} value={role}>
+                          {roleLabel(role)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
               </div>
-            ) : null}
-            <div className="row">
-              <button className="btn btn-accent" type="submit">
-                {"Сохранить"}
-              </button>
-            </div>
+
+              <div className="grid" style={{ gap: "0.75rem" }}>
+                <div className="grid" style={{ gap: "0.2rem" }}>
+                  <strong>Доступы</strong>
+                  <div className="text-soft">Объекты доступны только для ролей, которым разрешены object links.</div>
+                </div>
+                {canAssignObjects ? (
+                  <div className="row" style={{ flexWrap: "wrap" }}>
+                    {objects.map((objectItem) => (
+                      <label
+                        key={objectItem.id}
+                        className="badge badge-neutral"
+                        style={{ display: "inline-flex", gap: 6, alignItems: "center" }}
+                      >
+                        <input
+                          type="checkbox"
+                          name="object_ids"
+                          value={objectItem.id}
+                          defaultChecked={linksByUser.get(editingUser.id)?.ids.has(objectItem.id)}
+                        />
+                        {objectItem.name}
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-soft">Для выбранной роли объектные доступы через это окно не настраиваются.</div>
+                )}
+              </div>
+
+              <div className="grid" style={{ gap: "0.75rem" }}>
+                <div className="grid" style={{ gap: "0.2rem" }}>
+                  <strong>Безопасность</strong>
+                  <div className="text-soft">Оставьте оба поля пустыми, если пароль менять не нужно.</div>
+                </div>
+                <div className="field-grid">
+                  <label style={{ display: "grid", gap: "0.35rem" }}>
+                    <span className="text-soft" style={{ fontSize: "0.78rem" }}>Новый пароль</span>
+                    <input className="input" name="password" type="password" autoComplete="new-password" />
+                  </label>
+                  <label style={{ display: "grid", gap: "0.35rem" }}>
+                    <span className="text-soft" style={{ fontSize: "0.78rem" }}>Подтверждение нового пароля</span>
+                    <input className="input" name="password_confirm" type="password" autoComplete="new-password" />
+                  </label>
+                </div>
+              </div>
+
+              {editError ? (
+                <div
+                  className="card"
+                  style={{ color: "#fecaca", background: "#3f1820", borderColor: "#7f1d1d" }}
+                >
+                  {editError}
+                </div>
+              ) : null}
+
+              <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
+                <button className="btn btn-ghost" type="button" onClick={() => setEditingUserId(null)}>
+                  {"Отмена"}
+                </button>
+                <button className="btn btn-accent" type="submit" disabled={editPending}>
+                  {editPending ? "Сохраняем..." : "Сохранить"}
+                </button>
+              </div>
+            </fieldset>
           </form>
         ) : null}
       </Modal>
