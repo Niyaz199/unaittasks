@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { canAccessRoundsModule } from "@/lib/rounds/permissions";
 import { PageHeader } from "@/components/ui/page-header";
@@ -9,17 +10,21 @@ export default async function RoundsPage() {
   if (!canAccessRoundsModule(profile.role)) {
     return (
       <section className="grid">
-        <PageHeader title="Обходы" description="Доступ к модулю ограничен." />
-        <div className="section-card">У вас нет доступа к модулю обходов.</div>
+        <PageHeader title={"Обходы"} description={"Доступ к модулю ограничен."} />
+        <div className="section-card">{"У вас нет доступа к модулю обходов."}</div>
       </section>
     );
+  }
+
+  if (profile.role === "tech") {
+    redirect("/rounds/scan");
   }
 
   return (
     <section className="grid">
       <PageHeader
-        title="Модуль Обходов"
-        description="Управление обходами помещений, сканирование QR-кодов, фиксация состояния и фотоотчеты."
+        title={"Модуль Обходов"}
+        description={"Управление обходами помещений, сканирование QR-кодов, фиксация состояния и фотоотчеты."}
       />
       <RoundsDashboardHome role={profile.role} />
     </section>

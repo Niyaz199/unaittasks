@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createTaskActionSafe } from "@/app/actions/task-actions";
-import type { ObjectItem, Profile } from "@/lib/types";
+import type { ObjectItem, Profile, Role } from "@/lib/types";
 import { AssigneeCombobox, type AssigneeOption } from "@/components/ui/assignee-combobox";
 import { TeamMembersPicker } from "@/components/tasks/team-members-picker";
 import { PhotoPicker, type PickedFile } from "@/components/tasks/photo-picker";
@@ -14,14 +14,21 @@ type FieldErrors = {
   assigned_to?: string;
 };
 
+type TaskCandidate = Pick<Profile, "id" | "full_name"> & {
+  email?: string | null;
+  role: Role;
+  object_ids: string[];
+  is_global_scope: boolean;
+};
+
 export function CreateTaskForm({
   objects,
   assignees,
   teamCandidates
 }: {
   objects: ObjectItem[];
-  assignees: Array<Pick<Profile, "id" | "full_name"> & { email?: string | null }>;
-  teamCandidates: Array<Pick<Profile, "id" | "full_name"> & { email?: string | null }>;
+  assignees: TaskCandidate[];
+  teamCandidates: TaskCandidate[];
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -39,9 +46,32 @@ export function CreateTaskForm({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const assigneeOptions: AssigneeOption[] = assignees.map((a) => ({ id: a.id, label: a.full_name, subtitle: a.email ?? null }));
   const objectOptions: AssigneeOption[] = objects.map((o) => ({ id: o.id, label: o.name }));
-  const teamOptions: AssigneeOption[] = teamCandidates.map((m) => ({ id: m.id, label: m.full_name, subtitle: m.email ?? null }));
+  const filteredAssignees = useMemo(
+    () =>
+      assignees.filter((candidate) => {
+        if (!selectedObjectId) return true;
+        return candidate.is_global_scope || candidate.object_ids.includes(selectedObjectId);
+      }),
+    [assignees, selectedObjectId]
+  );
+  const filteredTeamCandidates = useMemo(
+    () =>
+      teamCandidates.filter((candidate) => {
+        if (!selectedObjectId) return true;
+        return candidate.is_global_scope || candidate.object_ids.includes(selectedObjectId);
+      }),
+    [teamCandidates, selectedObjectId]
+  );
+  const assigneeOptions: AssigneeOption[] = filteredAssignees.map((a) => ({ id: a.id, label: a.full_name, subtitle: a.email ?? null }));
+  const teamOptions: AssigneeOption[] = filteredTeamCandidates.map((m) => ({ id: m.id, label: m.full_name, subtitle: m.email ?? null }));
+
+  useEffect(() => {
+    if (selectedAssigneeId && !filteredAssignees.some((candidate) => candidate.id === selectedAssigneeId)) {
+      setSelectedAssigneeId("");
+    }
+    setSelectedTeamIds((prev) => prev.filter((memberId) => filteredTeamCandidates.some((candidate) => candidate.id === memberId)));
+  }, [filteredAssignees, filteredTeamCandidates, selectedAssigneeId]);
 
   function validate(titleValue: string): FieldErrors {
     const errors: FieldErrors = {};
@@ -203,6 +233,7 @@ export function CreateTaskForm({
             </label>
             <div className={fieldErrors.assigned_to ? "ctf-combobox--error" : ""}>
               <AssigneeCombobox
+                key={`assignee-${selectedObjectId || "any"}`}
                 name="assigned_to"
                 options={assigneeOptions}
                 required

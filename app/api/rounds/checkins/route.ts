@@ -36,6 +36,10 @@ function extractApiErrorMessage(error: unknown, fallback = "Не удалось 
   return fallback;
 }
 
+function extractApiErrorStatus(message: string) {
+  return /недостаточно прав|недоступ/i.test(message) ? 403 : 400;
+}
+
 export async function POST(request: Request) {
   let uploadedPhoto: {
     storage_path: string;
@@ -123,6 +127,6 @@ export async function POST(request: Request) {
       typeof error === "object" && error && "hint" in error && typeof (error as { hint?: unknown }).hint === "string"
         ? (error as { hint: string }).hint
         : null;
-    return NextResponse.json({ error: message, details, hint }, { status: 400 });
+    return NextResponse.json({ error: message, details, hint }, { status: extractApiErrorStatus(message) });
   }
 }

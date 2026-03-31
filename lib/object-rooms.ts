@@ -3,9 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { hasScopedObjectAccessForProfile, listScopedObjectsForProfile } from "@/lib/object-access";
 import type { NamedRelation, RelationValue } from "@/lib/relation-normalization";
 import type { Profile } from "@/lib/types";
-
-const OBJECT_ROOM_READ_ROLES = new Set(["admin", "chief", "lead", "engineer", "object_engineer"]);
-const OBJECT_ROOM_MANAGE_ROLES = new Set(["admin", "chief", "lead", "object_engineer"]);
+import { canManageObjectRoomsDirectory, canReadObjectRoomsDirectory } from "@/lib/access/matrix";
 
 type FloorRelation = RelationValue<{ id: string; name: string; sort_order: number; is_active: boolean }>;
 type RoomTypeRelation = RelationValue<{ id: string; name: string; is_active: boolean }>;
@@ -52,11 +50,11 @@ export function normalizeObjectRoomName(value: string) {
 }
 
 export function canReadObjectRooms(role: Profile["role"]) {
-  return OBJECT_ROOM_READ_ROLES.has(role);
+  return canReadObjectRoomsDirectory(role);
 }
 
 export function canManageObjectRooms(role: Profile["role"]) {
-  return OBJECT_ROOM_MANAGE_ROLES.has(role);
+  return canManageObjectRoomsDirectory(role);
 }
 
 function isSchemaCacheError(error: unknown) {

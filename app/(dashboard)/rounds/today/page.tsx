@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { BackButton } from "@/components/ui/back-button";
 import { PageHeader } from "@/components/ui/page-header";
@@ -13,6 +14,10 @@ export default async function RoundsTodayPage({
 }) {
   const search = searchParams ? await searchParams : {};
   const { profile, supabase } = await requireProfile();
+
+  if (profile.role === "tech") {
+    redirect("/rounds/scan");
+  }
 
   if (!canReadRoundsReports(profile.role)) {
     return (

@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { NamedRelation } from "@/lib/relation-normalization";
 import type { Profile } from "@/lib/types";
+import { canReadObjectRoomsDirectory } from "@/lib/access/matrix";
 import { canManageFloorsDirectory, canReadFloorsDirectory } from "@/lib/auth";
 import { listObjectRoomManageableObjectsForProfile, listObjectRoomReadableObjectsForProfile } from "@/lib/object-rooms";
 
@@ -53,7 +54,7 @@ export async function listFloorsForProfile(
   profile: Pick<Profile, "id" | "role">,
   options: { objectId?: string; onlyActive?: boolean } = {}
 ) {
-  if (!canReadFloorsDirectory(profile.role)) {
+  if (!canReadFloorsDirectory(profile.role) && !canReadObjectRoomsDirectory(profile.role)) {
     throw new Error("Недостаточно прав для чтения справочника этажей");
   }
 

@@ -1,45 +1,62 @@
 import type { Role } from "@/lib/types";
+import {
+  canAccessDirectories as canAccessDirectoriesByRole,
+  canAccessUserManagement,
+  canCreateTasks,
+  canManageFloorsDirectory as canManageFloorsDirectoryByRole,
+  canManageObjects as canManageObjectsByRole,
+  canManageTaskTeam as canManageTaskTeamByRole,
+  canManageObjectRoomsDirectory as canManageObjectRoomsDirectoryByRole,
+  canManageRoomTypesDirectory as canManageRoomTypesDirectoryByRole,
+  canReadFloorsDirectory as canReadFloorsDirectoryByRole,
+  canReadObjectRoomsDirectory,
+  canReadRoomTypesDirectory as canReadRoomTypesDirectoryByRole,
+  canViewAudit as canViewAuditByRole,
+  isSuperuser,
+} from "@/lib/access/matrix";
 
 export function canViewAudit(role: Role) {
-  return role === "admin" || role === "chief";
+  return canViewAuditByRole(role);
 }
 
 export function canManageObjects(role: Role) {
-  return role === "admin" || role === "chief";
+  return canManageObjectsByRole(role);
 }
 
 export function canManageUsers(role: Role) {
-  return role === "admin" || role === "chief";
+  return canAccessUserManagement(role);
 }
 
 export function canReadFloorsDirectory(role: Role) {
-  return role === "admin" || role === "chief" || role === "lead" || role === "object_engineer";
+  return canReadFloorsDirectoryByRole(role);
 }
 
 export function canManageFloorsDirectory(role: Role) {
-  return role === "admin" || role === "chief" || role === "lead" || role === "object_engineer";
+  return canManageFloorsDirectoryByRole(role);
 }
 
 export function canReadRoomTypesDirectory(role: Role) {
-  return role === "admin" || role === "chief" || role === "lead" || role === "object_engineer";
+  return canReadRoomTypesDirectoryByRole(role);
 }
 
 export function canManageRoomTypesDirectory(role: Role) {
-  return role === "admin" || role === "chief";
+  return canManageRoomTypesDirectoryByRole(role);
 }
 
 export function canAccessDirectories(role: Role) {
-  return canManageObjects(role) || canReadFloorsDirectory(role) || canReadRoomTypesDirectory(role);
+  return canAccessDirectoriesByRole(role);
 }
 
 export function canEditTasks(role: Role) {
-  return role === "admin" || role === "chief" || role === "lead" || role === "engineer" || role === "object_engineer";
+  return canCreateTasks(role);
 }
 
 export function canManageTaskTeam(role: Role) {
-  return role === "admin" || role === "chief" || role === "lead" || role === "engineer" || role === "object_engineer";
+  return canManageTaskTeamByRole(role);
 }
 
-export function isSuperuser(role: Role) {
-  return role === "admin";
+export function canManageObjectRooms(role: Role) {
+  return canManageObjectRoomsDirectoryByRole(role);
 }
+
+export { canReadObjectRoomsDirectory, isSuperuser };

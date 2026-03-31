@@ -7,12 +7,22 @@ import type { Route } from "next";
 import type { Role } from "@/lib/types";
 import {
   canAccessDirectories,
+  canManageObjectRooms,
   canManageObjects,
   canManageUsers,
   canReadFloorsDirectory,
   canReadRoomTypesDirectory,
 } from "@/lib/capabilities";
 import { canAccessRoundsModule, canManageRoundsConfig, canReadRoundsReports } from "@/lib/rounds/permissions";
+import {
+  canAccessPprAssignmentScreens,
+  canAccessPprCalendarScreens,
+  canAccessPprStructureScreens,
+  canAccessPprSystemGroupScreens,
+  canAccessPprTaskScreens,
+  canAccessPprTemplateScreens,
+} from "@/lib/ppr/access";
+import { canAccessPprModule } from "@/lib/ppr/permissions";
 
 type Props = {
   role: Role;
@@ -86,10 +96,19 @@ const Icons = {
 export function MainNav({ role, currentPath }: Props) {
   const router = useRouter();
   const canOpenDirectories = canAccessDirectories(role);
-  const canManagePprSystemGroups = role === "admin" || role === "chief" || role === "lead";
+  const canOpenPpr = canAccessPprModule(role);
+  const canOpenPprStructure = canAccessPprStructureScreens(role);
+  const canOpenPprSystemGroups = canAccessPprSystemGroupScreens(role);
+  const canOpenPprTemplates = canAccessPprTemplateScreens(role);
+  const canOpenPprAssignments = canAccessPprAssignmentScreens(role);
+  const canOpenPprCalendar = canAccessPprCalendarScreens(role);
+  const canOpenPprTasks = canAccessPprTaskScreens(role);
+  const canOpenPprTaskRegistry = canOpenPprTasks && role !== "tech";
+  const pprHref = role === "tech" ? "/ppr/my" : "/ppr";
   const canOpenRounds = canAccessRoundsModule(role);
   const canOpenRoundsReports = canReadRoundsReports(role);
   const canOpenRoundsConfig = canManageRoundsConfig(role);
+  const roundsHref = role === "tech" ? "/rounds/scan" : "/rounds";
 
   const sections: NavSection[] = [
     {
@@ -107,18 +126,18 @@ export function MainNav({ role, currentPath }: Props) {
       id: "ppr",
       title: "ППР",
       icon: Icons.Ppr,
-      show: true,
-      href: "/ppr",
+      show: canOpenPpr,
+      href: pprHref,
       items: [
-        { href: "/ppr/system-groups", label: "Группы систем ППР", show: canManagePprSystemGroups },
-        { href: "/ppr/systems", label: "Системы", show: true },
-        { href: "/ppr/equipment", label: "Оборудование", show: true },
-        { href: "/ppr/templates", label: "Шаблоны", show: true },
-        { href: "/ppr/assignments", label: "Назначения", show: true },
-        { href: "/ppr/calendar", label: "Календарь", show: true },
-        { href: "/ppr/tasks", label: "Все заявки", show: true },
-        { href: "/ppr/my", label: "Мои работы", show: true },
-        { href: "/ppr/archive", label: "Архив работ", show: true },
+        { href: "/ppr/system-groups", label: "Группы систем ППР", show: canOpenPprSystemGroups },
+        { href: "/ppr/systems", label: "Системы", show: canOpenPprStructure },
+        { href: "/ppr/equipment", label: "Оборудование", show: canOpenPprStructure },
+        { href: "/ppr/templates", label: "Шаблоны", show: canOpenPprTemplates },
+        { href: "/ppr/assignments", label: "Назначения", show: canOpenPprAssignments },
+        { href: "/ppr/calendar", label: "Календарь", show: canOpenPprCalendar },
+        { href: "/ppr/tasks", label: "Все заявки", show: canOpenPprTaskRegistry },
+        { href: "/ppr/my", label: "Мои работы", show: canOpenPprTasks },
+        { href: "/ppr/archive", label: "Архив работ", show: canOpenPprTaskRegistry },
       ],
     },
     {
@@ -126,7 +145,7 @@ export function MainNav({ role, currentPath }: Props) {
       title: "Обходы",
       icon: Icons.Rounds,
       show: canOpenRounds,
-      href: "/rounds",
+      href: roundsHref,
       items: [
         { href: "/rounds/scan", label: "Сканер", show: true },
         { href: "/rounds/today", label: "Сегодня", show: canOpenRoundsReports },
@@ -145,7 +164,7 @@ export function MainNav({ role, currentPath }: Props) {
         { href: "/objects", label: "Объекты", show: canManageObjects(role) },
         { href: "/directories/floors", label: "Этажи", show: canReadFloorsDirectory(role) },
         { href: "/directories/room-types", label: "Типы помещений", show: canReadRoomTypesDirectory(role) },
-        { href: "/ppr/rooms", label: "Помещения", show: true },
+        { href: "/ppr/rooms", label: "\u041f\u043e\u043c\u0435\u0449\u0435\u043d\u0438\u044f", show: canManageObjectRooms(role) },
       ],
     },
     {

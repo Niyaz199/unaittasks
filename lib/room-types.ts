@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Profile } from "@/lib/types";
+import { canReadObjectRoomsDirectory } from "@/lib/access/matrix";
 import { canManageRoomTypesDirectory, canReadRoomTypesDirectory } from "@/lib/auth";
 
 export type RoomTypeRow = {
@@ -33,7 +34,7 @@ export async function listRoomTypesForProfile(
   profile: Pick<Profile, "role">,
   options: { onlyActive?: boolean } = {}
 ) {
-  if (!canReadRoomTypesDirectory(profile.role)) {
+  if (!canReadRoomTypesDirectory(profile.role) && !canReadObjectRoomsDirectory(profile.role)) {
     throw new Error("Недостаточно прав для чтения справочника типов помещений");
   }
 

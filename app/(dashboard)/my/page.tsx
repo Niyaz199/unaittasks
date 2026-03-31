@@ -6,12 +6,31 @@ import { TaskFilters } from "@/components/tasks/task-filters";
 import { TaskList } from "@/components/tasks/task-list";
 import { PageHeader } from "@/components/ui/page-header";
 import type { SortMode } from "@/lib/task-sort";
+import type { TaskItem } from "@/lib/types";
 
 type Search = Record<string, string | string[] | undefined>;
 
 const VALID_SORT_MODES: SortMode[] = ["smart", "due_asc", "due_desc", "created_desc"];
 type GroupBy = "none" | "object" | "status";
 const VALID_GROUP_BY: GroupBy[] = ["none", "object", "status"];
+
+function listTaskPeople(tasks: TaskItem[]) {
+  const people = new Map<string, string>();
+  for (const task of tasks) {
+    const assignee = Array.isArray(task.assignee) ? task.assignee[0] : task.assignee;
+    if (task.assigned_to && assignee?.full_name) {
+      people.set(task.assigned_to, assignee.full_name);
+    }
+    for (const member of task.team_members ?? []) {
+      if (member.user_id && member.member?.full_name) {
+        people.set(member.user_id, member.member.full_name);
+      }
+    }
+  }
+  return [...people.entries()]
+    .map(([id, full_name]) => ({ id, full_name }))
+    .sort((left, right) => left.full_name.localeCompare(right.full_name, "ru"));
+}
 
 export default async function MyTasksPage({ searchParams }: { searchParams: Promise<Search> }) {
   const params = await searchParams;
@@ -46,17 +65,13 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
     ? (rawGroupBy as GroupBy)
     : "none";
 
-  const [objects, tasks, allTasks, assignees] = await Promise.all([
+  const [objects, tasks, allTasks] = await Promise.all([
     listObjectsForProfile(supabase, profile),
     listTasksForProfile(supabase, profile, "my", filters),
     // KPI всегда по полному списку без фильтров
     listTasksForProfile(supabase, profile, "my"),
-    supabase
-      .from("profiles")
-      .select("id,full_name,role")
-      .in("role", ["lead", "engineer", "object_engineer", "tech"])
-      .order("full_name")
   ]);
+  const people = listTaskPeople(allTasks);
 
   return (
     <section className="tl-page">
@@ -66,7 +81,7 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
       />
       <TaskFilters
         objects={objects}
-        assignees={(assignees.data ?? []).map((item) => ({ id: item.id, full_name: item.full_name }))}
+        assignees={people}
         initial={{ ...filters, clientSort, groupBy }}
         showCreateButton={canEditTasks(profile.role)}
         createHref="/tasks/create"

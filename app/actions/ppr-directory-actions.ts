@@ -10,6 +10,7 @@ import {
   canAccessPprSystemGroupScreens,
   listPprManageableObjectsForProfile,
 } from "@/lib/ppr/queries";
+import { hasActorScopedObjectAccessForProfile } from "@/lib/access/object-scope";
 import { canBeResponsibleForSystem, canManagePprStructure } from "@/lib/ppr/permissions";
 
 async function requireSystemGroupManager() {
@@ -57,15 +58,13 @@ async function assertResponsibleCandidate(
     throw new Error("Выбранный пользователь не может быть ответственным по системе");
   }
 
-  const { count, error: accessError } = await supabase
-    .from("user_objects")
-    .select("object_id", { count: "exact", head: true })
-    .eq("user_id", responsibleUserId)
-    .eq("object_id", objectId);
-  if (accessError) throw accessError;
-
-  if ((count ?? 0) === 0) {
-    throw new Error("Ответственный по системе должен иметь доступ к выбранному объекту");
+  const hasAccess = await hasActorScopedObjectAccessForProfile(
+    supabase,
+    { id: responsibleUserId, role: profile.role },
+    objectId
+  );
+  if (!hasAccess) {
+    throw new Error("\u041e\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0439 \u043f\u043e \u0441\u0438\u0441\u0442\u0435\u043c\u0435 \u0434\u043e\u043b\u0436\u0435\u043d \u0438\u043c\u0435\u0442\u044c \u0434\u043e\u0441\u0442\u0443\u043f \u043a \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u043e\u043c\u0443 \u043e\u0431\u044a\u0435\u043a\u0442\u0443");
   }
 }
 

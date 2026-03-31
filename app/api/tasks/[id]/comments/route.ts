@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getApiSession } from "@/lib/api-auth";
 import { writeAudit } from "@/lib/audit";
-import { canReadTaskByRole } from "@/lib/task-permissions";
+import { canWorkOnTaskByRole } from "@/lib/task-permissions";
 import { sendPushToUser } from "@/lib/push";
 
 const schema = z.object({
@@ -28,23 +28,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       team_members: Array<{ user_id: string }> | null;
     };
 
-    const { data: task, error: taskError } = await supabase
+    const { data: task } = await supabase
       .from("tasks")
       .select("id, title, assigned_to, created_by, object_id, objects(name, object_engineer_id), team_members:task_team_members(user_id)")
       .eq("id", id)
       .single();
-    if (taskError) console.error("[comments] task fetch error:", taskError);
     if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
 
     const row = task as unknown as TaskRow;
-
-    console.log("[comments] raw task row:", {
-      id: row.id,
-      title: row.title,
-      assigned_to: row.assigned_to,
-      created_by: row.created_by,
-      team_members: row.team_members,
-    });
 
     const teamMemberIds = (row.team_members ?? []).map((member) => member.user_id);
     const objectsRelation = row.objects;
@@ -55,8 +46,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       ? objectsRelation[0]?.object_engineer_id ?? null
       : objectsRelation?.object_engineer_id ?? null;
 
-    const canRead = canReadTaskByRole(profile.role, profile.id, row, teamMemberIds, objectEngineerId);
-    if (!canRead) {
+    const canWork = canWorkOnTaskByRole(profile.role, profile.id, row, teamMemberIds, objectEngineerId);
+    if (!canWork) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -129,16 +120,7 @@ async function sendCommentPushes(p: CommentPushParams) {
     (uid): uid is string => typeof uid === "string" && uid.length > 0 && uid !== p.actorId
   );
 
-  console.log("[comments push] actorId:", p.actorId);
-  console.log("[comments push] assigned_to:", p.assignedTo);
-  console.log("[comments push] created_by:", p.createdBy);
-  console.log("[comments push] teamMemberIds:", p.teamMemberIds);
-  console.log("[comments push] finalRecipients:", observers);
-
-  if (!observers.length) {
-    console.log("[comments push] no recipients, skipping");
-    return;
-  }
+  if (!observers.length) return;
 
   const titlePrefix = p.objectName ? `[${p.objectName}] ` : "";
   const bodySnippet = p.commentBody.length > 100
@@ -155,8 +137,6 @@ async function sendCommentPushes(p: CommentPushParams) {
   results.forEach((r, i) => {
     if (r.status === "rejected") {
       console.error(`[comments push] failed for uid=${observers[i]}:`, r.reason);
-    } else {
-      console.log(`[comments push] result for uid=${observers[i]}:`, r.value);
     }
   });
 }

@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { Route } from "next";
 import { z } from "zod";
-import { canManageUsers, requireProfile } from "@/lib/auth";
+import { requireProfile } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { assertManageableUserPayload, canManageUserRole, canManageUsers as canManageUsersByRole } from "@/lib/access/users";
 import { writeAudit } from "@/lib/audit";
 
 const schema = z.object({
@@ -33,7 +34,8 @@ function buildCreateUserErrorRedirect(message: string): Route {
 
 export async function createUserAction(formData: FormData) {
   const actor = await requireProfile();
-  if (!canManageUsers(actor.profile.role)) {
+  const sessionSupabase = actor.supabase;
+  if (!canManageUsersByRole(actor.profile.role)) {
     throw new Error("Нет прав на создание пользователей");
   }
 
@@ -46,6 +48,7 @@ export async function createUserAction(formData: FormData) {
   });
 
   const admin = createSupabaseAdminClient();
+  const manageableObjectIds = await assertManageableUserPayload(sessionSupabase, actor.profile, payload.role, payload.objectIds ?? []);
   const { data: created, error: authError } = await admin.auth.admin.createUser({
     email: payload.email,
     password: payload.password,
@@ -64,19 +67,22 @@ export async function createUserAction(formData: FormData) {
   }
 
   const userId = created.user.id;
-  const { error: profileError } = await admin.from("profiles").upsert({
-    id: userId,
-    full_name: payload.fullName,
-    role: payload.role
-  });
-  if (profileError) throw profileError;
+  try {
+    const { error: profileError } = await sessionSupabase.from("profiles").insert({
+      id: userId,
+      full_name: payload.fullName,
+      role: payload.role
+    });
+    if (profileError) throw profileError;
 
-  if (payload.role === "engineer" || payload.role === "object_engineer") {
-    const objectRows = (payload.objectIds ?? []).map((objectId) => ({ user_id: userId, object_id: objectId }));
-    if (objectRows.length) {
-      const { error: objectError } = await admin.from("user_objects").insert(objectRows);
+    if (manageableObjectIds.length) {
+      const objectRows = manageableObjectIds.map((objectId) => ({ user_id: userId, object_id: objectId }));
+      const { error: objectError } = await sessionSupabase.from("user_objects").insert(objectRows);
       if (objectError) throw objectError;
     }
+  } catch (error) {
+    await admin.auth.admin.deleteUser(userId).catch(() => undefined);
+    throw error;
   }
 
   await writeAudit({
@@ -97,7 +103,8 @@ export async function createUserAction(formData: FormData) {
 
 export async function updateUserAction(formData: FormData) {
   const actor = await requireProfile();
-  if (!canManageUsers(actor.profile.role)) {
+  const sessionSupabase = actor.supabase;
+  if (!canManageUsersByRole(actor.profile.role)) {
     throw new Error("Нет прав на редактирование пользователей");
   }
 
@@ -113,22 +120,49 @@ export async function updateUserAction(formData: FormData) {
   }
 
   const admin = createSupabaseAdminClient();
-  const { error: profileError } = await admin
+  const { data: currentTarget, error: currentTargetError } = await sessionSupabase
     .from("profiles")
-    .update({ full_name: payload.fullName, role: payload.role })
-    .eq("id", payload.userId);
-  if (profileError) throw profileError;
+    .select("full_name,role")
+    .eq("id", payload.userId)
+    .maybeSingle();
+  if (currentTargetError) throw currentTargetError;
+  if (!currentTarget) throw new Error("\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d");
+  if (!canManageUserRole(actor.profile.role, currentTarget.role)) {
+    throw new Error("\u041d\u0435\u0442 \u043f\u0440\u0430\u0432 \u043d\u0430 \u0440\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435 \u044d\u0442\u043e\u0433\u043e \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044f");
+  }
+  const manageableObjectIds = await assertManageableUserPayload(sessionSupabase, actor.profile, payload.role, payload.objectIds ?? []);
+  const { data: previousLinks, error: previousLinksError } = await sessionSupabase
+    .from("user_objects")
+    .select("object_id")
+    .eq("user_id", payload.userId);
+  if (previousLinksError) throw previousLinksError;
 
-  const { error: clearLinksError } = await admin.from("user_objects").delete().eq("user_id", payload.userId);
-  if (clearLinksError) throw clearLinksError;
+  try {
+    const { error: profileError } = await sessionSupabase
+      .from("profiles")
+      .update({ full_name: payload.fullName, role: payload.role })
+      .eq("id", payload.userId);
+    if (profileError) throw profileError;
 
-  if (payload.role === "engineer" || payload.role === "object_engineer") {
-    const uniqueObjectIds = [...new Set(payload.objectIds ?? [])];
-    if (uniqueObjectIds.length) {
-      const objectRows = uniqueObjectIds.map((objectId) => ({ user_id: payload.userId, object_id: objectId }));
-      const { error: objectError } = await admin.from("user_objects").insert(objectRows);
+    const { error: clearLinksError } = await sessionSupabase.from("user_objects").delete().eq("user_id", payload.userId);
+    if (clearLinksError) throw clearLinksError;
+
+    if (manageableObjectIds.length) {
+      const objectRows = manageableObjectIds.map((objectId) => ({ user_id: payload.userId, object_id: objectId }));
+      const { error: objectError } = await sessionSupabase.from("user_objects").insert(objectRows);
       if (objectError) throw objectError;
     }
+  } catch (error) {
+    await admin
+      .from("profiles")
+      .update({ full_name: currentTarget.full_name, role: currentTarget.role })
+      .eq("id", payload.userId);
+    await admin.from("user_objects").delete().eq("user_id", payload.userId);
+    if ((previousLinks ?? []).length) {
+      const rollbackRows = previousLinks.map((row) => ({ user_id: payload.userId, object_id: row.object_id }));
+      await admin.from("user_objects").insert(rollbackRows);
+    }
+    throw error;
   }
 
   await writeAudit({
@@ -147,7 +181,8 @@ export async function updateUserAction(formData: FormData) {
 
 export async function deleteUserAction(formData: FormData) {
   const actor = await requireProfile();
-  if (!canManageUsers(actor.profile.role)) {
+  const sessionSupabase = actor.supabase;
+  if (!canManageUsersByRole(actor.profile.role)) {
     throw new Error("Нет прав на удаление пользователей");
   }
 
@@ -160,6 +195,16 @@ export async function deleteUserAction(formData: FormData) {
   }
 
   const admin = createSupabaseAdminClient();
+  const { data: currentTarget, error: currentTargetError } = await sessionSupabase
+    .from("profiles")
+    .select("full_name,role")
+    .eq("id", payload.userId)
+    .maybeSingle();
+  if (currentTargetError) throw currentTargetError;
+  if (!currentTarget) throw new Error("\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d");
+  if (!canManageUserRole(actor.profile.role, currentTarget.role)) {
+    throw new Error("\u041d\u0435\u0442 \u043f\u0440\u0430\u0432 \u043d\u0430 \u0443\u0434\u0430\u043b\u0435\u043d\u0438\u0435 \u044d\u0442\u043e\u0433\u043e \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044f");
+  }
   const { count, error: tasksCountError } = await admin
     .from("tasks")
     .select("id", { count: "exact", head: true })
@@ -169,8 +214,28 @@ export async function deleteUserAction(formData: FormData) {
     throw new Error("Нельзя удалить пользователя: есть связанные задачи");
   }
 
+  const { data: previousLinks, error: previousLinksError } = await sessionSupabase
+    .from("user_objects")
+    .select("object_id")
+    .eq("user_id", payload.userId);
+  if (previousLinksError) throw previousLinksError;
+
+  const { error: profileDeleteError } = await sessionSupabase.from("profiles").delete().eq("id", payload.userId);
+  if (profileDeleteError) throw profileDeleteError;
+
   const { error: deleteError } = await admin.auth.admin.deleteUser(payload.userId);
-  if (deleteError) throw deleteError;
+  if (deleteError) {
+    await admin.from("profiles").insert({
+      id: payload.userId,
+      full_name: currentTarget.full_name,
+      role: currentTarget.role
+    });
+    if ((previousLinks ?? []).length) {
+      const rollbackRows = previousLinks.map((row) => ({ user_id: payload.userId, object_id: row.object_id }));
+      await admin.from("user_objects").insert(rollbackRows);
+    }
+    throw deleteError;
+  }
 
   await writeAudit({
     actorId: actor.profile.id,

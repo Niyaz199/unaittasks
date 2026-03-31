@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { getApiSession } from "@/lib/api-auth";
+import { canReadRoundsReports } from "@/lib/rounds/permissions";
 import { getRoundsArchiveForProfile } from "@/lib/rounds/queries";
 
 export async function GET(request: Request) {
   try {
     const { supabase, profile } = await getApiSession();
     if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!canReadRoundsReports(profile.role)) {
+      return NextResponse.json({ error: "Недостаточно прав для просмотра архива обходов" }, { status: 403 });
+    }
 
     const url = new URL(request.url);
     const result = await getRoundsArchiveForProfile(supabase, profile, {
@@ -21,6 +25,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 400 });
+    const status = /недостаточно прав|недоступ/i.test(message) ? 403 : 400;
+    return NextResponse.json({ error: message }, { status });
   }
 }

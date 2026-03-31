@@ -89,15 +89,13 @@ export async function listPprTasksForProfile(
     query = query.in("status", ["new", "in_progress", "done"]);
   }
 
-  if (profile.role === "lead" || profile.role === "object_engineer") {
+  if (profile.role === "lead" || profile.role === "engineer" || profile.role === "object_engineer") {
     const objects = await listPprManageableObjectsForProfile(supabase, profile);
     if (!objects.length) return [];
     query = query.in(
       "object_id",
       objects.map((item) => item.id)
     );
-  } else if (profile.role === "engineer" && kind !== "my") {
-    query = query.or(`responsible_user_id.eq.${profile.id},assignee_id.eq.${profile.id}`);
   } else if (profile.role === "tech" && kind !== "my") {
     query = query.eq("assignee_id", profile.id);
   }
@@ -127,16 +125,9 @@ export async function getPprTaskByIdForProfile(
     return data as PprTaskSummaryRow;
   }
 
-  if (profile.role === "lead" || profile.role === "object_engineer") {
+  if (profile.role === "lead" || profile.role === "engineer" || profile.role === "object_engineer") {
     const objects = await listPprManageableObjectsForProfile(supabase, profile);
     if (!objects.some((item) => item.id === data.object_id)) {
-      return null;
-    }
-    return data as PprTaskSummaryRow;
-  }
-
-  if (profile.role === "engineer") {
-    if (data.responsible_user_id !== profile.id && data.assignee_id !== profile.id) {
       return null;
     }
     return data as PprTaskSummaryRow;
@@ -203,15 +194,13 @@ export async function getPreferredActivePprTaskForEquipmentForProfile(
     .order("created_at", { ascending: false })
     .limit(1);
 
-  if (profile.role === "lead" || profile.role === "object_engineer") {
+  if (profile.role === "lead" || profile.role === "engineer" || profile.role === "object_engineer") {
     const objects = await listPprManageableObjectsForProfile(supabase, profile);
     if (!objects.length) return null;
     query = query.in(
       "object_id",
       objects.map((item) => item.id)
     );
-  } else if (profile.role === "engineer") {
-    query = query.or(`responsible_user_id.eq.${profile.id},assignee_id.eq.${profile.id}`);
   } else if (profile.role === "tech") {
     query = query.eq("assignee_id", profile.id);
   }
@@ -232,7 +221,7 @@ export async function listPprTaskAssigneeCandidatesForProfile(
   }
 
   const accessibleObjectIds =
-    profile.role === "lead" || profile.role === "object_engineer"
+    profile.role === "lead" || profile.role === "engineer" || profile.role === "object_engineer"
       ? (await listPprManageableObjectsForProfile(supabase, profile)).map((item) => item.id)
       : [];
   const canAssign = canAssignExecutorToPprTask(
@@ -249,7 +238,19 @@ export async function listPprTaskAssigneeCandidatesForProfile(
     .eq("object_id", task.object_id);
   if (linksError) throw linksError;
 
-  const candidateIds = [...new Set((links ?? []).map((row) => row.user_id))];
+  const { data: objectRow, error: objectError } = await supabase
+    .from("objects")
+    .select("object_engineer_id")
+    .eq("id", task.object_id)
+    .maybeSingle();
+  if (objectError) throw objectError;
+
+  const candidateIds = [
+    ...new Set([
+      ...(links ?? []).map((row) => row.user_id),
+      ...(objectRow?.object_engineer_id ? [objectRow.object_engineer_id] : []),
+    ]),
+  ];
   if (!candidateIds.length) {
     return [];
   }

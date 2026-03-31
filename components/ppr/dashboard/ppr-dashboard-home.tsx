@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import type { Role } from "@/lib/types";
+import { canAccessPprSystemGroupScreens } from "@/lib/ppr/access";
 
 const roleLabelMap: Record<Role, string> = {
   admin: "Администратор",
@@ -111,6 +112,8 @@ function PprNavCard({ card }: { card: NavCard }) {
 }
 
 export function PprDashboardHome({ role }: { role: Role }) {
+  const canOpenPprSystemGroups = canAccessPprSystemGroupScreens(role);
+
   return (
     <div className="grid" style={{ gap: "1.5rem" }}>
       {/* Информационная плашка о модуле */}
@@ -133,7 +136,7 @@ export function PprDashboardHome({ role }: { role: Role }) {
 
       {/* Навигационные группы */}
       {GROUPS.map(({ key, label }) => {
-        const cards = NAV_CARDS.filter((c) => c.group === key);
+        const cards = NAV_CARDS.filter((c) => c.group === key && (c.href !== "/ppr/system-groups" || canOpenPprSystemGroups));
         return (
           <section key={key} className="grid" style={{ gap: "0.6rem" }}>
             <p className="ppr-group-label">{label}</p>

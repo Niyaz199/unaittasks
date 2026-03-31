@@ -1,15 +1,21 @@
 import type { Role, TaskStatus } from "@/lib/types";
+import {
+  canArchiveTask,
+  canAssignRole,
+  canChangeTaskStatus,
+  canCreateOrAssignTask,
+  canManageTaskTeam,
+  canReadTaskByRole,
+  canViewTaskHistoryByRole,
+  canWorkOnTaskByRole,
+} from "@/lib/access/tasks";
 
 type TaskAccess = {
   id: string;
   object_id: string;
   created_by: string;
   assigned_to: string;
-};
-
-type TaskArchiveAccess = {
-  status: TaskStatus;
-  archived_at: string | null;
+  objects?: { object_engineer_id?: string | null } | Array<{ object_engineer_id?: string | null }> | null;
 };
 
 const taskStatusTransitions: Record<TaskStatus, TaskStatus[]> = {
@@ -17,65 +23,23 @@ const taskStatusTransitions: Record<TaskStatus, TaskStatus[]> = {
   accepted: ["in_progress", "done"],
   in_progress: ["paused", "done"],
   paused: ["in_progress"],
-  done: []
+  done: [],
 };
 
-export function canAssignRole(assignerRole: Role, targetRole: Role) {
-  if (assignerRole === "admin") return true;
-  if (assignerRole === "chief") return ["lead", "engineer", "object_engineer", "tech"].includes(targetRole);
-  if (assignerRole === "lead") return ["engineer", "object_engineer", "tech"].includes(targetRole);
-  if (assignerRole === "engineer") return ["engineer", "object_engineer", "tech"].includes(targetRole);
-  if (assignerRole === "object_engineer") return ["lead", "engineer", "object_engineer", "tech"].includes(targetRole);
-  return false;
+function getObjectEngineerId(task: TaskAccess) {
+  if (Array.isArray(task.objects)) return task.objects[0]?.object_engineer_id ?? null;
+  return task.objects?.object_engineer_id ?? null;
 }
 
-export function canCreateOrAssignTask(
-  actorRole: Role,
-  targetRole: Role,
-  options: { objectEngineerScoped: boolean }
-) {
-  if (actorRole === "admin") return true;
-  if (actorRole === "tech") return false;
-  if (actorRole === "object_engineer" && !options.objectEngineerScoped) return false;
-  return canAssignRole(actorRole, targetRole);
-}
-
-export function canManageTaskTeam(role: Role, options: { objectEngineerScoped: boolean }) {
-  if (role === "admin") return true;
-  if (["chief", "lead", "engineer"].includes(role)) return true;
-  if (role === "object_engineer") return options.objectEngineerScoped;
-  return false;
-}
-
-export function isTaskParticipant(task: TaskAccess, userId: string, teamMemberIds: string[]) {
-  return task.assigned_to === userId || teamMemberIds.includes(userId);
-}
-
-export function canReadTaskByRole(
-  role: Role,
-  userId: string,
-  task: TaskAccess,
-  teamMemberIds: string[],
-  objectEngineerId: string | null
-) {
-  if (role === "admin") return true;
-  if (role === "chief") return true;
-  if (role === "lead" || role === "engineer") {
-    return task.created_by === userId || task.assigned_to === userId || teamMemberIds.includes(userId);
-  }
-  if (role === "object_engineer") {
-    return objectEngineerId === userId;
-  }
-  if (role === "tech") {
-    return task.assigned_to === userId || teamMemberIds.includes(userId);
-  }
-  return false;
-}
-
-export function canChangeTaskStatus(role: Role, task: TaskAccess, userId: string, teamMemberIds: string[]) {
-  if (role === "admin") return true;
-  return isTaskParticipant(task, userId, teamMemberIds);
-}
+export {
+  canArchiveTask,
+  canAssignRole,
+  canCreateOrAssignTask,
+  canManageTaskTeam,
+  canReadTaskByRole,
+  canViewTaskHistoryByRole,
+  canWorkOnTaskByRole,
+};
 
 export function getAllowedTaskTransitions(status: TaskStatus) {
   return taskStatusTransitions[status];
@@ -90,11 +54,11 @@ export function canChangeStatus(
   currentUser: { id: string; role: Role },
   options?: { teamMemberIds?: string[] }
 ) {
-  return canChangeTaskStatus(currentUser.role, task, currentUser.id, options?.teamMemberIds ?? []);
-}
-
-export function canArchiveTask(role: Role, task: TaskArchiveAccess) {
-  if (!["admin", "chief"].includes(role)) return false;
-  if (task.status !== "done") return false;
-  return task.archived_at === null;
+  return canChangeTaskStatus(
+    currentUser.role,
+    task,
+    currentUser.id,
+    options?.teamMemberIds ?? [],
+    getObjectEngineerId(task)
+  );
 }

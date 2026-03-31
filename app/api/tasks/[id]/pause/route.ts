@@ -22,7 +22,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const { data: task } = await supabase
       .from("tasks")
-      .select("id,status,assigned_to,created_by,object_id,team_members:task_team_members(user_id)")
+      .select("id,status,assigned_to,created_by,object_id,objects(object_engineer_id),team_members:task_team_members(user_id)")
       .eq("id", id)
       .single();
     if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });

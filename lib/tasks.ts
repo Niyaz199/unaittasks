@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { canReadTaskByRole } from "@/lib/task-permissions";
-import type { Profile, TaskHistoryEvent, TaskItem, TaskPriority, TaskStatus } from "@/lib/types";
+import { listAssignableTaskRoles } from "@/lib/access/matrix";
+import { canViewTaskHistoryByRole } from "@/lib/task-permissions";
+import type { Profile, Role, TaskHistoryEvent, TaskItem, TaskPriority, TaskStatus } from "@/lib/types";
 
 type TaskListKind = "my" | "new" | "archive";
 
@@ -13,6 +14,14 @@ export type TaskFiltersInput = {
   teamMember?: string | "all";
   due?: "all" | "overdue" | "today" | "week";
   sort?: "due_asc" | "due_desc" | "priority" | "status" | "created_desc";
+};
+
+export type TaskAssignableCandidate = {
+  id: string;
+  full_name: string;
+  role: Role;
+  object_ids: string[];
+  is_global_scope: boolean;
 };
 
 export async function listTasksForProfile(
@@ -29,20 +38,6 @@ export async function listTasksForProfile(
 
   if (kind === "new") {
     query = query.eq("status", "new");
-    if (profile.role !== "admin") {
-      const { data: myTeamRows, error: myTeamError } = await supabase
-        .from("task_team_members")
-        .select("task_id")
-        .eq("user_id", profile.id);
-      if (myTeamError) throw myTeamError;
-
-      const myTeamTaskIds = (myTeamRows ?? []).map((row) => row.task_id);
-      if (myTeamTaskIds.length) {
-        query = query.or(`assigned_to.eq.${profile.id},id.in.(${myTeamTaskIds.join(",")})`);
-      } else {
-        query = query.eq("assigned_to", profile.id);
-      }
-    }
   } else if (kind === "archive") {
     query = query.not("archived_at", "is", null);
   } else {
@@ -130,16 +125,71 @@ export async function getTaskByIdForProfile(
   return data as unknown as TaskItem;
 }
 
+export async function listAssignableTaskCandidatesForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "role">
+) {
+  const assignableRoles = listAssignableTaskRoles(profile.role);
+  if (!assignableRoles.length) {
+    return [] as TaskAssignableCandidate[];
+  }
+
+  const { data: profiles, error: profilesError } = await supabase
+    .from("profiles")
+    .select("id,full_name,role")
+    .in("role", assignableRoles)
+    .order("full_name", { ascending: true });
+  if (profilesError) throw profilesError;
+
+  const candidateRows = (profiles ?? []) as Array<{ id: string; full_name: string; role: Role }>;
+  const candidateIds = candidateRows.map((row) => row.id);
+  if (!candidateIds.length) {
+    return [];
+  }
+
+  const [{ data: linkedObjects, error: linkedObjectsError }, { data: ownedObjects, error: ownedObjectsError }] = await Promise.all([
+    supabase.from("user_objects").select("user_id,object_id").in("user_id", candidateIds),
+    supabase.from("objects").select("id,object_engineer_id").in("object_engineer_id", candidateIds),
+  ]);
+  if (linkedObjectsError) throw linkedObjectsError;
+  if (ownedObjectsError) throw ownedObjectsError;
+
+  const objectIdsByUser = new Map<string, Set<string>>();
+  for (const row of (linkedObjects ?? []) as Array<{ user_id: string; object_id: string }>) {
+    const current = objectIdsByUser.get(row.user_id) ?? new Set<string>();
+    current.add(row.object_id);
+    objectIdsByUser.set(row.user_id, current);
+  }
+  for (const row of (ownedObjects ?? []) as Array<{ id: string; object_engineer_id: string | null }>) {
+    if (!row.object_engineer_id) continue;
+    const current = objectIdsByUser.get(row.object_engineer_id) ?? new Set<string>();
+    current.add(row.id);
+    objectIdsByUser.set(row.object_engineer_id, current);
+  }
+
+  return candidateRows.map((row) => ({
+    id: row.id,
+    full_name: row.full_name,
+    role: row.role,
+    object_ids: [...(objectIdsByUser.get(row.id) ?? new Set<string>())],
+    is_global_scope: row.role === "lead",
+  }));
+}
+
+export async function listAssignableTaskCandidatesForObject(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "role">,
+  objectId: string
+) {
+  const candidates = await listAssignableTaskCandidatesForProfile(supabase, profile);
+  return candidates.filter((candidate) => candidate.is_global_scope || candidate.object_ids.includes(objectId));
+}
+
 export async function getTaskHistoryForProfile(
   supabase: SupabaseClient,
   profile: Profile,
   taskId: string
 ) {
-  const allowedHistoryRoles = new Set(["admin", "chief", "lead", "engineer"]);
-  if (!allowedHistoryRoles.has(profile.role)) {
-    throw new Error("Нет доступа к истории задачи");
-  }
-
   const { data: task, error: taskError } = await supabase
     .from("tasks")
     .select("id,assigned_to,created_by,object_id,team_members:task_team_members(user_id),objects(object_engineer_id)")
@@ -156,8 +206,8 @@ export async function getTaskHistoryForProfile(
     ? objectsRelation[0]?.object_engineer_id ?? null
     : objectsRelation?.object_engineer_id ?? null;
 
-  const canRead = canReadTaskByRole(profile.role, profile.id, task, teamMemberIds, objectEngineerId);
-  if (!canRead) {
+  const canViewHistory = canViewTaskHistoryByRole(profile.role, profile.id, task, teamMemberIds, objectEngineerId);
+  if (!canViewHistory) {
     throw new Error("Нет доступа к истории задачи");
   }
 

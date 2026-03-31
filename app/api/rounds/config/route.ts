@@ -35,6 +35,10 @@ function getErrorMessage(error: unknown) {
   return "Unknown error";
 }
 
+function getErrorStatus(message: string) {
+  return /недостаточно прав|недоступ/i.test(message) ? 403 : 400;
+}
+
 function revalidateRoundsPaths() {
   revalidatePath("/rounds");
   revalidatePath("/rounds/config");
@@ -58,7 +62,7 @@ export async function GET() {
     });
   } catch (error) {
     const message = getErrorMessage(error);
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: message }, { status: getErrorStatus(message) });
   }
 }
 
@@ -109,6 +113,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, result });
   } catch (error) {
     const message = getErrorMessage(error);
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: message }, { status: getErrorStatus(message) });
   }
 }

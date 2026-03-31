@@ -60,18 +60,13 @@ async function assertCalendarSystemManageable(
     .single();
   if (error) throw error;
 
-  const accessibleObjectIds =
-    actor.role === "lead" || actor.role === "object_engineer"
-      ? (
-          await supabase
-            .from("user_objects")
-            .select("object_id")
-            .eq("user_id", actor.id)
-        ).data?.map((item) => item.object_id) ?? []
-      : [];
+  const scopedActor = await buildPprTaskActor(supabase, {
+    id: actor.id,
+    role: actor.role as never,
+  });
 
   const allowed = canManagePprCalendar(
-    { id: actor.id, role: actor.role as never, accessibleObjectIds },
+    scopedActor,
     { objectId: system.object_id, isResponsibleForSystem: system.responsible_user_id === actor.id }
   );
   if (!allowed) {

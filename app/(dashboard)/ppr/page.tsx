@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { canAccessPprModule } from "@/lib/ppr/permissions";
 import { PageHeader } from "@/components/ui/page-header";
@@ -9,17 +10,21 @@ export default async function PprPage() {
   if (!canAccessPprModule(profile.role)) {
     return (
       <section className="grid">
-        <PageHeader title="ППР" description="Доступ к модулю ограничен." />
-        <div className="section-card">У вас нет доступа к модулю ППР.</div>
+        <PageHeader title={"ППР"} description={"Доступ к модулю ограничен."} />
+        <div className="section-card">{"У вас нет доступа к модулю ППР."}</div>
       </section>
     );
+  }
+
+  if (profile.role === "tech") {
+    redirect("/ppr/my");
   }
 
   return (
     <section className="grid">
       <PageHeader
-        title="Модуль ППР"
-        description="Управление регламентным обслуживанием: структура объектов, шаблоны, планирование, заявки и архив."
+        title={"Модуль ППР"}
+        description={"Управление регламентным обслуживанием: структура объектов, шаблоны, планирование, заявки и архив."}
       />
       <PprDashboardHome role={profile.role} />
     </section>

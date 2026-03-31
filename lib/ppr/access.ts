@@ -2,10 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { listScopedObjectsForProfile, type ScopedObjectRow } from "@/lib/object-access";
 import type { Profile } from "@/lib/types";
 
-const STRUCTURE_MANAGER_ROLES = new Set(["admin", "chief", "lead", "object_engineer"]);
+const STRUCTURE_MANAGER_ROLES = new Set(["admin", "chief", "lead", "engineer", "object_engineer"]);
 const SYSTEM_GROUP_MANAGER_ROLES = new Set(["admin", "chief", "lead"]);
-const TEMPLATE_MANAGER_ROLES = new Set(["admin", "chief", "lead", "object_engineer"]);
-const ASSIGNMENT_MANAGER_ROLES = new Set(["admin", "chief", "lead", "object_engineer"]);
+const TEMPLATE_MANAGER_ROLES = new Set(["admin", "chief", "lead", "engineer", "object_engineer"]);
+const ASSIGNMENT_MANAGER_ROLES = new Set(["admin", "chief", "lead", "engineer", "object_engineer"]);
 const CALENDAR_MANAGER_ROLES = new Set(["admin", "chief", "lead", "engineer", "object_engineer"]);
 const TASK_LAYER_ROLES = new Set(["admin", "chief", "lead", "engineer", "object_engineer", "tech"]);
 const QR_LAYER_ROLES = new Set(["admin", "chief", "lead", "engineer", "object_engineer", "tech"]);

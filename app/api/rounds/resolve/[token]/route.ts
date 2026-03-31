@@ -79,6 +79,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 400 });
+    const status = /недостаточно прав|недоступ/i.test(message) ? 403 : 400;
+    return NextResponse.json({ error: message }, { status });
   }
 }

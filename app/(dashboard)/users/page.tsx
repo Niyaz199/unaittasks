@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { canManageUsers, requireProfile } from "@/lib/auth";
+import { listActorScopedObjectsForProfile } from "@/lib/access/object-scope";
+import { listAvailableUserRoles } from "@/lib/access/users";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { UsersAdminList } from "@/components/dictionaries/users-admin-list";
 import { PageHeader } from "@/components/ui/page-header";
@@ -11,11 +13,14 @@ export default async function UsersPage() {
   }
 
   const supabase = await createSupabaseServerClient();
-  const [{ data: users }, { data: objects }, { data: linksRaw }] = await Promise.all([
+  const [manageableObjects, availableRoles, usersResult, linksResult] = await Promise.all([
+    listActorScopedObjectsForProfile(supabase, profile),
+    Promise.resolve(listAvailableUserRoles(profile.role)),
     supabase.from("profiles").select("id,full_name,role").order("created_at", { ascending: false }),
-    supabase.from("objects").select("id,name").order("name"),
     supabase.from("user_objects").select("user_id,object_id,objects(name)")
   ]);
+  const { data: users } = usersResult;
+  const { data: linksRaw } = linksResult;
 
   const links = ((linksRaw ?? []) as Array<{ user_id: string; object_id: string; objects: { name: string }[] | null }>).map(
     (row) => ({
@@ -45,7 +50,9 @@ export default async function UsersPage() {
             role: "admin" | "chief" | "lead" | "engineer" | "object_engineer" | "tech";
           }>
         }
-        objects={(objects ?? []) as Array<{ id: string; name: string }>}
+        actorRole={profile.role}
+        availableRoles={availableRoles as Array<"admin" | "chief" | "lead" | "engineer" | "object_engineer" | "tech">}
+        objects={manageableObjects as Array<{ id: string; name: string }>}
         links={links}
         currentUserId={user.id}
       />

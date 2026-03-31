@@ -2,14 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { canManageTaskTeam, requireProfile } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getTaskByIdForProfile, getTaskHistoryForProfile } from "@/lib/tasks";
+import { getTaskByIdForProfile, getTaskHistoryForProfile, listAssignableTaskCandidatesForObject } from "@/lib/tasks";
 import { StatusControl } from "@/components/tasks/status-control";
 import { CommentForm } from "@/components/tasks/comment-form";
 import { TaskTeamManager } from "@/components/tasks/task-team-manager";
 import { AttachmentsGallery } from "@/components/tasks/attachments-gallery";
 import { Badge } from "@/components/ui/badge";
 import { BackButton } from "@/components/ui/back-button";
-import { canArchiveTask, canChangeStatus } from "@/lib/task-permissions";
+import { canArchiveTask, canChangeStatus, canViewTaskHistoryByRole } from "@/lib/task-permissions";
 import { taskPriorityMeta, taskStatusMeta, humanStatus } from "@/lib/task-presentation";
 import type { TaskComment, TaskHistoryEvent } from "@/lib/types";
 
@@ -116,20 +116,25 @@ export default async function TaskDetailsPage({
     .eq("task_id", task.id)
     .order("created_at", { ascending: true });
   const comments = (commentsData ?? []) as unknown as TaskComment[];
-  const canViewHistory = ["admin", "chief", "lead", "engineer"].includes(profile.role);
-  const history = canViewHistory ? await getTaskHistoryForProfile(supabase, profile, id).catch(() => []) : [];
-
   const teamMembers = resolveTeamMembers(task.team_members);
   const teamMemberIds = teamMembers.map((member) => member.user_id);
   const objectEngineerScoped =
     profile.role !== "object_engineer" || task.objects?.object_engineer_id === profile.id;
+  const canViewHistory = canViewTaskHistoryByRole(
+    profile.role,
+    profile.id,
+    task,
+    teamMemberIds,
+    task.objects?.object_engineer_id ?? null
+  );
+  const history = canViewHistory ? await getTaskHistoryForProfile(supabase, profile, id).catch(() => []) : [];
   const canEdit = canChangeStatus(task, { id: profile.id, role: profile.role }, { teamMemberIds });
   const canArchive = canArchiveTask(profile.role, task);
   const canManageTeam = canManageTaskTeam(profile.role) && objectEngineerScoped;
 
-  const teamCandidatesData = canManageTeam
-    ? await supabase.from("profiles").select("id,full_name").order("full_name")
-    : { data: [] as Array<{ id: string; full_name: string }> };
+  const teamCandidates = canManageTeam
+    ? await listAssignableTaskCandidatesForObject(supabase, profile, task.object_id)
+    : [];
 
   const status = taskStatusMeta[task.status];
   const priority = taskPriorityMeta[task.priority];
@@ -279,7 +284,7 @@ export default async function TaskDetailsPage({
             currentUserId={profile.id}
             assigneeId={task.assigned_to}
             initialMembers={teamMembers}
-            allCandidates={(teamCandidatesData.data ?? []).map((item) => ({ id: item.id, full_name: item.full_name }))}
+            allCandidates={teamCandidates.map((item) => ({ id: item.id, full_name: item.full_name }))}
           />
         ) : null}
       </div>

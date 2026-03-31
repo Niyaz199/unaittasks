@@ -2,6 +2,7 @@ import { canEditTasks, requireProfile } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { listObjectsForProfile } from "@/lib/objects";
+import { listAssignableTaskCandidatesForProfile } from "@/lib/tasks";
 import { CreateTaskForm } from "@/components/tasks/create-task-form";
 import { PageHeader } from "@/components/ui/page-header";
 import { BackButton } from "@/components/ui/back-button";
@@ -15,14 +16,17 @@ export default async function CreateTaskPage() {
   const supabase = await createSupabaseServerClient();
   const [objects, assignees] = await Promise.all([
     listObjectsForProfile(supabase, profile),
-    supabase
-      .from("profiles")
-      .select("id,full_name,role")
-      .in("role", ["lead", "engineer", "object_engineer", "tech"])
-      .order("full_name")
+    listAssignableTaskCandidatesForProfile(supabase, profile),
   ]);
 
-  const assigneeRows = (assignees.data ?? []).map((item) => ({ id: item.id, full_name: item.full_name, email: null as string | null }));
+  const assigneeRows = assignees.map((item) => ({
+    id: item.id,
+    full_name: item.full_name,
+    role: item.role,
+    object_ids: item.object_ids,
+    is_global_scope: item.is_global_scope,
+    email: null as string | null,
+  }));
   try {
     const admin = createSupabaseAdminClient();
     const { data: usersData } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });

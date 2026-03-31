@@ -20,10 +20,12 @@ export function MobileTabs({ role }: { role: Role }) {
   const pathname = usePathname();
   const directoryHref: Route = canManageUsers(role) ? "/users" : "/directories/floors";
   const canOpenDirectories = canAccessDirectories(role);
+  const pprHref: Route = role === "tech" ? "/ppr/my" : "/ppr";
+  const roundsHref: Route = role === "tech" ? "/rounds/scan" : "/rounds";
   const moduleLinks: Array<{ href: Route; label: string; isActive: (pathname: string) => boolean }> = [
     { href: "/my", label: "Задачи", isActive: isTasksModuleActive },
-    ...(canAccessPprModule(role) ? [{ href: "/ppr" as Route, label: "ППР", isActive: (value: string) => isTabActive(value, "/ppr") }] : []),
-    ...(canAccessRoundsModule(role) ? [{ href: "/rounds" as Route, label: "Обходы", isActive: (value: string) => isTabActive(value, "/rounds") }] : []),
+    ...(canAccessPprModule(role) ? [{ href: pprHref, label: "ППР", isActive: (value: string) => value === "/ppr" || value.startsWith("/ppr/") }] : []),
+    ...(canAccessRoundsModule(role) ? [{ href: roundsHref, label: "\u041e\u0431\u0445\u043e\u0434\u044b", isActive: (value: string) => value === "/rounds" || value.startsWith("/rounds/") }] : []),
   ];
   const tabs: Array<{ href: Route; label: string }> = [
     { href: "/my", label: "Мои" },

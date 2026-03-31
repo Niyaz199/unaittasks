@@ -1,10 +1,12 @@
-import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { hasActorScopedObjectAccessForProfile, listActorScopedObjectsForProfile } from "@/lib/access/object-scope";
+import { isGlobalObjectScopeRole } from "@/lib/access/matrix";
 import type { Profile } from "@/lib/types";
 
 export type ScopedObjectRow = {
   id: string;
   name: string;
+  object_engineer_id?: string | null;
 };
 
 type ObjectScopeKey =
@@ -17,98 +19,52 @@ type ObjectScopeKey =
   | "rounds_scan";
 
 type ObjectScopePolicy = {
-  viaUserObjectsRoles: Profile["role"][];
-  includeObjectEngineerOwnedObjects: boolean;
-};
-
-type UserObjectRelationRow = {
-  objects: ScopedObjectRow | null;
+  allowedRoles: Profile["role"][];
 };
 
 const OBJECT_SCOPE_POLICIES: Record<ObjectScopeKey, ObjectScopePolicy> = {
   object_rooms_read: {
-    viaUserObjectsRoles: ["lead", "engineer", "object_engineer"],
-    includeObjectEngineerOwnedObjects: false,
+    allowedRoles: ["lead", "engineer", "object_engineer"],
   },
   object_rooms_manage: {
-    viaUserObjectsRoles: ["lead", "object_engineer"],
-    includeObjectEngineerOwnedObjects: false,
+    allowedRoles: ["lead", "engineer", "object_engineer"],
   },
   ppr_manage: {
-    viaUserObjectsRoles: ["lead", "object_engineer"],
-    includeObjectEngineerOwnedObjects: false,
+    allowedRoles: ["lead", "engineer", "object_engineer"],
   },
   ppr_execute: {
-    viaUserObjectsRoles: ["lead", "engineer", "object_engineer", "tech"],
-    includeObjectEngineerOwnedObjects: false,
+    allowedRoles: ["lead", "engineer", "object_engineer", "tech"],
   },
   rounds_read: {
-    viaUserObjectsRoles: ["lead", "engineer", "object_engineer"],
-    includeObjectEngineerOwnedObjects: true,
+    allowedRoles: ["lead", "engineer", "object_engineer"],
   },
   rounds_manage: {
-    viaUserObjectsRoles: ["lead", "engineer", "object_engineer"],
-    includeObjectEngineerOwnedObjects: true,
+    allowedRoles: ["lead", "engineer", "object_engineer"],
   },
   rounds_scan: {
-    viaUserObjectsRoles: ["lead", "engineer", "object_engineer", "tech"],
-    includeObjectEngineerOwnedObjects: true,
+    allowedRoles: ["lead", "engineer", "object_engineer", "tech"],
   },
 };
 
-function isGlobalObjectScopeRole(role: Profile["role"]) {
-  return role === "admin" || role === "chief";
-}
-
-const listScopedObjectsCached = cache(
-  async (
-    supabase: SupabaseClient,
-    profileId: string,
-    role: Profile["role"],
-    scope: ObjectScopeKey
-  ): Promise<ScopedObjectRow[]> => {
-    if (isGlobalObjectScopeRole(role)) {
-      const { data, error } = await supabase.from("objects").select("id,name").order("name", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as ScopedObjectRow[];
-    }
-
-    const policy = OBJECT_SCOPE_POLICIES[scope];
-    const result = new Map<string, ScopedObjectRow>();
-
-    if (policy.viaUserObjectsRoles.includes(role)) {
-      const { data, error } = await supabase
-        .from("user_objects")
-        .select("objects(id,name)")
-        .eq("user_id", profileId);
-      if (error) throw error;
-
-      for (const row of ((data ?? []) as unknown as UserObjectRelationRow[])) {
-        if (row.objects) {
-          result.set(row.objects.id, row.objects);
-        }
-      }
-    }
-
-    if (policy.includeObjectEngineerOwnedObjects && role === "object_engineer") {
-      const { data, error } = await supabase.from("objects").select("id,name").eq("object_engineer_id", profileId);
-      if (error) throw error;
-
-      for (const row of (data ?? []) as ScopedObjectRow[]) {
-        result.set(row.id, row);
-      }
-    }
-
-    return [...result.values()].sort((left, right) => left.name.localeCompare(right.name, "ru"));
+function canUseObjectScope(profile: Pick<Profile, "role">, scope: ObjectScopeKey) {
+  if (isGlobalObjectScopeRole(profile.role)) {
+    return true;
   }
-);
+
+  return OBJECT_SCOPE_POLICIES[scope].allowedRoles.includes(profile.role);
+}
 
 export async function listScopedObjectsForProfile(
   supabase: SupabaseClient,
   profile: Pick<Profile, "id" | "role">,
   scope: ObjectScopeKey
 ) {
-  return listScopedObjectsCached(supabase, profile.id, profile.role, scope);
+  if (!canUseObjectScope(profile, scope)) {
+    return [] as ScopedObjectRow[];
+  }
+
+  const objects = await listActorScopedObjectsForProfile(supabase, profile);
+  return objects.map((item) => ({ id: item.id, name: item.name, object_engineer_id: item.object_engineer_id }));
 }
 
 export async function listScopedObjectIdsForProfile(
@@ -126,10 +82,13 @@ export async function hasScopedObjectAccessForProfile(
   scope: ObjectScopeKey,
   objectId: string
 ) {
+  if (!canUseObjectScope(profile, scope)) {
+    return false;
+  }
+
   if (isGlobalObjectScopeRole(profile.role)) {
     return true;
   }
 
-  const objectIds = await listScopedObjectIdsForProfile(supabase, profile, scope);
-  return objectIds.includes(objectId);
+  return hasActorScopedObjectAccessForProfile(supabase, profile, objectId);
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getApiSession } from "@/lib/api-auth";
-import { canReadTaskByRole } from "@/lib/task-permissions";
+import { canReadTaskByRole, canWorkOnTaskByRole } from "@/lib/task-permissions";
 import {
   ALLOWED_MIME_TYPES,
   MAX_FILE_SIZE_BYTES,
@@ -44,8 +44,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       ? task.objects[0]?.object_engineer_id ?? null
       : task.objects?.object_engineer_id ?? null;
 
-    const canRead = canReadTaskByRole(profile.role, profile.id, task, teamMemberIds, objectEngineerId);
-    if (!canRead) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const canUpload = canWorkOnTaskByRole(profile.role, profile.id, task, teamMemberIds, objectEngineerId);
+    if (!canUpload) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const formData = await request.formData();
     const commentId = formData.get("comment_id");
