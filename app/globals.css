@@ -777,6 +777,35 @@ textarea {
     inset 0 0 0 1px color-mix(in srgb, #8ca4cb 20%, transparent);
 }
 
+.profile-sections {
+  align-items: start;
+}
+
+.profile-panel {
+  gap: 0.9rem;
+}
+
+.profile-panel-title {
+  font-size: 1.05rem;
+}
+
+.profile-field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.profile-field-label {
+  font-size: 0.78rem;
+  color: var(--text-soft);
+}
+
+.profile-status {
+  padding: 0.7rem 0.85rem;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-size: 0.92rem;
+}
+
 .profile-name {
   font-size: 1.45rem;
   font-weight: 700;
@@ -1590,6 +1619,10 @@ textarea {
 
 @media (min-width: 760px) {
   .field-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profile-sections {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
