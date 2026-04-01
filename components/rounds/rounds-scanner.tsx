@@ -1,5 +1,6 @@
 "use client";
 
+import jsQR from "jsqr";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { extractRoundsToken } from "@/lib/rounds/token";
@@ -21,24 +22,30 @@ declare global {
 export function RoundsScanner() {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectorRef = useRef<BarcodeDetectorLike | null>(null);
   const timerRef = useRef<number | null>(null);
   const { snapshot } = useRoundsScannerConfig();
 
-  const [manualValue, setManualValue] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const [isDetectorAvailable, setIsDetectorAvailable] = useState(false);
+  const [scannerMode, setScannerMode] = useState<"native" | "fallback" | null>(null);
 
   const stopCamera = useCallback(() => {
     if (timerRef.current) {
       window.clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+    detectorRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.srcObject = null;
+    }
     setIsCameraActive(false);
+    setScannerMode(null);
   }, []);
 
   const openToken = useCallback((rawToken: string) => {
@@ -51,11 +58,11 @@ export function RoundsScanner() {
     router.push(`/rounds/scan?token=${encodeURIComponent(token)}`);
   }, [router, stopCamera]);
 
-  const scanFrame = useCallback(async () => {
+  const scanWithBarcodeDetector = useCallback(async () => {
     const detector = detectorRef.current;
     const video = videoRef.current;
     if (!detector || !video || video.readyState < 2) {
-      timerRef.current = window.setTimeout(() => void scanFrame(), 700);
+      timerRef.current = window.setTimeout(() => void scanWithBarcodeDetector(), 500);
       return;
     }
 
@@ -70,42 +77,89 @@ export function RoundsScanner() {
       // ignore and retry
     }
 
-    timerRef.current = window.setTimeout(() => void scanFrame(), 700);
+    timerRef.current = window.setTimeout(() => void scanWithBarcodeDetector(), 500);
   }, [openToken]);
 
+  const scanWithFallback = useCallback(() => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    if (!video || !canvas || video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
+      timerRef.current = window.setTimeout(() => scanWithFallback(), 250);
+      return;
+    }
+
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) {
+      setMessage("Не удалось инициализировать QR-сканер.");
+      stopCamera();
+      return;
+    }
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const image = context.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(image.data, image.width, image.height);
+    if (code?.data) {
+      openToken(code.data);
+      return;
+    }
+
+    timerRef.current = window.setTimeout(() => scanWithFallback(), 250);
+  }, [openToken, stopCamera]);
+
   const startCamera = useCallback(async () => {
-    if (!window.BarcodeDetector) {
-      setMessage("На этом устройстве нет встроенного BarcodeDetector. Используйте deep-link или ручной ввод токена.");
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setMessage("Браузер не поддерживает доступ к камере.");
       return;
     }
 
     try {
+      stopCamera();
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: "environment" },
         },
         audio: false,
       });
+
       streamRef.current = stream;
-      detectorRef.current = new window.BarcodeDetector({ formats: ["qr_code"] });
-      setIsDetectorAvailable(true);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
 
+      if (window.BarcodeDetector) {
+        try {
+          detectorRef.current = new window.BarcodeDetector({ formats: ["qr_code"] });
+          setScannerMode("native");
+        } catch {
+          detectorRef.current = null;
+          setScannerMode("fallback");
+        }
+      } else {
+        setScannerMode("fallback");
+      }
+
       setMessage(null);
       setIsCameraActive(true);
-      await scanFrame();
+
+      if (detectorRef.current) {
+        await scanWithBarcodeDetector();
+      } else {
+        scanWithFallback();
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось открыть камеру.");
       stopCamera();
     }
-  }, [scanFrame, stopCamera]);
+  }, [scanWithBarcodeDetector, scanWithFallback, stopCamera]);
 
   useEffect(() => {
-    setIsDetectorAvailable(Boolean(window.BarcodeDetector));
     return () => stopCamera();
   }, [stopCamera]);
 
@@ -140,6 +194,7 @@ export function RoundsScanner() {
               objectFit: "cover",
             }}
           />
+          <canvas ref={canvasRef} style={{ display: "none" }} />
 
           <div className="row" style={{ flexWrap: "wrap" }}>
             {!isCameraActive ? (
@@ -151,22 +206,7 @@ export function RoundsScanner() {
                 Остановить камеру
               </button>
             )}
-            {!isDetectorAvailable ? <span className="text-soft">Встроенный сканер недоступен на этом устройстве.</span> : null}
-          </div>
-        </div>
-
-        <div className="grid" style={{ gap: "0.6rem" }}>
-          <div className="text-soft">Ручной ввод / deep-link fallback</div>
-          <div className="row" style={{ alignItems: "stretch" }}>
-            <input
-              className="input"
-              value={manualValue}
-              onChange={(event) => setManualValue(event.target.value)}
-              placeholder="Вставьте token или URL из QR"
-            />
-            <button className="btn btn-ghost" type="button" onClick={() => openToken(manualValue)}>
-              Открыть
-            </button>
+            {isCameraActive && scannerMode === "fallback" ? <span className="text-soft">Используется совместимый QR-сканер.</span> : null}
           </div>
         </div>
 
