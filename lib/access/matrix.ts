@@ -13,6 +13,13 @@ const OBJECT_ROOM_ROLES: Role[] = ["admin", "chief", "lead", "engineer", "object
 const TASK_CREATE_ROLES: Role[] = ["admin", "chief", "lead", "engineer", "object_engineer"];
 const TASK_DELETE_ROLES: Role[] = ["admin", "chief", "lead"];
 const TASK_TEAM_MANAGEMENT_ROLES: Role[] = ["admin", "chief", "lead", "engineer", "object_engineer"];
+const TASK_ASSIGNMENT_MATRIX: Partial<Record<Role, readonly Role[]>> = {
+  admin: ["lead", "engineer", "object_engineer", "tech"],
+  chief: ["lead", "engineer", "object_engineer", "tech"],
+  lead: ["engineer", "object_engineer", "tech"],
+  engineer: ["lead", "engineer", "object_engineer", "tech"],
+  object_engineer: ["lead", "engineer", "object_engineer", "tech"],
+};
 const PPR_MODULE_ROLES: Role[] = ["admin", "chief", "lead", "engineer", "object_engineer", "tech"];
 const PPR_MANAGEMENT_ROLES: Role[] = ["admin", "chief", "lead", "engineer", "object_engineer"];
 const ROUNDS_MODULE_ROLES: Role[] = ["admin", "chief", "lead", "engineer", "object_engineer", "tech"];
@@ -83,16 +90,7 @@ export function canManageTaskTeam(role: Role) {
 }
 
 export function listAssignableTaskRoles(actorRole: Role): Role[] {
-  if (actorRole === "admin" || actorRole === "chief") {
-    return ["lead", "engineer", "object_engineer", "tech"];
-  }
-  if (actorRole === "lead") {
-    return ["engineer", "object_engineer", "tech"];
-  }
-  if (actorRole === "engineer" || actorRole === "object_engineer") {
-    return ["lead", "engineer", "object_engineer", "tech"];
-  }
-  return [];
+  return [...(TASK_ASSIGNMENT_MATRIX[actorRole] ?? [])];
 }
 
 export function canAssignTaskToRole(actorRole: Role, targetRole: Role) {

@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { listAssignableTaskRoles } from "@/lib/access/matrix";
+import { isGlobalObjectScopeRole, listAssignableTaskRoles } from "@/lib/access/matrix";
+import { listActorScopedObjectIdsForProfile } from "@/lib/access/object-scope";
+import { listTaskTargetObjectIdsByProfile } from "@/lib/access/task-target-scope";
 import { canViewTaskHistoryByRole } from "@/lib/task-permissions";
 import type { Profile, Role, TaskHistoryEvent, TaskItem, TaskPriority, TaskStatus } from "@/lib/types";
 
@@ -127,7 +129,7 @@ export async function getTaskByIdForProfile(
 
 export async function listAssignableTaskCandidatesForProfile(
   supabase: SupabaseClient,
-  profile: Pick<Profile, "role">
+  profile: Pick<Profile, "id" | "role">
 ) {
   const assignableRoles = listAssignableTaskRoles(profile.role);
   if (!assignableRoles.length) {
@@ -147,38 +149,23 @@ export async function listAssignableTaskCandidatesForProfile(
     return [];
   }
 
-  const [{ data: linkedObjects, error: linkedObjectsError }, { data: ownedObjects, error: ownedObjectsError }] = await Promise.all([
-    supabase.from("user_objects").select("user_id,object_id").in("user_id", candidateIds),
-    supabase.from("objects").select("id,object_engineer_id").in("object_engineer_id", candidateIds),
-  ]);
-  if (linkedObjectsError) throw linkedObjectsError;
-  if (ownedObjectsError) throw ownedObjectsError;
-
-  const objectIdsByUser = new Map<string, Set<string>>();
-  for (const row of (linkedObjects ?? []) as Array<{ user_id: string; object_id: string }>) {
-    const current = objectIdsByUser.get(row.user_id) ?? new Set<string>();
-    current.add(row.object_id);
-    objectIdsByUser.set(row.user_id, current);
-  }
-  for (const row of (ownedObjects ?? []) as Array<{ id: string; object_engineer_id: string | null }>) {
-    if (!row.object_engineer_id) continue;
-    const current = objectIdsByUser.get(row.object_engineer_id) ?? new Set<string>();
-    current.add(row.id);
-    objectIdsByUser.set(row.object_engineer_id, current);
-  }
+  const allowedObjectIds = isGlobalObjectScopeRole(profile.role)
+    ? undefined
+    : await listActorScopedObjectIdsForProfile(supabase, profile);
+  const objectIdsByUser = await listTaskTargetObjectIdsByProfile(candidateRows, { allowedObjectIds });
 
   return candidateRows.map((row) => ({
     id: row.id,
     full_name: row.full_name,
     role: row.role,
-    object_ids: [...(objectIdsByUser.get(row.id) ?? new Set<string>())],
+    object_ids: objectIdsByUser.get(row.id) ?? [],
     is_global_scope: row.role === "lead",
   }));
 }
 
 export async function listAssignableTaskCandidatesForObject(
   supabase: SupabaseClient,
-  profile: Pick<Profile, "role">,
+  profile: Pick<Profile, "id" | "role">,
   objectId: string
 ) {
   const candidates = await listAssignableTaskCandidatesForProfile(supabase, profile);

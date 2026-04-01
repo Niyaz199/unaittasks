@@ -3,9 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { canEditTasks, canManageObjects, canManageTaskTeam, requireProfile } from "@/lib/auth";
+import { hasTaskTargetObjectAccess } from "@/lib/access/task-target-scope";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { writeAudit } from "@/lib/audit";
-import { hasActorScopedObjectAccessForProfile } from "@/lib/access/object-scope";
 import { sendPushToUser } from "@/lib/push";
 import {
   canChangeStatus,
@@ -104,11 +104,11 @@ async function getObjectEngineerByObjectId(
 }
 
 async function isObjectAccessibleForUser(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  _supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   profile: Pick<{ id: string; role: Role }, "id" | "role">,
   objectId: string
 ): Promise<boolean> {
-  return hasActorScopedObjectAccessForProfile(supabase, profile, objectId);
+  return hasTaskTargetObjectAccess(profile, objectId);
 }
 
 async function assertTaskObjectAccessForUser(
