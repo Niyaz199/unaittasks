@@ -28,7 +28,7 @@ import type {
 
 const PprFiltersDrawer = dynamic(() => import("./filters-drawer").then((module) => module.PprFiltersDrawer));
 const PprCalendarMonthSection = dynamic(() => import("./ppr-calendar-month-section").then((module) => module.PprCalendarMonthSection), {
-  loading: () => <div className="section-card text-soft">Загрузка monthly view...</div>,
+  loading: () => <div className="section-card text-soft">Загрузка месячного плана...</div>,
 });
 const PprCalendarItemDrawers = dynamic(() => import("./ppr-calendar-item-drawers").then((module) => module.PprCalendarItemDrawers));
 
@@ -244,17 +244,17 @@ export function PprCalendarAdmin({
             <span className="text-soft" style={{ fontSize: "0.88rem" }}>Календарь ППР</span>
             <span className="text-soft">/</span>
             <strong style={{ fontSize: "0.92rem" }}>
-              {activeTab === "year" ? (yearScreen === "groups" ? "Уровень 1: Группы" : "Уровень 2: Системы") : "Уровень 3: Операционный план"}
+              {activeTab === "year" ? (yearScreen === "groups" ? "Годовой план — Группы" : "Годовой план — Системы") : "Месячный план"}
             </strong>
           </div>
 
           <div className="row" style={{ gap: "0.75rem", flexWrap: "wrap" }}>
             <div className="row" style={{ gap: "0.25rem", background: "var(--panel-soft)", padding: "0.2rem", borderRadius: "10px" }}>
               <button type="button" className={`btn ${activeTab === "year" ? "btn-secondary" : "btn-ghost"}`} onClick={() => handleTabChange("year")}>
-                Уровни 1-2
+                Годовой план
               </button>
               <button type="button" className={`btn ${activeTab === "month" ? "btn-secondary" : "btn-ghost"}`} onClick={() => handleTabChange("month")}>
-                Уровень 3
+                Месячный план
               </button>
             </div>
 
@@ -322,7 +322,7 @@ export function PprCalendarAdmin({
             nextMonthHref={nextMonthHref}
           />
         ) : (
-          <div className="section-card text-soft">Загрузка monthly view...</div>
+          <div className="section-card text-soft">Загрузка месячного плана...</div>
         )
       )}
 

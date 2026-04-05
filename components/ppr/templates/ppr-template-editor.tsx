@@ -16,6 +16,7 @@ type TemplateFormValues = {
   system_id: string;
   name: string;
   description: string;
+  execution_mode: "in_house" | "contractor";
   period_months: number;
   base_start_date: string;
   norm_hours: string;
@@ -41,6 +42,7 @@ const defaultValues: TemplateFormValues = {
   system_id: "",
   name: "",
   description: "",
+  execution_mode: "in_house",
   period_months: 12,
   base_start_date: "",
   norm_hours: "",
@@ -139,6 +141,13 @@ export function PprTemplateEditor({
 
           <PprFormGroup label="Описание">
             <textarea className="input" name="description" rows={3} defaultValue={values.description} placeholder="Цель шаблона, рекомендации..." />
+          </PprFormGroup>
+
+          <PprFormGroup label="Исполнитель работ">
+            <select className="select" name="execution_mode" defaultValue={values.execution_mode} required>
+              <option value="in_house">Своими силами</option>
+              <option value="contractor">Подрядчиком</option>
+            </select>
           </PprFormGroup>
           
           <label className="row" style={{ alignItems: "center", gap: "0.5rem" }}>

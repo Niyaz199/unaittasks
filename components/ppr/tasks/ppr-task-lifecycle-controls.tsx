@@ -220,21 +220,27 @@ export function PprTaskLifecycleControls({
       ) : null}
 
       {canCancel ? (
-        <div className="grid" style={{ gap: "0.5rem" }}>
-          <strong>Отмена</strong>
+        <div className="grid" style={{ gap: "0.5rem", borderTop: "1px solid color-mix(in srgb, var(--danger) 20%, transparent)", paddingTop: "1rem", marginTop: "0.5rem" }}>
+          <div className="grid" style={{ gap: "0.25rem" }}>
+            <strong style={{ color: "var(--danger)" }}>Отмена заявки</strong>
+            <p className="text-soft" style={{ margin: 0, fontSize: "0.85rem" }}>
+              Это действие необратимо. Заявка будет переведена в статус «Отменена».
+            </p>
+          </div>
           <textarea
             className="input"
             rows={3}
             value={cancelReason}
             onChange={(event) => setCancelReason(event.target.value)}
-            placeholder="Причина отмены"
+            placeholder="Укажите причину отмены (обязательно)"
           />
           <div className="row">
             <button
-              className="btn"
+              className="btn btn-danger"
               type="button"
-              disabled={pending}
-              onClick={() =>
+              disabled={pending || !cancelReason.trim()}
+              onClick={() => {
+                if (!window.confirm("Вы уверены, что хотите отменить эту ППР-заявку? Действие необратимо.")) return;
                 startTransition(async () => {
                   try {
                     setMessage(null);
@@ -243,8 +249,8 @@ export function PprTaskLifecycleControls({
                   } catch (error) {
                     setMessage(error instanceof Error ? error.message : "Не удалось отменить заявку");
                   }
-                })
-              }
+                });
+              }}
             >
               Отменить заявку
             </button>
@@ -252,7 +258,26 @@ export function PprTaskLifecycleControls({
         </div>
       ) : null}
 
-      {message ? <div className="text-soft">{message}</div> : null}
+      {message ? (
+        <div
+          style={{
+            padding: "0.65rem 1rem",
+            borderRadius: "8px",
+            fontSize: "0.9rem",
+            background: message.includes("не удалось") || message.includes("Не удалось")
+              ? "color-mix(in srgb, var(--danger) 12%, transparent)"
+              : "color-mix(in srgb, var(--success) 12%, transparent)",
+            border: `1px solid ${message.includes("не удалось") || message.includes("Не удалось")
+              ? "color-mix(in srgb, var(--danger) 30%, transparent)"
+              : "color-mix(in srgb, var(--success) 30%, transparent)"}`,
+            color: message.includes("не удалось") || message.includes("Не удалось")
+              ? "var(--danger)"
+              : "var(--success)",
+          }}
+        >
+          {message}
+        </div>
+      ) : null}
     </div>
   );
 }

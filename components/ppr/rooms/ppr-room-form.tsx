@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { PprFormGroup } from "@/components/ppr/ui/ppr-modal";
+import { useToast } from "@/components/ui/toast";
 
 type ObjectOption = { id: string; name: string };
 type FloorOption = { id: string; object_id: string; name: string; sort_order: number; is_active: boolean };
@@ -56,6 +57,7 @@ export function PprRoomForm({
   const [selectedRoomTypeId, setSelectedRoomTypeId] = useState(values.room_type_id);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const { addToast } = useToast();
 
   const availableFloors = useMemo(
     () =>
@@ -121,13 +123,19 @@ export function PprRoomForm({
 
     const formData = new FormData(event.currentTarget);
     startTransition(async () => {
-      const result = await action(formData);
-      if (!result.ok) {
-        setSubmitError(result.error);
-        return;
-      }
+      try {
+        const result = await action(formData);
+        if (!result.ok) {
+          setSubmitError(result.error);
+          addToast(result.error, "error");
+          return;
+        }
 
-      onSubmitted?.();
+        addToast(roomId ? "Помещение успешно обновлено" : "Помещение успешно создано", "success");
+        onSubmitted?.();
+      } catch (error) {
+        addToast("Произошла ошибка при сохранении", "error");
+      }
     });
   }
 
@@ -173,65 +181,67 @@ export function PprRoomForm({
           />
         </PprFormGroup>
 
-        <PprFormGroup label="Этаж">
-          {selectedObjectId && activeFloorsForObject.length === 0 ? (
-            <div className="section-card" style={{ display: "grid", gap: "0.5rem" }}>
-              <div>Для выбранного объекта ещё не заведены этажи.</div>
-              <Link href={"/directories/floors" as Route} className="btn btn-ghost" style={{ width: "fit-content" }}>
-                Открыть справочник этажей
-              </Link>
-            </div>
-          ) : (
-            <select
-              className="select"
-              name="floor_id"
-              required
-              value={selectedFloorId}
-              onChange={(event) => setSelectedFloorId(event.target.value)}
-              disabled={!selectedObjectId || isPending}
-            >
-              <option value="" disabled>
-                {selectedObjectId ? "Выберите этаж" : "Сначала выберите объект"}
-              </option>
-              {availableFloors.map((floor) => (
-                <option key={floor.id} value={floor.id}>
-                  {floor.name}
-                  {floor.is_active ? "" : " (неактивен)"}
+        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+          <PprFormGroup label="Этаж">
+            {selectedObjectId && activeFloorsForObject.length === 0 ? (
+              <div className="section-card" style={{ display: "grid", gap: "0.5rem" }}>
+                <div>Для выбранного объекта ещё не заведены этажи.</div>
+                <Link href={"/directories/floors" as Route} className="btn btn-ghost" style={{ width: "fit-content" }}>
+                  Открыть справочник этажей
+                </Link>
+              </div>
+            ) : (
+              <select
+                className="select"
+                name="floor_id"
+                required
+                value={selectedFloorId}
+                onChange={(event) => setSelectedFloorId(event.target.value)}
+                disabled={!selectedObjectId || isPending}
+              >
+                <option value="" disabled>
+                  {selectedObjectId ? "Выберите этаж" : "Сначала выберите объект"}
                 </option>
-              ))}
-            </select>
-          )}
-        </PprFormGroup>
+                {availableFloors.map((floor) => (
+                  <option key={floor.id} value={floor.id}>
+                    {floor.name}
+                    {floor.is_active ? "" : " (неактивен)"}
+                  </option>
+                ))}
+              </select>
+            )}
+          </PprFormGroup>
 
-        <PprFormGroup label="Тип помещения">
-          {activeRoomTypes.length === 0 ? (
-            <div className="section-card" style={{ display: "grid", gap: "0.5rem" }}>
-              <div>В справочнике пока нет активных типов помещений.</div>
-              <Link href={"/directories/room-types" as Route} className="btn btn-ghost" style={{ width: "fit-content" }}>
-                Открыть справочник типов помещений
-              </Link>
-            </div>
-          ) : (
-            <select
-              className="select"
-              name="room_type_id"
-              required
-              value={selectedRoomTypeId}
-              onChange={(event) => setSelectedRoomTypeId(event.target.value)}
-              disabled={isPending}
-            >
-              <option value="" disabled>
-                Выберите тип помещения
-              </option>
-              {availableRoomTypes.map((roomType) => (
-                <option key={roomType.id} value={roomType.id}>
-                  {roomType.name}
-                  {roomType.is_active ? "" : " (неактивен)"}
+          <PprFormGroup label="Тип помещения">
+            {activeRoomTypes.length === 0 ? (
+              <div className="section-card" style={{ display: "grid", gap: "0.5rem" }}>
+                <div>В справочнике пока нет активных типов помещений.</div>
+                <Link href={"/directories/room-types" as Route} className="btn btn-ghost" style={{ width: "fit-content" }}>
+                  Открыть справочник типов помещений
+                </Link>
+              </div>
+            ) : (
+              <select
+                className="select"
+                name="room_type_id"
+                required
+                value={selectedRoomTypeId}
+                onChange={(event) => setSelectedRoomTypeId(event.target.value)}
+                disabled={isPending}
+              >
+                <option value="" disabled>
+                  Выберите тип помещения
                 </option>
-              ))}
-            </select>
-          )}
-        </PprFormGroup>
+                {availableRoomTypes.map((roomType) => (
+                  <option key={roomType.id} value={roomType.id}>
+                    {roomType.name}
+                    {roomType.is_active ? "" : " (неактивен)"}
+                  </option>
+                ))}
+              </select>
+            )}
+          </PprFormGroup>
+        </div>
 
         <PprFormGroup label="Описание">
           <textarea

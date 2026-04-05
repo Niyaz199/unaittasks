@@ -10,7 +10,7 @@ export default async function PprMyTasksPage() {
   if (!canAccessPprTaskScreens(profile.role)) {
     return (
       <section className="grid">
-        <PageHeader title="Мои ППР" description="Доступ к ППР-заявкам ограничен." />
+        <PageHeader title="Мои заявки ППР" description="Доступ к ППР-заявкам ограничен." />
         <div className="section-card">У вас нет доступа к списку ППР-заявок.</div>
       </section>
     );
@@ -22,8 +22,8 @@ export default async function PprMyTasksPage() {
   return (
     <section className="grid">
       <PageHeader
-        title="Мои ППР"
-        description="Список активных ППР-заявок, где вы указаны исполнителем."
+        title="Мои заявки ППР"
+        description="Активные заявки планово-предупредительного ремонта, назначенные вам."
       />
       <PprTasksAdmin
         tasks={tasks}

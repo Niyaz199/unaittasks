@@ -14,7 +14,7 @@ import { StatusBadge } from "@/components/ppr/ui/status-badge";
 
 const PprEquipmentForm = dynamic(
   () => import("@/components/ppr/equipment/ppr-equipment-form").then((module) => module.PprEquipmentForm),
-  { loading: () => <div className="section-card text-soft">Загрузка формы оборудования...</div> }
+  { loading: () => <div className="section-card text-soft">Загрузка...</div> }
 );
 
 type EquipmentRow = {
@@ -225,9 +225,15 @@ export function PprEquipmentAdmin({
                 setFilterRoomId("");
                 updateSearchParams(nextObjectId);
               }}
-              style={{ maxWidth: "200px" }}
+              style={{
+                maxWidth: "200px",
+                ...(!filterObjectId ? {
+                  borderColor: "color-mix(in srgb, var(--accent) 60%, transparent)",
+                  boxShadow: "0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent)",
+                } : {}),
+              }}
             >
-              <option value="">Выберите объект</option>
+              <option value="">— Выберите объект —</option>
               {objects.map((obj) => (
                 <option key={obj.id} value={obj.id}>
                   {obj.name}
@@ -298,7 +304,11 @@ export function PprEquipmentAdmin({
             ]}
           >
             {filteredEquipment.map((item) => (
-              <tr key={item.id}>
+              <tr 
+                key={item.id} 
+                className="clickable-row"
+                onClick={() => router.push(`/ppr/equipment/${item.id}` as Route)}
+              >
                 <td style={{ fontFamily: "monospace", fontSize: "0.9em" }}>{item.inventory_no}</td>
                 <td>
                   <div style={{ fontWeight: 600 }}>{item.name}</div>
@@ -310,11 +320,8 @@ export function PprEquipmentAdmin({
                 <td>
                   <StatusBadge status={item.status} labels={EQUIPMENT_LABELS} />
                 </td>
-                <td>
+                <td onClick={(e) => e.stopPropagation()}>
                   <div className="ppr-table-actions">
-                    <Link className="btn btn-ghost ppr-action-btn" href={`/ppr/equipment/${item.id}` as Route}>
-                      Карточка
-                    </Link>
                     <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(item.id)}>
                       Изменить
                     </button>
@@ -327,7 +334,12 @@ export function PprEquipmentAdmin({
 
         <div className="mobile-cards mobile-only">
           {filteredEquipment.map((item) => (
-            <div key={item.id} className="section-card mobile-card">
+            <div 
+              key={item.id} 
+              className="section-card mobile-card" 
+              style={{ cursor: "pointer" }}
+              onClick={() => router.push(`/ppr/equipment/${item.id}` as Route)}
+            >
               <div className="grid" style={{ gap: "0.45rem" }}>
                 <div style={{ fontWeight: 600 }}>{item.name}</div>
                 <div className="text-soft">Инв. номер: {item.inventory_no}</div>
@@ -337,10 +349,7 @@ export function PprEquipmentAdmin({
                 <div>
                   <StatusBadge status={item.status} labels={EQUIPMENT_LABELS} />
                 </div>
-                <div className="ppr-table-actions">
-                  <Link className="btn btn-ghost ppr-action-btn" href={`/ppr/equipment/${item.id}` as Route}>
-                    Карточка
-                  </Link>
+                <div className="ppr-table-actions" onClick={(e) => e.stopPropagation()}>
                   <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(item.id)}>
                     Изменить
                   </button>

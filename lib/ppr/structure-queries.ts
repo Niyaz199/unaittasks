@@ -271,7 +271,7 @@ export async function listPprWorkTemplatesForProfile(supabase: SupabaseClient, p
   const query = supabase
     .from("ppr_work_templates")
     .select(
-      "id,object_id,system_id,name,description,period_months,base_start_date,norm_hours,methodology,is_active,created_at,object:objects(name),system:ppr_systems(name)"
+      "id,object_id,system_id,name,description,execution_mode,period_months,base_start_date,norm_hours,methodology,is_active,created_at,object:objects(name),system:ppr_systems(name,responsible:profiles(full_name))"
     )
     .order("created_at", { ascending: false });
 
@@ -285,6 +285,7 @@ export async function listPprWorkTemplatesForProfile(supabase: SupabaseClient, p
     system_id: string;
     name: string;
     description: string | null;
+    execution_mode: "in_house" | "contractor";
     period_months: number;
     base_start_date: string;
     norm_hours: number | null;
@@ -292,7 +293,16 @@ export async function listPprWorkTemplatesForProfile(supabase: SupabaseClient, p
     is_active: boolean;
     created_at: string;
     object: { name: string } | Array<{ name: string }> | null;
-    system: { name: string } | Array<{ name: string }> | null;
+    system:
+      | {
+          name: string;
+          responsible: { full_name: string } | Array<{ full_name: string }> | null;
+        }
+      | Array<{
+          name: string;
+          responsible: { full_name: string } | Array<{ full_name: string }> | null;
+        }>
+      | null;
   }>;
 }
 
@@ -306,7 +316,7 @@ export async function getPprWorkTemplateByIdForProfile(
   const { data: template, error: templateError } = await supabase
     .from("ppr_work_templates")
     .select(
-      "id,object_id,system_id,name,description,period_months,base_start_date,norm_hours,methodology,is_active,created_at,object:objects(name),system:ppr_systems(name)"
+      "id,object_id,system_id,name,description,execution_mode,period_months,base_start_date,norm_hours,methodology,is_active,created_at,object:objects(name),system:ppr_systems(name,responsible:profiles(full_name))"
     )
     .eq("id", templateId)
     .maybeSingle();
@@ -332,6 +342,7 @@ export async function getPprWorkTemplateByIdForProfile(
       system_id: string;
       name: string;
       description: string | null;
+      execution_mode: "in_house" | "contractor";
       period_months: number;
       base_start_date: string;
       norm_hours: number | null;
@@ -339,7 +350,16 @@ export async function getPprWorkTemplateByIdForProfile(
       is_active: boolean;
       created_at: string;
       object: { name: string } | Array<{ name: string }> | null;
-      system: { name: string } | Array<{ name: string }> | null;
+      system:
+        | {
+            name: string;
+            responsible: { full_name: string } | Array<{ full_name: string }> | null;
+          }
+        | Array<{
+            name: string;
+            responsible: { full_name: string } | Array<{ full_name: string }> | null;
+          }>
+        | null;
     },
     checklistItems: (checklistItems ?? []) as Array<{
       id: string;

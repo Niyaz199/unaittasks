@@ -33,7 +33,7 @@ export default async function PprRoomsPage({
     <section className="grid">
       <PageHeader
         title="Помещения объектов"
-        description="Общий справочник помещений с собственными карточками и постоянными QR-кодами; участие в обходах настраивается отдельно."
+        description={initialObjectId ? "Помещения выбранного объекта с QR-кодами и карточками." : "Выберите объект в фильтре ниже, чтобы загрузить список помещений."}
         actions={<BackButton fallback="/ppr" label="← Назад к ППР" />}
       />
 

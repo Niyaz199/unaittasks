@@ -105,60 +105,60 @@ function TaskCard({
   })();
 
   return (
-    <div className={`tl-card${urgency.level === "overdue" ? " tl-card--overdue" : ""}${urgency.level === "today" ? " tl-card--today" : ""}${isDone ? " tl-card--done" : ""}`}>
-      {urgency.level === "overdue" ? <div className="tl-card-urgency-bar" aria-hidden="true" /> : null}
+      <div className={`tl-card${urgency.level === "overdue" ? " tl-card--overdue" : ""}${urgency.level === "today" ? " tl-card--today" : ""}${isDone ? " tl-card--done" : ""}`}>
+        {urgency.level === "overdue" ? <div className="tl-card-urgency-bar" aria-hidden="true" /> : null}
 
-      <Link className="tl-card-inner" href={`/tasks/${task.id}` as Route} prefetch={false}>
-        <div className="tl-card-main">
-          {/* Строка 1: название + бейдж срочности */}
-          <div className="tl-card-header">
-            <span className={`tl-card-title${isDone ? " tl-card-title--done" : ""}`}>{task.title}</span>
-            {urgency.level ? (
-              <span className={`tl-urgency-badge tl-urgency-badge--${urgency.level}`}>{urgency.text}</span>
-            ) : null}
-          </div>
+        <Link className="tl-card-inner" href={`/tasks/${task.id}` as Route} prefetch={false}>
+          <div className="tl-card-main">
+            {/* Строка 1: название + бейдж срочности */}
+            <div className="tl-card-header">
+              <span className={`tl-card-title${isDone ? " tl-card-title--done" : ""}`}>{task.title}</span>
+              {urgency.level ? (
+                <span className={`tl-urgency-badge tl-urgency-badge--${urgency.level}`}>{urgency.text}</span>
+              ) : null}
+            </div>
 
-          {/* Строка 2: объект + исполнитель */}
-          <div className="tl-card-sub">
-            <span className="tl-card-object">{task.objects?.name ?? "Без объекта"}</span>
-            <span className="tl-card-dot" aria-hidden="true">·</span>
-            <span className="tl-card-assignee">
-              <span className="tl-assignee-avatar" aria-hidden="true">{getInitials(assigneeName)}</span>
-              <span>{assigneeName}</span>
-            </span>
-          </div>
-
-          {/* Строка 3: статус, приоритет, срок — компактная */}
-          <div className="tl-card-footer">
-            <Badge tone={status.tone}>{status.label}</Badge>
-            <Badge tone={priority.tone}>{priority.label}</Badge>
-            {task.due_at ? (
-              <span className="tl-due-label">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                {new Date(task.due_at).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}
+            {/* Строка 2: объект + исполнитель */}
+            <div className="tl-card-sub">
+              <span className="tl-card-object">{task.objects?.name ?? "Без объекта"}</span>
+              <span className="tl-card-dot" aria-hidden="true">·</span>
+              <span className="tl-card-assignee">
+                <span className="tl-assignee-avatar" aria-hidden="true">{getInitials(assigneeName)}</span>
+                <span>{assigneeName}</span>
               </span>
-            ) : (
-              <span className="tl-due-label tl-due-label--none">Без срока</span>
-            )}
-            {task.status === "paused" && task.resume_at ? (
-              <span className="tl-paused-label">
-                до {new Date(task.resume_at).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}
-              </span>
-            ) : null}
-          </div>
-        </div>
+            </div>
 
-        <div className="tl-card-aside" onClick={(e) => e.preventDefault()}>
+            {/* Строка 3: статус, приоритет, срок — компактная */}
+            <div className="tl-card-footer">
+              <Badge tone={status.tone}>{status.label}</Badge>
+              <Badge tone={priority.tone}>{priority.label}</Badge>
+              {task.due_at ? (
+                <span className="tl-due-label">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  {new Date(task.due_at).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}
+                </span>
+              ) : (
+                <span className="tl-due-label tl-due-label--none">Без срока</span>
+              )}
+              {task.status === "paused" && task.resume_at ? (
+                <span className="tl-paused-label">
+                  до {new Date(task.resume_at).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}
+                </span>
+              ) : null}
+            </div>
+          </div>
+
+        <div className="tl-card-aside" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
           {currentUser ? <TaskActionMenu task={task} currentUser={currentUser} /> : null}
         </div>
-      </Link>
+        </Link>
 
-      {canTakeInWork ? (
-        <div className="tl-card-take-row">
-          <TakeInWorkButton taskId={task.id} />
-        </div>
-      ) : null}
-    </div>
+        {canTakeInWork ? (
+          <div className="tl-card-take-row" onClick={(e) => e.stopPropagation()}>
+            <TakeInWorkButton taskId={task.id} />
+          </div>
+        ) : null}
+      </div>
   );
 }
 

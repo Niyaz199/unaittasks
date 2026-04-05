@@ -60,11 +60,11 @@ export function ObjectsAdminList({
               <td>{resolveObjectEngineerName(objectItem)}</td>
               <td>{new Date(objectItem.created_at).toLocaleString("ru-RU")}</td>
               <td>
-                <div className="row">
-                  <button className="btn btn-ghost" type="button" onClick={() => setEditingId(objectItem.id)}>
+                <div className="ppr-table-actions">
+                  <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(objectItem.id)}>
                     Изменить
                   </button>
-                  <button className="btn btn-danger" type="button" onClick={() => setDeletingId(objectItem.id)}>
+                  <button className="btn btn-danger ppr-action-btn" type="button" onClick={() => setDeletingId(objectItem.id)}>
                     Удалить
                   </button>
                 </div>
@@ -98,19 +98,28 @@ export function ObjectsAdminList({
         {editingObject ? (
           <form action={updateObjectAction} className="grid" onSubmit={() => setEditingId(null)}>
             <input type="hidden" name="object_id" value={editingObject.id} />
-            <input className="input" name="name" defaultValue={editingObject.name} required />
-            <select
-              className="select"
-              name="object_engineer_id"
-              defaultValue={editingObject.object_engineer_id ?? ""}
-            >
-              <option value="">Без инженера объекта</option>
-              {objectEngineers.map((engineer) => (
-                <option key={engineer.id} value={engineer.id}>
-                  {engineer.full_name}
-                </option>
-              ))}
-            </select>
+            <div className="ctf-field">
+              <label className="ctf-label" htmlFor="edit-object-name">
+                Название объекта <span className="ctf-required" aria-hidden="true">*</span>
+              </label>
+              <input id="edit-object-name" className="input" name="name" defaultValue={editingObject.name} required />
+            </div>
+            <div className="ctf-field">
+              <label className="ctf-label" htmlFor="edit-object-engineer">Инженер объекта</label>
+              <select
+                id="edit-object-engineer"
+                className="select"
+                name="object_engineer_id"
+                defaultValue={editingObject.object_engineer_id ?? ""}
+              >
+                <option value="">Без инженера объекта</option>
+                {objectEngineers.map((engineer) => (
+                  <option key={engineer.id} value={engineer.id}>
+                    {engineer.full_name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="row">
               <button className="btn btn-accent" type="submit">
                 Сохранить

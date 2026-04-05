@@ -34,8 +34,8 @@ export default async function PprTasksPage({ searchParams }: { searchParams: Pro
   return (
     <section className="grid">
       <PageHeader
-        title="ППР-заявки"
-        description="Активный реестр ППР-заявок. Вид «На ознакомлении» показывает выполненные заявки, где исполнитель не совпадает с ответственным."
+        title="Реестр заявок ППР"
+        description={view === "review" ? "Выполненные заявки, ожидающие проверки ответственным инженером." : "Все активные заявки планово-предупредительного ремонта."}
         actions={
           <>
             <BackButton fallback="/ppr" label="← Назад к ППР" />

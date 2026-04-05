@@ -37,7 +37,7 @@ export default async function PprEquipmentPage({
     <section className="grid">
       <PageHeader
         title="Оборудование ППР"
-        description="Справочник оборудования с привязкой к объекту, системе и общему справочнику помещений."
+        description={selectedObjectId ? "Список оборудования выбранного объекта." : "Выберите объект в фильтре ниже, чтобы увидеть оборудование, системы и помещения."}
         actions={<BackButton fallback="/ppr" label="← Назад к ППР" />}
       />
 

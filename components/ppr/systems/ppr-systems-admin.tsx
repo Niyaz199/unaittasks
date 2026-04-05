@@ -36,7 +36,8 @@ function resolveResponsible(
 ) {
   const value = Array.isArray(raw) ? raw[0] : raw;
   if (!value) return "—";
-  return `${value.full_name} (${value.role})`;
+  const roleRu = value.role === "lead" ? "вед. инженер" : value.role === "object_engineer" ? "инженер объекта" : "инженер";
+  return `${value.full_name} — ${roleRu}`;
 }
 
 function roleLabel(role: ResponsibleOption["role"]) {
@@ -342,8 +343,7 @@ export function PprSystemsAdmin({
                 <option value="">Без ответственного</option>
                 {createResponsibleCandidates.map((candidate) => (
                   <option key={candidate.id} value={candidate.id}>
-                    {candidate.full_name} ({roleLabel(candidate.role)})
-                    {candidate.object_ids.length ? ` · ${candidate.object_ids.map((id) => objectMap.get(id) ?? id).join(", ")}` : ""}
+                    {candidate.full_name} — {roleLabel(candidate.role)}
                   </option>
                 ))}
               </select>
@@ -406,8 +406,7 @@ export function PprSystemsAdmin({
                   <option value="">Без ответственного</option>
                   {editResponsibleCandidates.map((candidate) => (
                     <option key={candidate.id} value={candidate.id}>
-                      {candidate.full_name} ({roleLabel(candidate.role)})
-                      {candidate.object_ids.length ? ` · ${candidate.object_ids.map((id) => objectMap.get(id) ?? id).join(", ")}` : ""}
+                      {candidate.full_name} — {roleLabel(candidate.role)}
                     </option>
                   ))}
                 </select>

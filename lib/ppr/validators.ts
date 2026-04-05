@@ -4,6 +4,7 @@ export const pprResponsibleRoleSchema = z.enum(["lead", "engineer", "object_engi
 export const pprTaskStatusSchema = z.enum(["new", "in_progress", "done", "closed", "cancelled"]);
 export const pprEquipmentStatusSchema = z.enum(["active", "repair", "out_of_service", "archived"]);
 export const pprMonthPlanItemStatusSchema = z.enum(["pending", "materialized", "carried_over", "closed", "cancelled"]);
+export const pprExecutionModeSchema = z.enum(["in_house", "contractor"]);
 
 const uuidSchema = z.string().uuid();
 
@@ -49,6 +50,7 @@ export const pprWorkTemplateFormSchema = z.object({
   systemId: uuidSchema,
   name: z.string().trim().min(2),
   description: z.string().trim().max(4000).optional().nullable(),
+  executionMode: pprExecutionModeSchema.default("in_house"),
   periodMonths: z.number().int().min(1),
   baseStartDate: z.string().date(),
   normHours: z.number().nonnegative().optional().nullable(),

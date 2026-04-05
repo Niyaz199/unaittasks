@@ -43,15 +43,23 @@ export function CreateUserForm({
       </div>
       {canAssignObjects ? (
         <div className="grid">
-          <div className="text-soft">Объекты управляемого пользователя:</div>
-          <div className="row" style={{ flexWrap: "wrap" }}>
+          <div className="text-soft" style={{ fontSize: "0.85rem" }}>Объекты управляемого пользователя:</div>
+          <div className="row" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
             {objects.map((objectItem) => (
               <label
                 key={objectItem.id}
                 className="badge badge-neutral"
-                style={{ display: "inline-flex", gap: 6, alignItems: "center" }}
+                style={{ 
+                  display: "inline-flex", 
+                  gap: "0.4rem", 
+                  alignItems: "center",
+                  padding: "0.4rem 0.8rem",
+                  cursor: "pointer",
+                  borderRadius: "8px",
+                  border: "1px solid color-mix(in srgb, var(--line) 50%, transparent)"
+                }}
               >
-                <input type="checkbox" name="object_ids" value={objectItem.id} />
+                <input type="checkbox" name="object_ids" value={objectItem.id} style={{ accentColor: "var(--accent)" }} />
                 {objectItem.name}
               </label>
             ))}

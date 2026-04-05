@@ -1,9 +1,9 @@
 import { requireProfile } from "@/lib/auth";
-import { signOutAction } from "@/app/actions/auth-actions";
 import { NavShell } from "@/components/dashboard/nav-shell";
 import { OfflineSyncBootstrap } from "@/components/offline/offline-sync-bootstrap";
 import { MobileTabs } from "@/components/dashboard/mobile-tabs";
 import { RegisterSW } from "@/components/pwa/register-sw";
+import { SignOutButton } from "@/components/dashboard/sign-out-button";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { profile } = await requireProfile();
@@ -30,11 +30,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               <div className="topbar-user-name">{profile.full_name}</div>
             </div>
             <div className="row">
-              <form action={signOutAction}>
-                <button className="btn" type="submit">
-                  Выйти
-                </button>
-              </form>
+              <SignOutButton />
             </div>
           </div>
         </header>

@@ -13,11 +13,11 @@ import { StatusBadge } from "@/components/ppr/ui/status-badge";
 
 const PprRoomForm = dynamic(
   () => import("@/components/ppr/rooms/ppr-room-form").then((module) => module.PprRoomForm),
-  { loading: () => <div className="section-card text-soft">Загрузка формы помещения...</div> }
+  { loading: () => <div className="section-card text-soft">Загрузка...</div> }
 );
 const PprRoomImportModal = dynamic(
   () => import("@/components/ppr/rooms/ppr-room-import-modal").then((module) => module.PprRoomImportModal),
-  { loading: () => <div className="section-card text-soft">Загрузка импорта помещений...</div> }
+  { loading: () => <div className="section-card text-soft">Загрузка...</div> }
 );
 
 type RoomRow = {
@@ -220,9 +220,15 @@ export function PprRoomsAdmin({
                 setFilterFloorId("");
                 updateSearchParams(nextObjectId);
               }}
-              style={{ maxWidth: "200px" }}
+              style={{
+                maxWidth: "200px",
+                ...(!filterObjectId ? {
+                  borderColor: "color-mix(in srgb, var(--accent) 60%, transparent)",
+                  boxShadow: "0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent)",
+                } : {}),
+              }}
             >
-              <option value="">Выберите объект</option>
+              <option value="">— Выберите объект —</option>
               {objects.map((obj) => (
                 <option key={obj.id} value={obj.id}>
                   {obj.name}
@@ -295,17 +301,18 @@ export function PprRoomsAdmin({
             ]}
           >
             {filteredRooms.map((room) => (
-              <tr key={room.id}>
+              <tr 
+                key={room.id}
+                className="clickable-row"
+                onClick={() => router.push(`/ppr/rooms/${encodeURIComponent(room.id)}` as Route)}
+              >
                 <td>{resolveName(room.object)}</td>
                 <td>{getFloorLabel(room)}</td>
                 <td>{getRoomTypeLabel(room)}</td>
                 <td style={{ fontWeight: 600 }}>{room.name}</td>
                 <td><StatusBadge isActive={room.is_active} /></td>
-                <td>
+                <td onClick={(e) => e.stopPropagation()}>
                   <div className="ppr-table-actions">
-                    <Link className="btn btn-ghost ppr-action-btn" href={`/ppr/rooms/${encodeURIComponent(room.id)}` as Route}>
-                      Карточка
-                    </Link>
                     <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(room.id)}>
                       Изменить
                     </button>
@@ -318,17 +325,19 @@ export function PprRoomsAdmin({
 
         <div className="mobile-cards mobile-only">
           {filteredRooms.map((room) => (
-            <div key={room.id} className="section-card mobile-card">
+            <div 
+              key={room.id} 
+              className="section-card mobile-card"
+              style={{ cursor: "pointer" }}
+              onClick={() => router.push(`/ppr/rooms/${encodeURIComponent(room.id)}` as Route)}
+            >
               <div className="grid" style={{ gap: "0.45rem" }}>
                 <div style={{ fontWeight: 600 }}>{room.name}</div>
                 <div className="text-soft">Объект: {resolveName(room.object)}</div>
                 <div className="text-soft">Этаж: {getFloorLabel(room)}</div>
                 <div className="text-soft">Тип помещения: {getRoomTypeLabel(room)}</div>
                 <div><StatusBadge isActive={room.is_active} /></div>
-                <div className="ppr-table-actions">
-                  <Link className="btn btn-ghost ppr-action-btn" href={`/ppr/rooms/${encodeURIComponent(room.id)}` as Route}>
-                    Карточка
-                  </Link>
+                <div className="ppr-table-actions" onClick={(e) => e.stopPropagation()}>
                   <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(room.id)}>
                     Изменить
                   </button>

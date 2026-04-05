@@ -16,6 +16,7 @@ type TemplateRow = {
   system_id: string;
   name: string;
   description: string | null;
+  execution_mode: "in_house" | "contractor";
   period_months: number;
   base_start_date: string;
   norm_hours: number | null;
@@ -23,7 +24,16 @@ type TemplateRow = {
   is_active: boolean;
   created_at: string;
   object: { name: string } | Array<{ name: string }> | null;
-  system: { name: string } | Array<{ name: string }> | null;
+  system:
+    | {
+        name: string;
+        responsible: { full_name: string } | Array<{ full_name: string }> | null;
+      }
+    | Array<{
+        name: string;
+        responsible: { full_name: string } | Array<{ full_name: string }> | null;
+      }>
+    | null;
 };
 
 type ObjectOption = { id: string; name: string };
@@ -32,6 +42,16 @@ type SystemOption = { id: string; object_id: string; name: string };
 function resolveName(raw: { name: string } | Array<{ name: string }> | null | undefined) {
   if (Array.isArray(raw)) return raw[0]?.name ?? "—";
   return raw?.name ?? "—";
+}
+
+function resolveExecutionModeLabel(mode: "in_house" | "contractor") {
+  return mode === "contractor" ? "Подрядчик" : "Свои силы";
+}
+
+function resolveResponsibleName(rawSystem: TemplateRow["system"]) {
+  const system = Array.isArray(rawSystem) ? (rawSystem[0] ?? null) : rawSystem;
+  const responsible = Array.isArray(system?.responsible) ? (system.responsible[0] ?? null) : (system?.responsible ?? null);
+  return responsible?.full_name ?? "Не назначен";
 }
 
 export function PprTemplatesAdmin({
@@ -147,6 +167,7 @@ export function PprTemplatesAdmin({
               { key: "name", label: "Шаблон" },
               { key: "object", label: "Объект" },
               { key: "system", label: "Система" },
+              { key: "execution", label: "Ответственный" },
               { key: "period", label: "Период" },
               { key: "status", label: "Статус" },
               { key: "actions", label: "Действия" },
@@ -157,6 +178,7 @@ export function PprTemplatesAdmin({
                 <td style={{ fontWeight: 600 }}>{template.name}</td>
                 <td>{resolveName(template.object)}</td>
                 <td>{resolveName(template.system)}</td>
+                <td>{resolveResponsibleName(template.system)}</td>
                 <td>{template.period_months} мес.</td>
                 <td>
                   <Badge tone={template.is_active ? "success" : "neutral"}>
@@ -182,6 +204,8 @@ export function PprTemplatesAdmin({
                 <div style={{ fontWeight: 600 }}>{template.name}</div>
                 <div className="text-soft">Объект: {resolveName(template.object)}</div>
                 <div className="text-soft">Система: {resolveName(template.system)}</div>
+                <div className="text-soft">Ответственный: {resolveResponsibleName(template.system)}</div>
+                <div className="text-soft">Формат выполнения: {resolveExecutionModeLabel(template.execution_mode)}</div>
                 <div className="text-soft">Период: {template.period_months} мес.</div>
                 <div>
                   <Badge tone={template.is_active ? "success" : "neutral"}>

@@ -12,14 +12,14 @@ import { pprTaskStatusMeta } from "@/lib/ppr/presentation";
 const PprTaskLifecycleControls = dynamic(
   () => import("@/components/ppr/tasks/ppr-task-lifecycle-controls").then((module) => module.PprTaskLifecycleControls),
   {
-    loading: () => <div className="section-card text-soft">Подготавливаем действия по заявке...</div>,
+    loading: () => <div className="section-card text-soft">Загрузка...</div>,
   }
 );
 
 const PprTaskCommentForm = dynamic(
   () => import("@/components/ppr/tasks/ppr-task-comment-form").then((module) => module.PprTaskCommentForm),
   {
-    loading: () => <div className="section-card text-soft">Подготавливаем форму комментария...</div>,
+    loading: () => <div className="section-card text-soft">Загрузка...</div>,
   }
 );
 
@@ -84,92 +84,97 @@ export function PprTaskDetails({
   return (
     <section className="td-page">
       {/* Header and key meta */}
-      <div className="td-hero" style={{ gap: "0.75rem" }}>
-        <div className="td-hero-top" style={{ alignItems: "center" }}>
-          <h2 className="task-details-title" style={{ margin: 0 }}>{equipment?.name ?? "ППР-заявка"}</h2>
-          <div className="td-hero-badges">
-            <Badge tone={meta.tone}>{meta.label}</Badge>
-            {task.is_overdue ? <Badge tone="danger">Просрочена</Badge> : null}
-            {task.is_rescheduled ? <Badge tone="warning">Перенесена</Badge> : null}
+      <div className="section-card" style={{ padding: "1.5rem", marginBottom: "1rem", background: "color-mix(in srgb, var(--panel-soft) 30%, transparent)" }}>
+        <div className="td-hero" style={{ gap: "1rem" }}>
+          <div className="td-hero-top" style={{ alignItems: "flex-start" }}>
+            <div>
+              <div className="text-soft" style={{ fontSize: "0.85rem", marginBottom: "0.4rem", fontFamily: "monospace", letterSpacing: "0.05em" }}>
+                {object?.name ?? "Без объекта"} • {system?.name ?? "Без системы"}
+              </div>
+              <h2 className="task-details-title" style={{ margin: 0, fontSize: "1.6rem" }}>{equipment?.name ?? "ППР-заявка"}</h2>
+            </div>
+            <div className="td-hero-badges">
+              <Badge tone={meta.tone} style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }}>{meta.label}</Badge>
+              {task.is_overdue ? <Badge tone="danger" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }}>Просрочена</Badge> : null}
+              {task.is_rescheduled ? <Badge tone="warning" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }}>Перенесена</Badge> : null}
+            </div>
           </div>
+
+          <div className="td-meta-grid" style={{ marginTop: "0.5rem", borderTop: "1px solid color-mix(in srgb, var(--line) 40%, transparent)", paddingTop: "1rem" }}>
+            <div className="td-meta-item">
+              <span className="td-meta-label">Плановая дата</span>
+              <span className="td-meta-value" style={{ fontWeight: 500 }}>{formatDate(task.planned_for)}</span>
+            </div>
+            <div className="td-meta-item">
+              <span className="td-meta-label">Инв. №</span>
+              <span className="td-meta-value" style={{ fontFamily: "monospace" }}>{equipment?.inventory_no ?? "—"}</span>
+            </div>
+            <div className="td-meta-item">
+              <span className="td-meta-label">Ответственный</span>
+              <span className="td-meta-value">{responsible?.full_name ?? "Не назначен"}</span>
+            </div>
+            <div className="td-meta-item">
+              <span className="td-meta-label">Исполнитель</span>
+              <span className="td-meta-value">{assignee?.full_name ?? "Не назначен"}</span>
+            </div>
+          </div>
+
+          <div className="row" style={{ gap: "1.2rem", flexWrap: "wrap", fontSize: "0.78rem", color: "var(--text-soft)", marginTop: "0.5rem" }}>
+            <span>Создана: {formatDateTime(task.created_at)}</span>
+            {task.completed_at && <span>Выполнена: {formatDateTime(task.completed_at)}</span>}
+            {task.closed_at && <span>Закрыта: {formatDateTime(task.closed_at)}</span>}
+            {task.cancelled_at && <span>Отменена: {formatDateTime(task.cancelled_at)}</span>}
+          </div>
+
+          {task.general_comment ? (
+            <div className="grid" style={{ marginTop: "1rem", gap: "0.25rem", padding: "1rem", background: "color-mix(in srgb, var(--panel-soft) 40%, transparent)", borderRadius: "8px", border: "1px solid color-mix(in srgb, var(--line) 30%, transparent)" }}>
+              <span className="td-meta-label">Комментарий к заявке</span>
+              <p style={{ margin: 0, fontSize: "0.95rem", lineHeight: 1.5 }}>{task.general_comment}</p>
+            </div>
+          ) : null}
+
+          {task.cancel_reason ? (
+            <div className="grid" style={{ marginTop: "1rem", gap: "0.25rem", padding: "1rem", background: "color-mix(in srgb, var(--danger) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--danger) 20%, transparent)", borderRadius: "8px" }}>
+              <span className="td-meta-label" style={{ color: "var(--danger)" }}>Причина отмены</span>
+              <p style={{ margin: 0, fontSize: "0.95rem", lineHeight: 1.5 }}>{task.cancel_reason}</p>
+            </div>
+          ) : null}
         </div>
-
-        <div className="text-soft" style={{ fontSize: "0.9rem", marginBottom: "0.25rem", opacity: 0.8 }}>
-          {object?.name ?? "Без объекта"} • {system?.name ?? "Без системы"}
-        </div>
-
-        <div className="td-meta-grid">
-          <div className="td-meta-item">
-            <span className="td-meta-label">Плановая дата</span>
-            <span className="td-meta-value">{formatDate(task.planned_for)}</span>
-          </div>
-          <div className="td-meta-item">
-            <span className="td-meta-label">Инв. №</span>
-            <span className="td-meta-value">{equipment?.inventory_no ?? "—"}</span>
-          </div>
-          <div className="td-meta-item">
-            <span className="td-meta-label">Ответственный</span>
-            <span className="td-meta-value">{responsible?.full_name ?? "Не назначен"}</span>
-          </div>
-          <div className="td-meta-item">
-            <span className="td-meta-label">Исполнитель</span>
-            <span className="td-meta-value">{assignee?.full_name ?? "Не назначен"}</span>
-          </div>
-        </div>
-
-        <div className="row" style={{ gap: "1.2rem", flexWrap: "wrap", fontSize: "0.78rem", opacity: 0.7 }}>
-          <span>Создана: {formatDateTime(task.created_at)}</span>
-          {task.completed_at && <span>Выполнена: {formatDateTime(task.completed_at)}</span>}
-          {task.closed_at && <span>Закрыта: {formatDateTime(task.closed_at)}</span>}
-          {task.cancelled_at && <span>Отменена: {formatDateTime(task.cancelled_at)}</span>}
-        </div>
-
-        {task.general_comment ? (
-          <div className="grid" style={{ gap: "0.25rem", padding: "0.75rem", background: "color-mix(in srgb, var(--panel-soft) 40%, transparent)", borderRadius: "8px", border: "1px solid var(--line)" }}>
-            <span className="td-meta-label">Комментарий к заявке</span>
-            <p style={{ margin: 0, fontSize: "0.9rem" }}>{task.general_comment}</p>
-          </div>
-        ) : null}
-
-        {task.cancel_reason ? (
-          <div className="grid" style={{ gap: "0.25rem", padding: "0.75rem", background: "color-mix(in srgb, var(--danger) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--danger) 20%, transparent)", borderRadius: "8px" }}>
-            <span className="td-meta-label" style={{ color: "var(--danger)" }}>Причина отмены</span>
-            <p style={{ margin: 0, fontSize: "0.9rem" }}>{task.cancel_reason}</p>
-          </div>
-        ) : null}
       </div>
 
-      <div className="grid md-grid-2" style={{ gap: "2.5rem" }}>
+      <div className="grid md-grid-2" style={{ gap: "1.5rem", alignItems: "start" }}>
         {/* Left Column */}
-        <div className="flex flex-col" style={{ gap: "2.5rem" }}>
+        <div className="flex flex-col" style={{ gap: "1.5rem" }}>
           
-          <div className="grid" style={{ gap: "1rem" }}>
-            <div className="grid" style={{ gap: "0.35rem", borderBottom: "1px solid color-mix(in srgb, var(--line-strong) 40%, transparent)", paddingBottom: "0.5rem" }}>
-              <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 600 }}>Управление заявкой</h3>
-              <p className="text-soft text-sm" style={{ margin: 0 }}>
-                Назначение исполнителя, запуск в работу, выполнение, закрытие, перенос и отмена.
-              </p>
+          <div className="section-card" style={{ padding: "1.5rem" }}>
+            <div className="grid" style={{ gap: "1.25rem" }}>
+              <div className="grid" style={{ gap: "0.35rem", borderBottom: "1px solid color-mix(in srgb, var(--line-strong) 40%, transparent)", paddingBottom: "0.75rem" }}>
+                <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600 }}>Управление заявкой</h3>
+                <p className="text-soft text-sm" style={{ margin: 0 }}>
+                  Назначение исполнителя, запуск в работу, выполнение, закрытие, перенос и отмена.
+                </p>
+              </div>
+              <PprTaskLifecycleControls
+                taskId={task.id}
+                currentStatus={task.status}
+                currentAssigneeId={task.assignee_id}
+                plannedFor={task.planned_for}
+                assigneeCandidates={assigneeCandidates}
+                canAssign={permissions.canAssign}
+                canStart={permissions.canStart}
+                canComplete={permissions.canComplete}
+                canClose={permissions.canClose}
+                canCancel={permissions.canCancel}
+                canReschedule={permissions.canReschedule}
+              />
             </div>
-            <PprTaskLifecycleControls
-              taskId={task.id}
-              currentStatus={task.status}
-              currentAssigneeId={task.assignee_id}
-              plannedFor={task.planned_for}
-              assigneeCandidates={assigneeCandidates}
-              canAssign={permissions.canAssign}
-              canStart={permissions.canStart}
-              canComplete={permissions.canComplete}
-              canClose={permissions.canClose}
-              canCancel={permissions.canCancel}
-              canReschedule={permissions.canReschedule}
-            />
           </div>
 
-      <div className="section-card grid" style={{ gap: "1rem" }}>
+      <div className="section-card grid" style={{ gap: "1rem", padding: "1.5rem" }}>
         <div className="grid" style={{ gap: "0.35rem" }}>
-          <h3 style={{ margin: 0 }}>Комментарии и фото</h3>
-          <p className="text-soft" style={{ margin: 0 }}>
-            Для перевода ППР-заявки в `done` сервер проверяет наличие хотя бы одного комментария и одного фото.
+          <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600 }}>Комментарии и фото</h3>
+          <p className="text-soft" style={{ margin: 0, fontSize: "0.85rem" }}>
+            Для завершения заявки необходимо добавить хотя бы один комментарий и одно фото.
           </p>
         </div>
 
@@ -200,11 +205,11 @@ export function PprTaskDetails({
         </div>
       </div>
 
-      <div className="section-card grid" style={{ gap: "1rem" }}>
+      <div className="section-card grid" style={{ gap: "1rem", padding: "1.5rem" }}>
         <div className="grid" style={{ gap: "0.35rem" }}>
-          <h3 style={{ margin: 0 }}>Работы по snapshot-данным</h3>
-          <p className="text-soft" style={{ margin: 0 }}>
-            Карточка читает сохраненные snapshots из `ppr_task_work_items`, а не текущую версию шаблона.
+          <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600 }}>Перечень работ</h3>
+          <p className="text-soft" style={{ margin: 0, fontSize: "0.85rem" }}>
+            Работы зафиксированы на момент создания заявки и не зависят от текущей версии шаблона.
           </p>
         </div>
 
@@ -245,7 +250,7 @@ export function PprTaskDetails({
                 ))}
               </div>
             ) : (
-              <div className="text-soft" style={{ padding: "1.5rem", textAlign: "center", border: "1px dashed color-mix(in srgb, var(--line-strong) 60%, transparent)", borderRadius: "8px" }}>Work items для этой ППР-заявки пока отсутствуют.</div>
+              <div className="text-soft" style={{ padding: "1.5rem", textAlign: "center", border: "1px dashed color-mix(in srgb, var(--line-strong) 60%, transparent)", borderRadius: "8px" }}>Перечень работ по этой заявке не задан.</div>
             )}
           </div>
         </div>

@@ -129,21 +129,32 @@ export function UsersAdminList({
                 <td>
                   <Badge tone={roleTone(user.role)}>{roleLabel(user.role)}</Badge>
                 </td>
-                <td>{(linksByUser.get(user.id)?.names ?? []).join(", ") || "—"}</td>
+                <td>
+                  {(() => {
+                    const names = linksByUser.get(user.id)?.names ?? [];
+                    if (!names.length) return "—";
+                    if (names.length <= 2) return names.join(", ");
+                    return (
+                      <span title={names.join(", ")}>
+                        {names.slice(0, 2).join(", ")} <span className="text-soft">+{names.length - 2}</span>
+                      </span>
+                    );
+                  })()}
+                </td>
                 <td>
                   {canManageTarget && !isSelf ? (
-                    <div className="row">
-                      <button className="btn btn-ghost" type="button" onClick={() => setEditingUserId(user.id)}>
-                        {"Изменить"}
+                    <div className="ppr-table-actions">
+                      <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingUserId(user.id)}>
+                        Изменить
                       </button>
-                      <button className="btn btn-danger" type="button" onClick={() => setDeletingUserId(user.id)}>
-                        {"Удалить"}
+                      <button className="btn btn-danger ppr-action-btn" type="button" onClick={() => setDeletingUserId(user.id)}>
+                        Удалить
                       </button>
                     </div>
                   ) : isSelf ? (
-                    <span className="text-soft">{"Свой профиль редактируется в разделе Профиль"}</span>
+                    <span className="text-soft" style={{ fontSize: "0.85em" }}>Свой профиль редактируется в Профиле</span>
                   ) : (
-                    <span className="text-soft">{"Нет доступа"}</span>
+                    <span className="text-soft" style={{ fontSize: "0.85em" }}>Нет доступа</span>
                   )}
                 </td>
               </tr>

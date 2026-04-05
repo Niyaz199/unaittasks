@@ -32,11 +32,11 @@ export default async function UsersPage() {
   );
   const emailById = new Map(emailEntries);
 
-  const links = ((linksRaw ?? []) as Array<{ user_id: string; object_id: string; objects: { name: string }[] | null }>).map(
+  const links = ((linksRaw ?? []) as Array<{ user_id: string; object_id: string; objects: { name: string } | null }>).map(
     (row) => ({
       user_id: row.user_id,
       object_id: row.object_id,
-      object_name: row.objects?.[0]?.name ?? ""
+      object_name: row.objects?.name ?? ""
     })
   );
 

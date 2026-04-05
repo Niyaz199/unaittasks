@@ -9,6 +9,7 @@ type TemplateDetails = {
   system_id: string;
   name: string;
   description: string | null;
+  execution_mode: "in_house" | "contractor";
   period_months: number;
   base_start_date: string;
   norm_hours: number | null;
@@ -16,7 +17,16 @@ type TemplateDetails = {
   is_active: boolean;
   created_at: string;
   object: { name: string } | Array<{ name: string }> | null;
-  system: { name: string } | Array<{ name: string }> | null;
+  system:
+    | {
+        name: string;
+        responsible: { full_name: string } | Array<{ full_name: string }> | null;
+      }
+    | Array<{
+        name: string;
+        responsible: { full_name: string } | Array<{ full_name: string }> | null;
+      }>
+    | null;
 };
 
 type ChecklistItem = {
@@ -32,6 +42,16 @@ type SystemOption = { id: string; object_id: string; name: string };
 function resolveName(raw: { name: string } | Array<{ name: string }> | null | undefined) {
   if (Array.isArray(raw)) return raw[0]?.name ?? "—";
   return raw?.name ?? "—";
+}
+
+function resolveExecutionModeLabel(mode: "in_house" | "contractor") {
+  return mode === "contractor" ? "Подрядчиком" : "Своими силами";
+}
+
+function resolveResponsibleName(rawSystem: TemplateDetails["system"]) {
+  const system = Array.isArray(rawSystem) ? (rawSystem[0] ?? null) : rawSystem;
+  const responsible = Array.isArray(system?.responsible) ? (system.responsible[0] ?? null) : (system?.responsible ?? null);
+  return responsible?.full_name ?? "Не назначен";
 }
 
 export function PprTemplateDetails({
@@ -54,6 +74,8 @@ export function PprTemplateDetails({
           <h2 style={{ margin: 0 }}>{template.name}</h2>
           <div className="text-soft">Объект: {resolveName(template.object)}</div>
           <div className="text-soft">Система: {resolveName(template.system)}</div>
+          <div className="text-soft">Ответственный исполнитель: {resolveResponsibleName(template.system)}</div>
+          <div className="text-soft">Формат выполнения: {resolveExecutionModeLabel(template.execution_mode)}</div>
           <div className="text-soft">Создан: {new Date(template.created_at).toLocaleString("ru-RU")}</div>
           <div className="text-soft">
             Активный шаблон автоматически формирует ППР для всего активного оборудования этой системы.
@@ -73,6 +95,7 @@ export function PprTemplateDetails({
             system_id: template.system_id,
             name: template.name,
             description: template.description ?? "",
+            execution_mode: template.execution_mode,
             period_months: template.period_months,
             base_start_date: template.base_start_date,
             norm_hours: template.norm_hours?.toString() ?? "",
