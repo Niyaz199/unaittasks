@@ -78,3 +78,129 @@ export type TaskAttachment = {
   /** Поле добавляется на клиенте после получения signed URL */
   url?: string | null;
 };
+
+export type DailyChecklistRole = Extract<Role, "lead" | "engineer" | "object_engineer">;
+export type DailyChecklistTemplateStatus = "in_progress" | "completed";
+export type DailyChecklistItemStatus = "pending" | "done" | "problem";
+export type DailyChecklistScheduleType = "daily" | "weekday" | "month_days" | "month_range";
+
+export type DailyChecklistScheduleConfig = {
+  weekday?: number;
+  days?: number[];
+  startDay?: number;
+  endDay?: number;
+};
+
+export type DailyChecklistTemplateItem = {
+  id: string;
+  template_id: string;
+  sort_order: number;
+  title: string;
+  description: string | null;
+  schedule_type: DailyChecklistScheduleType;
+  schedule_config: DailyChecklistScheduleConfig;
+  schedule_label: string;
+  is_required: boolean;
+  allow_task_escalation: boolean;
+  created_at?: string;
+};
+
+export type DailyChecklistTemplate = {
+  id: string;
+  profile_id: string;
+  profile_name: string;
+  role: DailyChecklistRole;
+  version: number;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  created_by: string | null;
+  archived_at: string | null;
+  items?: DailyChecklistTemplateItem[];
+};
+
+export type DailyChecklistAttachment = {
+  id: string;
+  item_run_id: string;
+  storage_path: string;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  uploaded_by: string | null;
+  created_at: string;
+  cleanup_after: string;
+  deleted_at?: string | null;
+  url?: string | null;
+};
+
+export type DailyChecklistItemRun = {
+  id: string;
+  run_id: string;
+  operational_date?: string;
+  template_item_id: string | null;
+  sort_order: number;
+  title: string;
+  description: string | null;
+  schedule_type: DailyChecklistScheduleType;
+  schedule_config: DailyChecklistScheduleConfig;
+  schedule_label: string;
+  is_required: boolean;
+  allow_task_escalation: boolean;
+  status: DailyChecklistItemStatus;
+  comment: string | null;
+  linked_task_id: string | null;
+  linked_object_id: string | null;
+  completed_at: string | null;
+  completed_by: string | null;
+  created_at: string;
+  updated_at: string;
+  attachments?: DailyChecklistAttachment[];
+};
+
+export type DailyChecklistRun = {
+  id: string;
+  profile_id: string;
+  role_snapshot: DailyChecklistRole;
+  operational_date: string;
+  template_id: string | null;
+  template_name: string;
+  status: DailyChecklistTemplateStatus;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+  items?: DailyChecklistItemRun[];
+};
+
+export type DailyChecklistDayData = {
+  run: DailyChecklistRun | null;
+  overdueItems: DailyChecklistItemRun[];
+  completion: {
+    total: number;
+    completed: number;
+    problems: number;
+    requiredTotal: number;
+    requiredResolved: number;
+    percent: number;
+  };
+};
+
+export type DailyChecklistControlRow = {
+  run_id: string;
+  profile_id: string;
+  full_name: string;
+  role: DailyChecklistRole;
+  operational_date: string;
+  status: DailyChecklistTemplateStatus;
+  total_items: number;
+  completed_items: number;
+  problem_items: number;
+  pending_required_items: number;
+  linked_tasks: number;
+};
+
+export type DailyChecklistTemplateProfile = {
+  id: string;
+  full_name: string;
+  role: DailyChecklistRole;
+};

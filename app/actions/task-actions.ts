@@ -6,7 +6,7 @@ import { canEditTasks, canManageObjects, canManageTaskTeam, requireProfile } fro
 import { hasTaskTargetObjectAccess } from "@/lib/access/task-target-scope";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { writeAudit } from "@/lib/audit";
-import { sendPushToUser } from "@/lib/push";
+import { createTaskFromPayload, parseTaskCreateFormData } from "@/lib/task-create";
 import {
   canChangeStatus,
   canCreateOrAssignTask,
@@ -21,15 +21,6 @@ const pauseSchema = z.object({
   taskId: z.string().uuid(),
   reason: z.string().trim().min(5),
   resumeAt: z.string().datetime()
-});
-const taskCreateSchema = z.object({
-  title: z.string().min(3),
-  description: z.string().optional(),
-  objectId: z.string().uuid(),
-  priority: z.enum(["low", "medium", "high", "critical"]),
-  dueAt: z.string().optional(),
-  assignedTo: z.string().uuid(),
-  teamMemberIds: z.array(z.string().uuid()).optional()
 });
 const objectUpdateSchema = z.object({
   objectId: z.string().uuid(),
@@ -79,28 +70,6 @@ async function getTaskAccessRow(supabase: Awaited<ReturnType<typeof createSupaba
 async function getRoleByUserId(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, userId: string) {
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", userId).single();
   return profile?.role as Role | undefined;
-}
-
-async function getRolesByUserIds(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  userIds: string[]
-) {
-  const uniqueIds = [...new Set(userIds)];
-  if (!uniqueIds.length) {
-    return new Map<string, Role>();
-  }
-
-  const { data, error } = await supabase.from("profiles").select("id,role").in("id", uniqueIds);
-  if (error) throw error;
-  return new Map((data ?? []).map((row) => [row.id as string, row.role as Role]));
-}
-
-async function getObjectEngineerByObjectId(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  objectId: string
-) {
-  const { data: objectRow } = await supabase.from("objects").select("object_engineer_id").eq("id", objectId).single();
-  return objectRow?.object_engineer_id ?? null;
 }
 
 async function isObjectAccessibleForUser(
@@ -360,120 +329,12 @@ export async function deleteObjectAction(formData: FormData) {
 export async function createTaskAction(formData: FormData) {
   const { profile } = await requireProfile();
   if (!canEditTasks(profile.role)) throw new Error("Нет прав на создание задач");
-
-  const payload = taskCreateSchema.parse({
-    title: String(formData.get("title") ?? ""),
-    description: String(formData.get("description") ?? ""),
-    objectId: String(formData.get("object_id") ?? ""),
-    priority: String(formData.get("priority") ?? "medium"),
-    dueAt: String(formData.get("due_at") ?? ""),
-    assignedTo: String(formData.get("assigned_to") ?? ""),
-    teamMemberIds: formData.getAll("team_member_ids").map(String).filter(Boolean)
-  });
-  const dueAtIso = payload.dueAt?.trim()
-    ? (() => {
-        const date = new Date(payload.dueAt);
-        if (Number.isNaN(date.getTime())) throw new Error("Некорректный срок due_at");
-        return date.toISOString();
-      })()
-    : null;
-
+  const payload = parseTaskCreateFormData(formData);
   const supabase = await createSupabaseServerClient();
-  const assigneeRole = await getRoleByUserId(supabase, payload.assignedTo);
-  if (!assigneeRole) throw new Error("\u041d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d \u043f\u0440\u043e\u0444\u0438\u043b\u044c \u043d\u0430\u0437\u043d\u0430\u0447\u0430\u0435\u043c\u043e\u0433\u043e \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044f");
-
-  if (profile.role === "engineer" || profile.role === "object_engineer") {
-    await assertTaskObjectAccessForUser(
-      supabase,
-      profile,
-      payload.objectId,
-      "\u041e\u0431\u044a\u0435\u043a\u0442 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d \u0434\u043b\u044f \u0441\u043e\u0437\u0434\u0430\u043d\u0438\u044f \u0437\u0430\u0434\u0430\u0447\u0438"
-    );
-  }
-
-  const objectEngineerId = await getObjectEngineerByObjectId(supabase, payload.objectId);
-  const objectEngineerScoped = objectEngineerId === profile.id;
-  const canAssign = canCreateOrAssignTask(profile.role, assigneeRole, { objectEngineerScoped });
-  if (!canAssign) {
-    throw new Error("\u041d\u0435\u0434\u043e\u0441\u0442\u0430\u0442\u043e\u0447\u043d\u043e \u043f\u0440\u0430\u0432 \u0434\u043b\u044f \u043d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u044f \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u043e\u0433\u043e \u0438\u0441\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044f");
-  }
-  await assertTaskObjectAccessForUser(
+  await createTaskFromPayload({
     supabase,
-    { id: payload.assignedTo, role: assigneeRole },
-    payload.objectId,
-    "\u0412\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u0439 \u0438\u0441\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c \u043d\u0435 \u0438\u043c\u0435\u0435\u0442 \u0434\u043e\u0441\u0442\u0443\u043f\u0430 \u043a \u043e\u0431\u044a\u0435\u043a\u0442\u0443 \u0437\u0430\u0434\u0430\u0447\u0438"
-  );
-
-  const dedupTeamMemberIds = [...new Set((payload.teamMemberIds ?? []).filter((id) => id !== payload.assignedTo))];
-  const teamRoleMap = await getRolesByUserIds(supabase, dedupTeamMemberIds);
-  for (const memberId of dedupTeamMemberIds) {
-    const memberRole = teamRoleMap.get(memberId);
-    if (!memberRole) throw new Error("\u041d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d \u043f\u0440\u043e\u0444\u0438\u043b\u044c \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0430 \u043a\u043e\u043c\u0430\u043d\u0434\u044b");
-    if (!canCreateOrAssignTask(profile.role, memberRole, { objectEngineerScoped })) {
-      throw new Error("\u041d\u0435\u0434\u043e\u0441\u0442\u0430\u0442\u043e\u0447\u043d\u043e \u043f\u0440\u0430\u0432 \u0434\u043b\u044f \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u0438\u044f \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u043e\u0433\u043e \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0430 \u043a\u043e\u043c\u0430\u043d\u0434\u044b");
-    }
-    await assertTaskObjectAccessForUser(
-      supabase,
-      { id: memberId, role: memberRole },
-      payload.objectId,
-      "\u0412\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u0439 \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a \u043a\u043e\u043c\u0430\u043d\u0434\u044b \u043d\u0435 \u0438\u043c\u0435\u0435\u0442 \u0434\u043e\u0441\u0442\u0443\u043f\u0430 \u043a \u043e\u0431\u044a\u0435\u043a\u0442\u0443 \u0437\u0430\u0434\u0430\u0447\u0438"
-    );
-  }
-
-  const { data, error } = await supabase
-    .from("tasks")
-    .insert({
-      title: payload.title.trim(),
-      description: payload.description?.trim() || null,
-      object_id: payload.objectId,
-      status: "new",
-      priority: payload.priority,
-      due_at: dueAtIso,
-      created_by: profile.id,
-      assigned_to: payload.assignedTo
-    })
-    .select("id,title")
-    .single();
-  if (error) throw error;
-
-  if (dedupTeamMemberIds.length) {
-    const rows = dedupTeamMemberIds.map((memberId) => ({
-      task_id: data.id,
-      user_id: memberId,
-      added_by: profile.id
-    }));
-    const { error: teamError } = await supabase.from("task_team_members").upsert(rows);
-    if (teamError) throw teamError;
-  }
-
-  await writeAudit({
-    actorId: profile.id,
-    action: "create_task",
-    entityType: "task",
-    entityId: data.id,
-    meta: {
-      assigned_to: payload.assignedTo,
-      team_member_ids: dedupTeamMemberIds,
-      priority: payload.priority,
-      due_at: dueAtIso
-    }
-  });
-
-  if (payload.assignedTo !== profile.id) {
-    await writeAudit({
-      actorId: profile.id,
-      action: "assign_task",
-      entityType: "task",
-      entityId: data.id,
-      meta: { assigned_to: payload.assignedTo }
-    });
-  }
-
-  await sendPushToUser(payload.assignedTo, {
-    title: "Новая задача",
-    body: payload.title,
-    taskId: data.id,
-    url: `/tasks/${data.id}`
+    actor: profile,
+    payload,
   });
 
   revalidatePath("/my");
@@ -486,112 +347,18 @@ export async function createTaskActionSafe(
   try {
     const { profile } = await requireProfile();
     if (!canEditTasks(profile.role)) return { ok: false, error: "Нет прав на создание задач" };
-
-    const payload = taskCreateSchema.parse({
-      title: String(formData.get("title") ?? ""),
-      description: String(formData.get("description") ?? ""),
-      objectId: String(formData.get("object_id") ?? ""),
-      priority: String(formData.get("priority") ?? "medium"),
-      dueAt: String(formData.get("due_at") ?? ""),
-      assignedTo: String(formData.get("assigned_to") ?? ""),
-      teamMemberIds: formData.getAll("team_member_ids").map(String).filter(Boolean)
-    });
-
-    const dueAtIso = payload.dueAt?.trim()
-      ? (() => {
-          const date = new Date(payload.dueAt);
-          if (Number.isNaN(date.getTime())) throw new Error("Некорректный срок due_at");
-          return date.toISOString();
-        })()
-      : null;
-
+    const payload = parseTaskCreateFormData(formData);
     const supabase = await createSupabaseServerClient();
-    const assigneeRole = await getRoleByUserId(supabase, payload.assignedTo);
-    if (!assigneeRole) return { ok: false, error: "\u041d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d \u043f\u0440\u043e\u0444\u0438\u043b\u044c \u0438\u0441\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044f" };
-
-    if (profile.role === "engineer" || profile.role === "object_engineer") {
-      const accessible = await isObjectAccessibleForUser(supabase, profile, payload.objectId);
-      if (!accessible) return { ok: false, error: "\u041e\u0431\u044a\u0435\u043a\u0442 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d \u0434\u043b\u044f \u0441\u043e\u0437\u0434\u0430\u043d\u0438\u044f \u0437\u0430\u0434\u0430\u0447\u0438" };
-    }
-
-    const objectEngineerId = await getObjectEngineerByObjectId(supabase, payload.objectId);
-    const objectEngineerScoped = objectEngineerId === profile.id;
-    const canAssign = canCreateOrAssignTask(profile.role, assigneeRole, { objectEngineerScoped });
-    if (!canAssign) return { ok: false, error: "\u041d\u0435\u0434\u043e\u0441\u0442\u0430\u0442\u043e\u0447\u043d\u043e \u043f\u0440\u0430\u0432 \u0434\u043b\u044f \u043d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u044f \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u043e\u0433\u043e \u0438\u0441\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044f" };
-    const assigneeAccessible = await isObjectAccessibleForUser(supabase, { id: payload.assignedTo, role: assigneeRole }, payload.objectId);
-    if (!assigneeAccessible) {
-      return { ok: false, error: "\u0412\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u0439 \u0438\u0441\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c \u043d\u0435 \u0438\u043c\u0435\u0435\u0442 \u0434\u043e\u0441\u0442\u0443\u043f\u0430 \u043a \u043e\u0431\u044a\u0435\u043a\u0442\u0443 \u0437\u0430\u0434\u0430\u0447\u0438" };
-    }
-
-    const dedupTeamMemberIds = [...new Set((payload.teamMemberIds ?? []).filter((id) => id !== payload.assignedTo))];
-    const teamRoleMap = await getRolesByUserIds(supabase, dedupTeamMemberIds);
-    for (const memberId of dedupTeamMemberIds) {
-      const memberRole = teamRoleMap.get(memberId);
-      if (!memberRole) return { ok: false, error: "\u041d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d \u043f\u0440\u043e\u0444\u0438\u043b\u044c \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0430 \u043a\u043e\u043c\u0430\u043d\u0434\u044b" };
-      if (!canCreateOrAssignTask(profile.role, memberRole, { objectEngineerScoped })) {
-        return { ok: false, error: "\u041d\u0435\u0434\u043e\u0441\u0442\u0430\u0442\u043e\u0447\u043d\u043e \u043f\u0440\u0430\u0432 \u0434\u043b\u044f \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u0438\u044f \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u043e\u0433\u043e \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0430 \u043a\u043e\u043c\u0430\u043d\u0434\u044b" };
-      }
-      const memberAccessible = await isObjectAccessibleForUser(supabase, { id: memberId, role: memberRole }, payload.objectId);
-      if (!memberAccessible) {
-        return { ok: false, error: "\u0412\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u0439 \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a \u043a\u043e\u043c\u0430\u043d\u0434\u044b \u043d\u0435 \u0438\u043c\u0435\u0435\u0442 \u0434\u043e\u0441\u0442\u0443\u043f\u0430 \u043a \u043e\u0431\u044a\u0435\u043a\u0442\u0443 \u0437\u0430\u0434\u0430\u0447\u0438" };
-      }
-    }
-
-    const { data, error } = await supabase
-      .from("tasks")
-      .insert({
-        title: payload.title.trim(),
-        description: payload.description?.trim() || null,
-        object_id: payload.objectId,
-        status: "new",
-        priority: payload.priority,
-        due_at: dueAtIso,
-        created_by: profile.id,
-        assigned_to: payload.assignedTo
-      })
-      .select("id,title")
-      .single();
-    if (error) return { ok: false, error: "Ошибка при создании задачи" };
-
-    if (dedupTeamMemberIds.length) {
-      const rows = dedupTeamMemberIds.map((memberId) => ({
-        task_id: data.id,
-        user_id: memberId,
-        added_by: profile.id
-      }));
-      const { error: teamError } = await supabase.from("task_team_members").upsert(rows);
-      if (teamError) return { ok: false, error: "Задача создана, но не удалось добавить участников команды" };
-    }
-
-    await writeAudit({
-      actorId: profile.id,
-      action: "create_task",
-      entityType: "task",
-      entityId: data.id,
-      meta: { assigned_to: payload.assignedTo, team_member_ids: dedupTeamMemberIds, priority: payload.priority, due_at: dueAtIso }
-    });
-
-    if (payload.assignedTo !== profile.id) {
-      await writeAudit({
-        actorId: profile.id,
-        action: "assign_task",
-        entityType: "task",
-        entityId: data.id,
-        meta: { assigned_to: payload.assignedTo }
-      });
-    }
-
-    await sendPushToUser(payload.assignedTo, {
-      title: "Новая задача",
-      body: payload.title,
-      taskId: data.id,
-      url: `/tasks/${data.id}`
+    const result = await createTaskFromPayload({
+      supabase,
+      actor: profile,
+      payload,
     });
 
     revalidatePath("/my");
     revalidatePath("/new");
 
-    return { ok: true, taskId: data.id };
+    return { ok: true, taskId: result.taskId };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Неизвестная ошибка";
     return { ok: false, error: message };

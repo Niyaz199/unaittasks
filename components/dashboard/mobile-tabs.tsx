@@ -13,7 +13,14 @@ function isTabActive(pathname: string, href: Route) {
 }
 
 function isTasksModuleActive(pathname: string) {
-  return pathname === "/my" || pathname === "/new" || pathname === "/archive" || pathname.startsWith("/tasks/");
+  return (
+    pathname === "/my" ||
+    pathname === "/new" ||
+    pathname === "/archive" ||
+    pathname.startsWith("/tasks/") ||
+    pathname === "/checklists" ||
+    pathname.startsWith("/checklists/")
+  );
 }
 
 export function MobileTabs({ role }: { role: Role }) {

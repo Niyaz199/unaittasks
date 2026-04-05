@@ -7,9 +7,12 @@ import type { Route } from "next";
 import type { Role } from "@/lib/types";
 import {
   canAccessDirectories,
+  canAccessDailyChecklists,
   canManageObjectRooms,
   canManageObjects,
+  canManageDailyChecklistTemplates,
   canManageUsers,
+  canReadDailyChecklistControl,
   canReadFloorsDirectory,
   canReadRoomTypesDirectory,
 } from "@/lib/capabilities";
@@ -102,6 +105,10 @@ export function MainNav({ role, currentPath }: Props) {
   const canOpenPprCalendar = canAccessPprCalendarScreens(role);
   const canOpenPprTasks = canAccessPprTaskScreens(role);
   const canOpenPprTaskRegistry = canOpenPprTasks && role !== "tech";
+  const canOpenChecklists = canAccessDailyChecklists(role);
+  const canOpenChecklistTemplates = canManageDailyChecklistTemplates(role);
+  const canOpenChecklistControl = canReadDailyChecklistControl(role);
+  const canOpenMyChecklist = role === "lead" || role === "engineer" || role === "object_engineer";
   const pprHref = role === "tech" ? "/ppr/my" : "/ppr";
   const canOpenRounds = canAccessRoundsModule(role);
   const canOpenRoundsReports = canReadRoundsReports(role);
@@ -116,6 +123,9 @@ export function MainNav({ role, currentPath }: Props) {
       show: true,
       items: [
         { href: "/my", label: "Мои задачи", show: true },
+        { href: "/checklists", label: "Мой чек-лист", show: canOpenChecklists && canOpenMyChecklist },
+        { href: "/checklists/control", label: "Контроль чек-листов", show: canOpenChecklists && canOpenChecklistControl },
+        { href: "/checklists/templates", label: "Шаблоны чек-листов", show: canOpenChecklists && canOpenChecklistTemplates },
         { href: "/new", label: "Новые", show: true },
         { href: "/archive", label: "Архив", show: true },
       ],

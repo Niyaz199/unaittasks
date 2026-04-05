@@ -25,6 +25,9 @@ const PPR_MANAGEMENT_ROLES: Role[] = ["admin", "chief", "lead", "engineer", "obj
 const ROUNDS_MODULE_ROLES: Role[] = ["admin", "chief", "lead", "engineer", "object_engineer", "tech"];
 const ROUNDS_REPORT_ROLES: Role[] = ["admin", "chief", "lead", "engineer", "object_engineer"];
 const ROUNDS_CONFIG_ROLES: Role[] = ["admin", "chief", "lead", "engineer", "object_engineer"];
+const DAILY_CHECKLIST_ROLES: Role[] = ["admin", "chief", "lead", "engineer", "object_engineer"];
+const DAILY_CHECKLIST_TEMPLATE_MANAGEMENT_ROLES: Role[] = ["admin", "chief"];
+const DAILY_CHECKLIST_CONTROL_ROLES: Role[] = ["admin", "chief", "lead"];
 const GLOBAL_OBJECT_SCOPE_ROLES: Role[] = ["admin", "chief", "lead"];
 
 function includesRole(roles: readonly Role[], role: Role) {
@@ -140,6 +143,18 @@ export function canReadRoundsReports(role: Role) {
 
 export function canManageRoundsConfig(role: Role) {
   return includesRole(ROUNDS_CONFIG_ROLES, role);
+}
+
+export function canAccessDailyChecklists(role: Role) {
+  return includesRole(DAILY_CHECKLIST_ROLES, role);
+}
+
+export function canManageDailyChecklistTemplates(role: Role) {
+  return includesRole(DAILY_CHECKLIST_TEMPLATE_MANAGEMENT_ROLES, role);
+}
+
+export function canReadDailyChecklistControl(role: Role) {
+  return includesRole(DAILY_CHECKLIST_CONTROL_ROLES, role);
 }
 
 export function isGlobalObjectScopeRole(role: Role) {

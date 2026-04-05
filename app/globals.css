@@ -2671,6 +2671,15 @@ textarea {
   min-width: 0;
 }
 
+.clv-item-done {
+  opacity: 0.8;
+  background: color-mix(in srgb, var(--panel) 60%, transparent);
+}
+
+.clv-item-done:hover {
+  opacity: 1;
+}
+
 /* ─────────────────────────────────────────────────────────────
    SKELETON / LOADING STATES
    ───────────────────────────────────────────────────────────── */

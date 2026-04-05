@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -15,6 +15,7 @@ type Props = {
   options: AssigneeOption[];
   placeholder?: string;
   required?: boolean;
+  defaultValue?: string;
   onSelectedIdChange?: (id: string) => void;
 };
 
@@ -23,11 +24,13 @@ export function AssigneeCombobox({
   options,
   placeholder = "Назначить исполнителя",
   required = false,
-  onSelectedIdChange
+  defaultValue = "",
+  onSelectedIdChange,
 }: Props) {
   const [isOpen, setIsOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState("");
+  const initialOption = options.find((option) => option.id === defaultValue);
+  const [query, setQuery] = useState(initialOption ? (initialOption.label ?? initialOption.full_name ?? "") : "");
+  const [selectedId, setSelectedId] = useState(defaultValue);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const filteredOptions = useMemo(() => {
@@ -40,17 +43,22 @@ export function AssigneeCombobox({
     });
   }, [options, query]);
 
-  // Закрываем dropdown кликом вне контейнера — безопасно и без гонок
   useEffect(() => {
     if (!isOpen) return;
-    function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
+
+  useEffect(() => {
+    const option = options.find((item) => item.id === defaultValue);
+    setSelectedId(defaultValue);
+    setQuery(option ? (option.label ?? option.full_name ?? "") : "");
+  }, [defaultValue, options]);
 
   function selectOption(option: AssigneeOption) {
     setSelectedId(option.id);
@@ -99,9 +107,7 @@ export function AssigneeCombobox({
                 key={option.id}
                 type="button"
                 className="assignee-combobox-item"
-                // onMouseDown + preventDefault гарантирует, что input не теряет
-                // фокус до того, как onClick зафиксирует выбор
-                onMouseDown={(e) => e.preventDefault()}
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => selectOption(option)}
               >
                 <span>{option.label ?? option.full_name ?? "—"}</span>
