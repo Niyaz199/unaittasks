@@ -1,7 +1,17 @@
-import type { ReactNode } from "react";
+import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
 type Tone = "neutral" | "info" | "warning" | "success" | "danger" | "violet";
 
-export function Badge({ children, tone = "neutral" }: { children: ReactNode; tone?: Tone }) {
-  return <span className={`badge badge-${tone}`}>{children}</span>;
+type BadgeProps = ComponentPropsWithoutRef<"span"> & {
+  children: ReactNode;
+  tone?: Tone;
+};
+
+export function Badge({ children, tone = "neutral", className, ...props }: BadgeProps) {
+  const badgeClassName = `badge badge-${tone}${className ? ` ${className}` : ""}`;
+  return (
+    <span className={badgeClassName} {...props}>
+      {children}
+    </span>
+  );
 }

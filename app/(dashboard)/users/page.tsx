@@ -7,6 +7,12 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { UsersAdminList } from "@/components/dictionaries/users-admin-list";
 import { PageHeader } from "@/components/ui/page-header";
 
+type UserObjectLinkRow = {
+  user_id: string;
+  object_id: string;
+  objects: { name: string } | null;
+};
+
 export default async function UsersPage() {
   const { profile, user } = await requireProfile();
   if (!canManageUsers(profile.role)) {
@@ -32,13 +38,13 @@ export default async function UsersPage() {
   );
   const emailById = new Map(emailEntries);
 
-  const links = ((linksRaw ?? []) as Array<{ user_id: string; object_id: string; objects: { name: string } | null }>).map(
-    (row) => ({
-      user_id: row.user_id,
-      object_id: row.object_id,
-      object_name: row.objects?.name ?? ""
-    })
-  );
+  // PostgREST returns a single related object for this FK at runtime,
+  // even though the fallback TS inference may describe it as an array.
+  const links = ((linksRaw ?? []) as unknown as UserObjectLinkRow[]).map((row) => ({
+    user_id: row.user_id,
+    object_id: row.object_id,
+    object_name: row.objects?.name ?? ""
+  }));
 
   return (
     <section className="grid">
