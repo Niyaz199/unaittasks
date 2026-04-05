@@ -1,0 +1,8 @@
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# First day of every month: materialize the whole current month and prepare the next one.
+5 0 1 * * /usr/local/bin/run-ppr-monthly.sh >> /proc/1/fd/1 2>> /proc/1/fd/2
+
+# Daily operational overdue/materialization/sync.
+20 0 * * * /usr/local/bin/run-ppr-daily.sh >> /proc/1/fd/1 2>> /proc/1/fd/2

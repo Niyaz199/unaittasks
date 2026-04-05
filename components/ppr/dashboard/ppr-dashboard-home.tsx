@@ -47,21 +47,14 @@ const NAV_CARDS: NavCard[] = [
   {
     href: "/ppr/templates",
     label: "Шаблоны",
-    description: "Регламентные работы и чеклисты",
+    description: "Регламентные работы для всей системы",
     icon: "📋",
-    group: "admin",
-  },
-  {
-    href: "/ppr/assignments",
-    label: "Назначения",
-    description: "Связь шаблонов с оборудованием",
-    icon: "🔗",
     group: "admin",
   },
   {
     href: "/ppr/calendar",
     label: "Календарь",
-    description: "Месячный план и переносы",
+    description: "Месячный план по шаблонам системы",
     icon: "📅",
     group: "admin",
   },

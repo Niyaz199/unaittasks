@@ -166,12 +166,12 @@ export async function reschedulePprMonthPlanItemAction(formData: FormData) {
 
   const actor = await buildPprTaskActor(supabase, profile);
   if (!canReschedulePprTaskLifecycle(actor, task)) {
-    throw new Error("Нет прав на перенос materialized ППР-заявки");
+    throw new Error("Нет прав на перенос уже созданной ППР-заявки");
   }
 
   const reason = payload.reason?.trim();
   if (!reason || reason.length < 3) {
-    throw new Error("Укажите причину переноса materialized ППР-заявки");
+    throw new Error("Укажите причину переноса уже созданной ППР-заявки");
   }
 
   const { data: updatedTask, error: updateTaskError } = await supabase
@@ -186,7 +186,7 @@ export async function reschedulePprMonthPlanItemAction(formData: FormData) {
     .maybeSingle();
   if (updateTaskError) throw updateTaskError;
   if (!updatedTask) {
-    throw new Error("Не удалось перенести materialized ППР-заявку");
+    throw new Error("Не удалось перенести уже созданную ППР-заявку");
   }
 
   await syncPprTaskPlanItemsPlannedFor(supabase, task, plannedFor);

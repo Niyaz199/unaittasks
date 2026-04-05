@@ -62,7 +62,7 @@ export function PprTaskLifecycleControls({
   }
 
   if (!canAssign && !canStart && !canComplete && !canClose && !canCancel && !canReschedule) {
-    return <div className="text-soft">Для текущей роли lifecycle-действия по этой ППР-заявке недоступны.</div>;
+    return <div className="text-soft">Для текущей роли действия по этой ППР-заявке недоступны.</div>;
   }
 
   return (

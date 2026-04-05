@@ -27,7 +27,7 @@ export default async function PprTemplatesPage() {
     <section className="grid">
       <PageHeader
         title="Шаблоны ППР"
-        description="Шаблоны периодических работ на уровне системы с базовой датой, периодичностью и чек-листом."
+        description="Шаблоны периодических работ на уровне системы. Активный шаблон применяется ко всему активному оборудованию выбранной системы."
         actions={<BackButton fallback="/ppr" label="← Назад к ППР" />}
       />
 

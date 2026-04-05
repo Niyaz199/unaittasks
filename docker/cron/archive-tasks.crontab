@@ -1,0 +1,5 @@
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Every day at 02:05 Europe/Moscow.
+5 2 * * * /usr/local/bin/run-archive.sh >> /proc/1/fd/1 2>> /proc/1/fd/2

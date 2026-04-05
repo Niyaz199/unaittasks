@@ -57,15 +57,6 @@ export const pprWorkTemplateFormSchema = z.object({
   checklistItems: z.array(pprChecklistItemFormSchema).default([]),
 });
 
-export const pprEquipmentAssignmentFormSchema = z.object({
-  objectId: uuidSchema,
-  equipmentId: uuidSchema,
-  templateId: uuidSchema,
-  startDate: z.string().date(),
-  periodMonths: z.number().int().min(1),
-  isActive: z.boolean().default(true),
-});
-
 export const pprMonthPlanGenerateFormSchema = z.object({
   systemId: uuidSchema,
   planMonth: z.string().regex(/^\d{4}-\d{2}$/),

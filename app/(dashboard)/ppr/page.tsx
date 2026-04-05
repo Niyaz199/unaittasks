@@ -24,7 +24,7 @@ export default async function PprPage() {
     <section className="grid">
       <PageHeader
         title={"Модуль ППР"}
-        description={"Управление регламентным обслуживанием: структура объектов, шаблоны, планирование, заявки и архив."}
+        description={"Управление регламентным обслуживанием: структура объектов, системные шаблоны, календарь, заявки и архив."}
       />
       <PprDashboardHome role={profile.role} />
     </section>

@@ -145,6 +145,11 @@ export function PprTemplateEditor({
             <input type="checkbox" name="is_active" defaultChecked={values.is_active} />
             Активен
           </label>
+
+          <div className="section-card text-soft" style={{ fontSize: "0.92rem", lineHeight: 1.5 }}>
+            Активный шаблон применяется ко всему активному оборудованию выбранной системы.
+            Оборудование, добавленное в систему позже, подключается только к будущим циклам ППР.
+          </div>
         </PprFormSection>
 
         <PprFormSection title="Параметры выполнения">

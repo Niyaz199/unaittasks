@@ -32,7 +32,7 @@ export default async function PprTemplateDetailsPage({ params }: { params: Promi
     <section className="grid">
       <PageHeader
         title="Карточка шаблона ППР"
-        description="Редактирование базовых параметров шаблона и его чек-листа. Назначения на оборудование остаются на следующем батче."
+        description="Редактирование системного шаблона ППР. Активный шаблон участвует в планировании для всего активного оборудования выбранной системы."
         actions={<BackButton fallback="/ppr/templates" />}
       />
 

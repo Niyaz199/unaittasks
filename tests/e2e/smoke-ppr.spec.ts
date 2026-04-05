@@ -53,4 +53,13 @@ test.describe("ppr smoke", () => {
     await expect(page.getByText("Сформированные планы")).toBeVisible();
     await expect(page.getByText(systemName).first()).toBeVisible();
   });
+
+  test("legacy assignments route redirects to templates and templates explain system-wide rollout", async ({ page }) => {
+    await loginAsSmokeUser(page);
+    await page.goto("/ppr/assignments");
+
+    await expect(page).toHaveURL(/\/ppr\/templates$/);
+    await expect(page.getByRole("heading", { name: "Шаблоны ППР" })).toBeVisible();
+    await expect(page.getByText("Активный шаблон применяется ко всему активному оборудованию выбранной системы.")).toBeVisible();
+  });
 });

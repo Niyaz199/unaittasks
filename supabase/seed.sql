@@ -291,25 +291,6 @@ begin
   from public.ppr_work_templates t
   where t.object_id in ('11111111-1111-4111-8111-111111111111'::uuid, '22222222-2222-4222-8222-222222222222'::uuid);
 
-  insert into public.ppr_equipment_work_assignments (
-    object_id,
-    equipment_id,
-    template_id,
-    start_date,
-    period_months,
-    is_active
-  )
-  select
-    e.object_id,
-    e.id,
-    t.id,
-    greatest(t.base_start_date, e.service_start_date),
-    t.period_months,
-    e.status <> 'archived'
-  from public.ppr_equipment e
-  join public.ppr_work_templates t on t.system_id = e.system_id
-  where e.object_id in ('11111111-1111-4111-8111-111111111111'::uuid, '22222222-2222-4222-8222-222222222222'::uuid);
-
   insert into public.ppr_month_plans (object_id, system_id, plan_month, generated_at)
   select s.object_id, s.id, v_current_month, now() - interval '1 day'
   from public.ppr_systems s
@@ -325,7 +306,6 @@ begin
     month_plan_id,
     system_id,
     equipment_id,
-    assignment_id,
     template_id,
     planned_for,
     source_due_date,
@@ -335,30 +315,30 @@ begin
     status
   )
   select
-    a.object_id,
+    e.object_id,
     mp.id,
     e.system_id,
     e.id,
-    a.id,
-    a.template_id,
-    (v_current_month + ((((dense_rank() over (order by e.inventory_no)) - 1) % 20)::int))::date as planned_for,
-    (v_current_month + ((((dense_rank() over (order by e.inventory_no)) - 1) % 20)::int))::date as source_due_date,
-    ((v_current_month + ((((dense_rank() over (order by e.inventory_no)) - 1) % 20)::int))::date < current_date),
+    t.id,
+    (v_current_month + ((((dense_rank() over (order by e.inventory_no, t.name)) - 1) % 20)::int))::date as planned_for,
+    (v_current_month + ((((dense_rank() over (order by e.inventory_no, t.name)) - 1) % 20)::int))::date as source_due_date,
+    ((v_current_month + ((((dense_rank() over (order by e.inventory_no, t.name)) - 1) % 20)::int))::date < current_date),
     false,
     null,
     'pending'
-  from public.ppr_equipment_work_assignments a
-  join public.ppr_equipment e on e.id = a.equipment_id
-  join public.ppr_month_plans mp on mp.object_id = a.object_id and mp.system_id = e.system_id and mp.plan_month = v_current_month
-  where a.object_id in ('11111111-1111-4111-8111-111111111111'::uuid, '22222222-2222-4222-8222-222222222222'::uuid)
-    and a.is_active = true;
+  from public.ppr_equipment e
+  join public.ppr_work_templates t on t.object_id = e.object_id and t.system_id = e.system_id
+  join public.ppr_month_plans mp on mp.object_id = e.object_id and mp.system_id = e.system_id and mp.plan_month = v_current_month
+  where e.object_id in ('11111111-1111-4111-8111-111111111111'::uuid, '22222222-2222-4222-8222-222222222222'::uuid)
+    and e.status = 'active'
+    and t.is_active = true
+    and e.service_start_date <= (v_current_month + interval '1 month' - interval '1 day')::date;
 
   insert into public.ppr_month_plan_items (
     object_id,
     month_plan_id,
     system_id,
     equipment_id,
-    assignment_id,
     template_id,
     planned_for,
     source_due_date,
@@ -368,23 +348,24 @@ begin
     status
   )
   select
-    a.object_id,
+    e.object_id,
     mp.id,
     e.system_id,
     e.id,
-    a.id,
-    a.template_id,
-    (v_next_month + ((((dense_rank() over (order by e.inventory_no)) - 1) % 20)::int))::date as planned_for,
-    (v_next_month + ((((dense_rank() over (order by e.inventory_no)) - 1) % 20)::int))::date as source_due_date,
+    t.id,
+    (v_next_month + ((((dense_rank() over (order by e.inventory_no, t.name)) - 1) % 20)::int))::date as planned_for,
+    (v_next_month + ((((dense_rank() over (order by e.inventory_no, t.name)) - 1) % 20)::int))::date as source_due_date,
     false,
     false,
     null,
     'pending'
-  from public.ppr_equipment_work_assignments a
-  join public.ppr_equipment e on e.id = a.equipment_id
-  join public.ppr_month_plans mp on mp.object_id = a.object_id and mp.system_id = e.system_id and mp.plan_month = v_next_month
-  where a.object_id in ('11111111-1111-4111-8111-111111111111'::uuid, '22222222-2222-4222-8222-222222222222'::uuid)
-    and a.is_active = true;
+  from public.ppr_equipment e
+  join public.ppr_work_templates t on t.object_id = e.object_id and t.system_id = e.system_id
+  join public.ppr_month_plans mp on mp.object_id = e.object_id and mp.system_id = e.system_id and mp.plan_month = v_next_month
+  where e.object_id in ('11111111-1111-4111-8111-111111111111'::uuid, '22222222-2222-4222-8222-222222222222'::uuid)
+    and e.status = 'active'
+    and t.is_active = true
+    and e.service_start_date <= (v_next_month + interval '1 month' - interval '1 day')::date;
 
   create temp table tmp_task_seed on commit drop as
   select
@@ -470,7 +451,6 @@ begin
       select
         mpi.id as plan_item_id,
         mpi.object_id,
-        mpi.assignment_id,
         mpi.template_id,
         wt.name as template_name,
         wt.description as template_description,
@@ -502,7 +482,6 @@ begin
       insert into public.ppr_task_work_items (
         object_id,
         task_id,
-        assignment_id,
         template_id,
         plan_item_id,
         title_snapshot,
@@ -515,7 +494,6 @@ begin
       values (
         work_item.object_id,
         v_task_id,
-        work_item.assignment_id,
         work_item.template_id,
         work_item.plan_item_id,
         work_item.template_name,

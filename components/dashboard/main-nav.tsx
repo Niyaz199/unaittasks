@@ -15,7 +15,6 @@ import {
 } from "@/lib/capabilities";
 import { canAccessRoundsModule, canManageRoundsConfig, canReadRoundsReports } from "@/lib/rounds/permissions";
 import {
-  canAccessPprAssignmentScreens,
   canAccessPprCalendarScreens,
   canAccessPprStructureScreens,
   canAccessPprSystemGroupScreens,
@@ -100,7 +99,6 @@ export function MainNav({ role, currentPath }: Props) {
   const canOpenPprStructure = canAccessPprStructureScreens(role);
   const canOpenPprSystemGroups = canAccessPprSystemGroupScreens(role);
   const canOpenPprTemplates = canAccessPprTemplateScreens(role);
-  const canOpenPprAssignments = canAccessPprAssignmentScreens(role);
   const canOpenPprCalendar = canAccessPprCalendarScreens(role);
   const canOpenPprTasks = canAccessPprTaskScreens(role);
   const canOpenPprTaskRegistry = canOpenPprTasks && role !== "tech";
@@ -133,7 +131,6 @@ export function MainNav({ role, currentPath }: Props) {
         { href: "/ppr/systems", label: "Системы", show: canOpenPprStructure },
         { href: "/ppr/equipment", label: "Оборудование", show: canOpenPprStructure },
         { href: "/ppr/templates", label: "Шаблоны", show: canOpenPprTemplates },
-        { href: "/ppr/assignments", label: "Назначения", show: canOpenPprAssignments },
         { href: "/ppr/calendar", label: "Календарь", show: canOpenPprCalendar },
         { href: "/ppr/tasks", label: "Все заявки", show: canOpenPprTaskRegistry },
         { href: "/ppr/my", label: "Мои работы", show: canOpenPprTasks },

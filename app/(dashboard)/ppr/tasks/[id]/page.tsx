@@ -64,7 +64,7 @@ export default async function PprTaskDetailsPage({ params }: { params: Promise<{
     <section className="grid">
       <PageHeader
         title="Карточка ППР-заявки"
-        description="Карточка ППР-заявки с lifecycle, комментариями, фото и snapshot work items."
+        description="Карточка ППР-заявки с действиями по этапам выполнения, комментариями, фото и сохраненным составом работ."
         actions={<BackButton fallback="/ppr/tasks" />}
       />
       <PprTaskDetails

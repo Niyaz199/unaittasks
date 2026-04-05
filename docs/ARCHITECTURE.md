@@ -167,7 +167,7 @@ Shared rooms теперь обслуживают одновременно:
 Главные подмодули:
 
 - структура: `/ppr/system-groups`, `/ppr/systems`, `/ppr/equipment`, `/ppr/rooms`;
-- планирование: `/ppr/templates`, `/ppr/assignments`, `/ppr/calendar`;
+- планирование: `/ppr/templates`, `/ppr/calendar`;
 - исполнение: `/ppr/tasks`, `/ppr/my`, `/ppr/archive`, `/ppr/tasks/[id]`;
 - QR-entry: `/ppr/qr/[token]`.
 

@@ -117,7 +117,7 @@ export function PprCalendarItemDrawers({
                 </PprFormGroup>
                 {editingTask ? (
                   <PprFormGroup label="Причина переноса">
-                    <textarea className="input" name="reason" rows={4} minLength={3} placeholder="Почему требуется сдвиг materialized заявки внутри месяца" />
+                    <textarea className="input" name="reason" rows={4} minLength={3} placeholder="Почему требуется перенос уже созданной заявки внутри месяца" />
                   </PprFormGroup>
                 ) : null}
                 <div className="text-soft" style={{ fontSize: "0.84rem" }}>
@@ -146,7 +146,7 @@ export function PprCalendarItemDrawers({
       <PprDrawer
         open={Boolean(pendingMaterializedItem && pendingMaterializedMove)}
         onClose={onCloseMaterialized}
-        title="Подтвердить перенос materialized заявки"
+        title="Подтвердить перенос созданной заявки"
         isDirty={Boolean(materializedReason)}
       >
         {pendingMaterializedItem && pendingMaterializedMove ? (
@@ -159,7 +159,7 @@ export function PprCalendarItemDrawers({
                     <strong>Новая дата:</strong> {formatDate(pendingMaterializedMove.targetDate)}
                   </div>
                   <div className="text-soft">
-                    Перенос для materialized заявки был выбран через drag-and-drop. Чтобы сохранить существующие правила, нужно указать причину и подтвердить действие.
+                    Перенос для уже созданной ППР-заявки был выбран через drag-and-drop. Чтобы сохранить существующие правила, нужно указать причину и подтвердить действие.
                   </div>
                 </div>
               </div>
@@ -170,7 +170,7 @@ export function PprCalendarItemDrawers({
                   minLength={3}
                   value={materializedReason}
                   onChange={(event) => onMaterializedReasonChange(event.target.value)}
-                  placeholder="Почему требуется перенос materialized заявки внутри месяца"
+                  placeholder="Почему требуется перенос уже созданной заявки внутри месяца"
                 />
               </PprFormGroup>
             </div>

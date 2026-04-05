@@ -425,7 +425,7 @@ export async function listPprMonthPlanItemsForProfile(
   let query = supabase
     .from("ppr_month_plan_items")
     .select(
-      "id,object_id,month_plan_id,system_id,equipment_id,assignment_id,template_id,planned_for,source_due_date,is_overdue,is_carried_over,task_id,status,month_plan:ppr_month_plans(plan_month),equipment:ppr_equipment(name,inventory_no,room:object_rooms(name,floor,floor_ref:floors(name,sort_order),room_type:room_types(name))),template:ppr_work_templates(name,norm_hours),system:ppr_systems(name),object:objects(name),task:ppr_tasks(id,status,planned_for)"
+      "id,object_id,month_plan_id,system_id,equipment_id,template_id,planned_for,source_due_date,is_overdue,is_carried_over,task_id,status,month_plan:ppr_month_plans(plan_month),equipment:ppr_equipment(name,inventory_no,room:object_rooms(name,floor,floor_ref:floors(name,sort_order),room_type:room_types(name))),template:ppr_work_templates(name,norm_hours),system:ppr_systems(name),object:objects(name),task:ppr_tasks(id,status,planned_for)"
     )
     .in("month_plan_id", monthPlanIds)
     .in("system_id", allowedSystemIds)
@@ -445,7 +445,6 @@ export async function listPprMonthPlanItemsForProfile(
     month_plan_id: string;
     system_id: string;
     equipment_id: string;
-    assignment_id: string;
     template_id: string;
     planned_for: string;
     source_due_date: string;

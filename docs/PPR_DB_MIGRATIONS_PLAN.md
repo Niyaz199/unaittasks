@@ -15,6 +15,7 @@ PPR-часть схемы развивается следующими файла
 - `0018_ppr_pgcrypto_fix.sql`
 - `0019_object_rooms_and_ppr_system_refactor.sql`
 - `0020_ppr_cleanup_legacy_structure.sql`
+- `0033_ppr_system_template_rollout.sql`
 
 ## 2. Что меняется в refactor-миграциях
 
@@ -43,7 +44,7 @@ PPR-часть схемы развивается следующими файла
 - `ppr_system_groups -> ppr_systems -> ppr_equipment`
 - `object_rooms -> ppr_equipment`
 - `ppr_systems -> ppr_work_templates`
-- `ppr_equipment + ppr_work_templates -> ppr_equipment_work_assignments`
+- `ppr_work_templates + ppr_equipment -> ppr_month_plan_items`
 - `ppr_month_plan_items -> ppr_tasks`
 
 ## 4. Принципы безопасности
@@ -58,6 +59,6 @@ PPR-часть схемы развивается следующими файла
 - создание и редактирование помещений в `object_rooms`
 - создание оборудования без `subsystem_id`
 - создание шаблонов на уровне `system_id`
-- совместимость назначений внутри одной системы
+- генерацию month plan для всего активного оборудования системы
 - генерацию month plan и materialization без подсистем
 - работу task-layer, QR и cron после cleanup

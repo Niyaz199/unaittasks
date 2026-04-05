@@ -9,6 +9,30 @@ services:
       - "3000"
     restart: unless-stopped
 
+  task-archive-cron:
+    build:
+      context: .
+      dockerfile: docker/cron/Dockerfile
+    depends_on:
+      - app
+    environment:
+      APP_INTERNAL_URL: http://app:3000
+      CRON_SECRET: ${CRON_SECRET}
+      TZ: Europe/Moscow
+    restart: unless-stopped
+
+  ppr-cron:
+    build:
+      context: .
+      dockerfile: docker/ppr-cron/Dockerfile
+    depends_on:
+      - app
+    environment:
+      APP_INTERNAL_URL: http://app:3000
+      CRON_SECRET: ${CRON_SECRET}
+      TZ: Europe/Moscow
+    restart: unless-stopped
+
   caddy:
     image: caddy:2
     depends_on:

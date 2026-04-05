@@ -197,7 +197,7 @@ export function PprCalendarAdmin({
       setMaterializedReason("");
       setMonthlyNotice({
         tone: "warning",
-        message: `Выбрана новая дата ${formatDate(targetDate)}. Для materialized заявки нужно подтвердить перенос и указать причину.`,
+        message: `Выбрана новая дата ${formatDate(targetDate)}. Для уже созданной ППР-заявки нужно подтвердить перенос и указать причину.`,
       });
       return;
     }

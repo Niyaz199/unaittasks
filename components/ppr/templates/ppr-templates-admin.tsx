@@ -83,7 +83,10 @@ export function PprTemplatesAdmin({
         isEmpty={!hasPrerequisites || templates.length === 0}
         emptyState={{
           message: !hasPrerequisites ? "Недостаточно структуры для создания шаблонов" : "Шаблоны ППР пока не созданы",
-          hint: !hasPrerequisites ? "Для шаблона ППР нужны доступные объекты и хотя бы одна система." : "Создайте первый шаблон и заполните его чек-лист.",
+          hint:
+            !hasPrerequisites
+              ? "Для шаблона ППР нужны доступные объекты и хотя бы одна система."
+              : "Создайте первый шаблон: он будет применяться ко всему активному оборудованию выбранной системы.",
         }}
         isFilteredEmpty={filteredTemplates.length === 0}
         filters={

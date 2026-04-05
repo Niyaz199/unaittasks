@@ -35,7 +35,6 @@
 - `ppr_equipment`
 - `ppr_work_templates`
 - `ppr_work_checklist_items`
-- `ppr_equipment_work_assignments`
 - `ppr_month_plans`
 - `ppr_month_plan_items`
 - `ppr_tasks`
@@ -51,6 +50,7 @@
 - `subsystem_id` в рабочем UI и query-layer
 - любые формы и экраны, требующие `subsystem_id`
 - PPR-specific справочник `ppr_rooms`
+- `ppr_equipment_work_assignments` как рабочий источник месячного плана
 
 ## 3. Связи между сущностями
 
@@ -64,7 +64,6 @@ flowchart TD
   systems[ppr_systems]
   equipment[ppr_equipment]
   templates[ppr_work_templates]
-  assignments[ppr_equipment_work_assignments]
   monthPlans[ppr_month_plan_items]
   pprTasks[ppr_tasks]
   rounds[rounds_module]
@@ -77,9 +76,8 @@ flowchart TD
   systems --> equipment
   objectRooms --> equipment
   systems --> templates
-  equipment --> assignments
-  templates --> assignments
-  assignments --> monthPlans
+  templates --> monthPlans
+  equipment --> monthPlans
   monthPlans --> pprTasks
   objectRooms --> rounds
 ```
@@ -88,7 +86,7 @@ flowchart TD
 
 - оборудование принадлежит системе напрямую;
 - шаблон ППР принадлежит системе напрямую;
-- совместимость назначения проверяется по `object_id + system_id`;
+- активный шаблон системы применяется ко всему активному оборудованию этой системы;
 - помещение принадлежит объекту, а не ППР;
 - `ppr_tasks` materialize-ятся по `(object_id, equipment_id, planned_for)`;
 - room QR принадлежит помещению, а не конкретному модулю.
@@ -107,7 +105,6 @@ flowchart TD
 - `app/(dashboard)/ppr/equipment/[id]/page.tsx`
 - `app/(dashboard)/ppr/templates/page.tsx`
 - `app/(dashboard)/ppr/templates/[id]/page.tsx`
-- `app/(dashboard)/ppr/assignments/page.tsx`
 - `app/(dashboard)/ppr/calendar/page.tsx`
 - `app/(dashboard)/ppr/tasks/page.tsx`
 - `app/(dashboard)/ppr/tasks/[id]/page.tsx`
@@ -229,15 +226,12 @@ PPR использует многослойную модель доступа:
 - создаётся на уровне системы;
 - содержит периодичность, базовую дату, чек-лист, нормо-часы и методику.
 
-### Назначение
-
-- связывает шаблон и оборудование;
-- разрешено только в рамках одной системы и одного объекта.
-
 ### Календарь
 
 - создаётся month plan по системе;
 - строки плана хранят конкретные due dates и `planned_for`;
+- month plan строится напрямую из активных шаблонов системы и активного оборудования этой системы;
+- оборудование, добавленное позже, попадает только в будущие циклы по `service_start_date`;
 - переносы ограничены рамками выбранного месяца.
 
 ### Materialization

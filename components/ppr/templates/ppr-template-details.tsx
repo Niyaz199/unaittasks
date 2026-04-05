@@ -55,6 +55,9 @@ export function PprTemplateDetails({
           <div className="text-soft">Объект: {resolveName(template.object)}</div>
           <div className="text-soft">Система: {resolveName(template.system)}</div>
           <div className="text-soft">Создан: {new Date(template.created_at).toLocaleString("ru-RU")}</div>
+          <div className="text-soft">
+            Активный шаблон автоматически формирует ППР для всего активного оборудования этой системы.
+          </div>
         </div>
       </SectionCard>
 

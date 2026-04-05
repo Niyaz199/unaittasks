@@ -40,7 +40,6 @@ export type PprTaskWorkItemRow = {
   id: string;
   object_id: string;
   task_id: string;
-  assignment_id: string;
   template_id: string;
   plan_item_id: string | null;
   title_snapshot: string;
@@ -152,7 +151,7 @@ export async function listPprTaskWorkItemsForProfile(
   const { data, error } = await supabase
     .from("ppr_task_work_items")
     .select(
-      "id,object_id,task_id,assignment_id,template_id,plan_item_id,title_snapshot,description_snapshot,methodology_snapshot,checklist_snapshot,norm_hours_snapshot,sort_order"
+      "id,object_id,task_id,template_id,plan_item_id,title_snapshot,description_snapshot,methodology_snapshot,checklist_snapshot,norm_hours_snapshot,sort_order"
     )
     .eq("task_id", taskId)
     .order("sort_order", { ascending: true });

@@ -12,7 +12,7 @@ import { pprTaskStatusMeta } from "@/lib/ppr/presentation";
 const PprTaskLifecycleControls = dynamic(
   () => import("@/components/ppr/tasks/ppr-task-lifecycle-controls").then((module) => module.PprTaskLifecycleControls),
   {
-    loading: () => <div className="section-card text-soft">Подготавливаем lifecycle-действия...</div>,
+    loading: () => <div className="section-card text-soft">Подготавливаем действия по заявке...</div>,
   }
 );
 
@@ -147,7 +147,7 @@ export function PprTaskDetails({
             <div className="grid" style={{ gap: "0.35rem", borderBottom: "1px solid color-mix(in srgb, var(--line-strong) 40%, transparent)", paddingBottom: "0.5rem" }}>
               <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 600 }}>Управление заявкой</h3>
               <p className="text-soft text-sm" style={{ margin: 0 }}>
-                Назначение исполнителя, перевод в `in_progress` и `done`, закрытие, перенос и отмена.
+                Назначение исполнителя, запуск в работу, выполнение, закрытие, перенос и отмена.
               </p>
             </div>
             <PprTaskLifecycleControls

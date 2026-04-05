@@ -1,18 +1,22 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { unwrapRelation, type RelationValue } from "@/lib/relation-normalization";
-
-type AssignmentForPlan = {
-  id: string;
-  object_id: string;
-  equipment_id: string;
-  template_id: string;
-  start_date: string;
-  period_months: number;
-  equipment: RelationValue<{ id: string; system_id: string }>;
-  template: RelationValue<{ id: string; system_id: string }>;
-};
 
 const PPR_MONTH_PLAN_BATCH_SIZE = 500;
+
+type TemplateForPlan = {
+  id: string;
+  object_id: string;
+  system_id: string;
+  base_start_date: string;
+  period_months: number;
+};
+
+type EquipmentForPlan = {
+  id: string;
+  object_id: string;
+  system_id: string;
+  created_at: string;
+  service_start_date: string;
+};
 
 function toDateOnly(value: Date) {
   return value.toISOString().slice(0, 10);
@@ -26,10 +30,22 @@ function lastDayOfMonth(date: Date) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
 }
 
+function addMonths(date: Date, months: number) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1));
+}
+
 function parseDate(value: string) {
   const parsed = new Date(`${value}T00:00:00.000Z`);
   if (Number.isNaN(parsed.getTime())) {
     throw new Error(`Некорректная дата: ${value}`);
+  }
+  return parsed;
+}
+
+function parseTimestamp(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`Некорректный timestamp: ${value}`);
   }
   return parsed;
 }
@@ -64,7 +80,7 @@ export function defaultPlannedFor(planMonth: string) {
   return normalizePlanMonth(planMonth);
 }
 
-export function calculateAssignmentDueDateForPlanMonth(startDate: string, periodMonths: number, planMonth: string) {
+export function calculateTemplateDueDateForPlanMonth(startDate: string, periodMonths: number, planMonth: string) {
   const start = parseDate(startDate);
   const monthStart = parseDate(normalizePlanMonth(planMonth));
   if (start > lastDayOfMonth(monthStart)) {
@@ -118,61 +134,63 @@ export async function generateMonthPlanForSystem(
         onConflict: "object_id,system_id,plan_month",
       }
     )
-    .select("id,object_id,system_id,plan_month")
+    .select("id,object_id,system_id,plan_month,generated_at")
     .single();
   if (monthPlanError) throw monthPlanError;
 
-  const { data: assignments, error: assignmentsError } = await supabase
-    .from("ppr_equipment_work_assignments")
-    .select("id,object_id,equipment_id,template_id,start_date,period_months,equipment:ppr_equipment(id,system_id),template:ppr_work_templates(id,system_id)")
-    .eq("object_id", system.object_id)
-    .eq("is_active", true);
-  if (assignmentsError) throw assignmentsError;
+  const [{ data: templates, error: templatesError }, { data: equipment, error: equipmentError }] = await Promise.all([
+    supabase
+      .from("ppr_work_templates")
+      .select("id,object_id,system_id,base_start_date,period_months")
+      .eq("object_id", system.object_id)
+      .eq("system_id", input.systemId)
+      .eq("is_active", true),
+    supabase
+      .from("ppr_equipment")
+      .select("id,object_id,system_id,created_at,service_start_date")
+      .eq("object_id", system.object_id)
+      .eq("system_id", input.systemId)
+      .eq("status", "active"),
+  ]);
+  if (templatesError) throw templatesError;
+  if (equipmentError) throw equipmentError;
 
-  const rows = ((assignments ?? []) as AssignmentForPlan[]).filter((assignment) => {
-    const equipment = unwrapRelation(assignment.equipment);
-    return equipment?.system_id === input.systemId;
-  });
+  const activeTemplates = (templates ?? []) as TemplateForPlan[];
+  const activeEquipment = (equipment ?? []) as EquipmentForPlan[];
 
   const { data: existingItems, error: existingItemsError } = await supabase
     .from("ppr_month_plan_items")
-    .select("assignment_id,source_due_date")
+    .select("equipment_id,template_id,source_due_date")
     .eq("month_plan_id", monthPlan.id);
   if (existingItemsError) throw existingItemsError;
 
   const existingKeys = new Set(
-    ((existingItems ?? []) as Array<{ assignment_id: string; source_due_date: string }>).map(
-      (item) => `${item.assignment_id}:${item.source_due_date}`
+    ((existingItems ?? []) as Array<{ equipment_id: string; template_id: string; source_due_date: string }>).map(
+      (item) => `${item.equipment_id}:${item.template_id}:${item.source_due_date}`
     )
   );
 
-  const insertRows = rows
-    .map((assignment) => {
-      const dueDate = calculateAssignmentDueDateForPlanMonth(assignment.start_date, assignment.period_months, planMonthKey);
-      if (!dueDate) return null;
+  const insertRows = activeTemplates.flatMap((template) => {
+    const dueDate = calculateTemplateDueDateForPlanMonth(template.base_start_date, template.period_months, planMonthKey);
+    if (!dueDate) return [];
 
-      const equipment = unwrapRelation(assignment.equipment);
-      const template = unwrapRelation(assignment.template);
-      if (!equipment || !template) return null;
-
-      return {
+    return activeEquipment
+      .filter((item) => item.service_start_date <= dueDate)
+      .filter((item) => parseTimestamp(item.created_at) <= parseTimestamp(monthPlan.generated_at))
+      .map((item) => ({
         object_id: system.object_id,
         month_plan_id: monthPlan.id,
         system_id: input.systemId,
-        equipment_id: assignment.equipment_id,
-        assignment_id: assignment.id,
-        template_id: assignment.template_id,
+        equipment_id: item.id,
+        template_id: template.id,
         planned_for: defaultPlannedFor(normalizedPlanMonth),
         source_due_date: dueDate,
         is_overdue: dueDate < toDateOnly(new Date()),
         is_carried_over: false,
         task_id: null,
         status: "pending" as const,
-      };
-    })
-    .filter((row): row is NonNullable<typeof row> => row !== null)
-    .filter((row) => !existingKeys.has(`${row.assignment_id}:${row.source_due_date}`));
-
+      }));
+  }).filter((row) => !existingKeys.has(`${row.equipment_id}:${row.template_id}:${row.source_due_date}`));
   if (!insertRows.length) {
     return {
       monthPlanId: monthPlan.id,
@@ -187,19 +205,54 @@ export async function generateMonthPlanForSystem(
     const { data, error } = await supabase
       .from("ppr_month_plan_items")
       .upsert(batch, {
-        onConflict: "month_plan_id,assignment_id,source_due_date",
+        onConflict: "month_plan_id,equipment_id,template_id,source_due_date",
         ignoreDuplicates: true,
       })
       .select("id");
     if (error) throw error;
     insertedCount += (data ?? []).length;
   }
-
   return {
     monthPlanId: monthPlan.id,
     normalizedPlanMonth,
     generatedItems: insertRows.length,
     touchedRows: insertedCount,
+  };
+}
+
+export async function generateMonthPlansForActiveSystems(
+  supabase: SupabaseClient,
+  input: { planMonth: string }
+) {
+  const normalizedPlanMonth = normalizePlanMonth(input.planMonth);
+  const { data, error } = await supabase
+    .from("ppr_work_templates")
+    .select("system_id")
+    .eq("is_active", true);
+  if (error) throw error;
+
+  const systemIds = [...new Set((data ?? []).map((row) => row.system_id).filter(Boolean))];
+
+  let generatedItems = 0;
+  let touchedRows = 0;
+  const monthPlanIds: string[] = [];
+
+  for (const systemId of systemIds) {
+    const result = await generateMonthPlanForSystem(supabase, {
+      systemId,
+      planMonth: normalizedPlanMonth,
+    });
+    generatedItems += result.generatedItems;
+    touchedRows += result.touchedRows;
+    monthPlanIds.push(result.monthPlanId);
+  }
+
+  return {
+    planMonth: normalizedPlanMonth,
+    systemCount: systemIds.length,
+    generatedItems,
+    touchedRows,
+    monthPlanIds,
   };
 }
 
@@ -270,5 +323,46 @@ export async function runPprCronOrchestration(supabase: SupabaseClient, input: P
     carryover,
     materialization,
     sync,
+  };
+}
+
+export async function runPprMonthlyCycle(
+  supabase: SupabaseClient,
+  input: { anchorDate?: string; runId: string }
+) {
+  const anchor = parseDate(input.anchorDate ?? toDateOnly(new Date()));
+  const currentMonthStart = toDateOnly(firstDayOfMonth(anchor));
+  const currentMonthEnd = toDateOnly(lastDayOfMonth(anchor));
+  const nextMonthStart = toDateOnly(addMonths(anchor, 1));
+
+  const currentMonthPlan = await generateMonthPlansForActiveSystems(supabase, {
+    planMonth: currentMonthStart,
+  });
+
+  const materialization = await runPprCronStep(supabase, "ppr_materialize_plan_items", {
+    dateFrom: currentMonthStart,
+    dateTo: currentMonthEnd,
+    runId: input.runId,
+  });
+
+  const sync = await runPprCronStep(supabase, "ppr_sync_plan_item_statuses", {
+    dateFrom: currentMonthStart,
+    dateTo: currentMonthEnd,
+    runId: input.runId,
+  });
+
+  const nextMonthPlan = await generateMonthPlansForActiveSystems(supabase, {
+    planMonth: nextMonthStart,
+  });
+
+  return {
+    anchorDate: toDateOnly(anchor),
+    currentMonthStart,
+    currentMonthEnd,
+    nextMonthStart,
+    currentMonthPlan,
+    materialization,
+    sync,
+    nextMonthPlan,
   };
 }

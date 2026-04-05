@@ -3,7 +3,6 @@ import { listObjectRoomsForProfile } from "@/lib/object-rooms";
 import type { Profile } from "@/lib/types";
 import {
   RESPONSIBLE_ROLES,
-  assertPprAssignmentQueryAccess,
   assertPprQrQueryAccess,
   assertPprStructureQueryAccess,
   assertPprSystemGroupQueryAccess,
@@ -353,81 +352,3 @@ export async function getPprWorkTemplateByIdForProfile(
   };
 }
 
-export async function listPprAssignmentsForProfile(supabase: SupabaseClient, profile: Pick<Profile, "id" | "role">) {
-  assertPprAssignmentQueryAccess(profile.role);
-  const objects = await listPprManageableObjectsForProfile(supabase, profile);
-  if (!objects.length && profile.role !== "admin" && profile.role !== "chief") return [];
-
-  const query = supabase
-    .from("ppr_equipment_work_assignments")
-    .select(
-      "id,object_id,equipment_id,template_id,start_date,period_months,is_active,created_at,equipment:ppr_equipment(name,inventory_no,system_id),template:ppr_work_templates(name,system_id),object:objects(name)"
-    )
-    .order("created_at", { ascending: false });
-
-  const { data, error } =
-    profile.role === "admin" || profile.role === "chief" ? await query : await query.in("object_id", objects.map((item) => item.id));
-  if (error) throw error;
-
-  return (data ?? []) as Array<{
-    id: string;
-    object_id: string;
-    equipment_id: string;
-    template_id: string;
-    start_date: string;
-    period_months: number;
-    is_active: boolean;
-    created_at: string;
-    equipment:
-      | { name: string; inventory_no: string; system_id: string }
-      | Array<{ name: string; inventory_no: string; system_id: string }>
-      | null;
-    template: { name: string; system_id: string } | Array<{ name: string; system_id: string }> | null;
-    object: { name: string } | Array<{ name: string }> | null;
-  }>;
-}
-
-export async function listAssignableEquipmentForProfile(supabase: SupabaseClient, profile: Pick<Profile, "id" | "role">) {
-  assertPprAssignmentQueryAccess(profile.role);
-  const objects = await listPprManageableObjectsForProfile(supabase, profile);
-  if (!objects.length && profile.role !== "admin" && profile.role !== "chief") return [];
-
-  const query = supabase.from("ppr_equipment").select("id,object_id,system_id,name,inventory_no").order("name", { ascending: true });
-
-  const { data, error } =
-    profile.role === "admin" || profile.role === "chief" ? await query : await query.in("object_id", objects.map((item) => item.id));
-  if (error) throw error;
-
-  return (data ?? []) as Array<{
-    id: string;
-    object_id: string;
-    system_id: string;
-    name: string;
-    inventory_no: string;
-  }>;
-}
-
-export async function listAssignableTemplatesForProfile(supabase: SupabaseClient, profile: Pick<Profile, "id" | "role">) {
-  assertPprAssignmentQueryAccess(profile.role);
-  const objects = await listPprManageableObjectsForProfile(supabase, profile);
-  if (!objects.length && profile.role !== "admin" && profile.role !== "chief") return [];
-
-  const query = supabase
-    .from("ppr_work_templates")
-    .select("id,object_id,system_id,name,period_months,base_start_date,is_active")
-    .order("name", { ascending: true });
-
-  const { data, error } =
-    profile.role === "admin" || profile.role === "chief" ? await query : await query.in("object_id", objects.map((item) => item.id));
-  if (error) throw error;
-
-  return (data ?? []) as Array<{
-    id: string;
-    object_id: string;
-    system_id: string;
-    name: string;
-    period_months: number;
-    base_start_date: string;
-    is_active: boolean;
-  }>;
-}

@@ -63,7 +63,7 @@ export default async function PprTasksPage({ searchParams }: { searchParams: Pro
         emptyHint={
           view === "review"
             ? "Сюда попадают выполненные заявки, где исполнитель и ответственный различаются."
-            : "После materialization и дальнейшего lifecycle ППР-заявки появятся в этом списке."
+            : "После формирования месяца и создания ППР-заявок они появятся в этом списке."
         }
       />
     </section>

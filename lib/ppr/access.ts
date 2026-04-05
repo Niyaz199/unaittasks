@@ -5,7 +5,6 @@ import type { Profile } from "@/lib/types";
 const STRUCTURE_MANAGER_ROLES = new Set(["admin", "chief", "lead", "engineer", "object_engineer"]);
 const SYSTEM_GROUP_MANAGER_ROLES = new Set(["admin", "chief", "lead"]);
 const TEMPLATE_MANAGER_ROLES = new Set(["admin", "chief", "lead", "engineer", "object_engineer"]);
-const ASSIGNMENT_MANAGER_ROLES = new Set(["admin", "chief", "lead", "engineer", "object_engineer"]);
 const CALENDAR_MANAGER_ROLES = new Set(["admin", "chief", "lead", "engineer", "object_engineer"]);
 const TASK_LAYER_ROLES = new Set(["admin", "chief", "lead", "engineer", "object_engineer", "tech"]);
 const QR_LAYER_ROLES = new Set(["admin", "chief", "lead", "engineer", "object_engineer", "tech"]);
@@ -24,10 +23,6 @@ export function canAccessPprSystemGroupScreens(role: Profile["role"]) {
 
 export function canAccessPprTemplateScreens(role: Profile["role"]) {
   return TEMPLATE_MANAGER_ROLES.has(role);
-}
-
-export function canAccessPprAssignmentScreens(role: Profile["role"]) {
-  return ASSIGNMENT_MANAGER_ROLES.has(role);
 }
 
 export function canAccessPprCalendarScreens(role: Profile["role"]) {
@@ -57,12 +52,6 @@ export function assertPprSystemGroupQueryAccess(role: Profile["role"]) {
 export function assertPprTemplateQueryAccess(role: Profile["role"]) {
   if (!canAccessPprTemplateScreens(role)) {
     throw new Error("Недостаточно прав для server-side запросов шаблонов ППР");
-  }
-}
-
-export function assertPprAssignmentQueryAccess(role: Profile["role"]) {
-  if (!canAccessPprAssignmentScreens(role)) {
-    throw new Error("Недостаточно прав для server-side запросов назначений ППР");
   }
 }
 

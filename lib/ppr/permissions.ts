@@ -40,12 +40,6 @@ export function canManagePprTemplates(actor: PprActor, objectId: string) {
   return actor.role === "lead" || actor.role === "engineer" || actor.role === "object_engineer";
 }
 
-export function canManagePprAssignments(actor: PprActor, objectId: string) {
-  if (isChiefOrAdmin(actor.role)) return true;
-  if (!hasObjectAccess(actor, objectId)) return false;
-  return actor.role === "lead" || actor.role === "engineer" || actor.role === "object_engineer";
-}
-
 export function canManagePprCalendar(actor: PprActor, options: PprCalendarOptions) {
   if (isChiefOrAdmin(actor.role)) return true;
   if (!hasObjectAccess(actor, options.objectId)) return false;

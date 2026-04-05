@@ -55,7 +55,6 @@ export type MonthPlanItemRow = {
   month_plan_id: string;
   system_id: string;
   equipment_id: string;
-  assignment_id: string;
   template_id: string;
   planned_for: string;
   source_due_date: string;

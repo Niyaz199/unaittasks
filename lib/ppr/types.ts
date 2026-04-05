@@ -94,16 +94,6 @@ export type PprWorkTemplateAttachment = {
   created_at: string;
 };
 
-export type PprEquipmentAssignment = {
-  id: string;
-  object_id: string;
-  equipment_id: string;
-  template_id: string;
-  start_date: string;
-  period_months: number;
-  is_active: boolean;
-};
-
 export type PprMonthPlan = {
   id: string;
   object_id: string;
@@ -118,7 +108,6 @@ export type PprMonthPlanItem = {
   month_plan_id: string;
   system_id: string;
   equipment_id: string;
-  assignment_id: string;
   template_id: string;
   planned_for: string;
   source_due_date: string;
@@ -152,7 +141,6 @@ export type PprTaskWorkItem = {
   id: string;
   object_id: string;
   task_id: string;
-  assignment_id: string;
   template_id: string;
   plan_item_id: string | null;
   title_snapshot: string;

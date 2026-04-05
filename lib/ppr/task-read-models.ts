@@ -120,7 +120,7 @@ export async function listMaterializablePlanItemsForRange(
   const { data, error } = await supabase
     .from("ppr_month_plan_items")
     .select(
-      "id,object_id,month_plan_id,system_id,equipment_id,assignment_id,template_id,planned_for,source_due_date,is_overdue,is_carried_over,task_id,status,assignment:ppr_equipment_work_assignments(id),template:ppr_work_templates(id,name,description,methodology,norm_hours),system:ppr_systems(id,responsible_user_id)"
+      "id,object_id,month_plan_id,system_id,equipment_id,template_id,planned_for,source_due_date,is_overdue,is_carried_over,task_id,status,template:ppr_work_templates(id,name,description,methodology,norm_hours),system:ppr_systems(id,responsible_user_id)"
     )
     .in("status", ["pending", "carried_over"])
     .is("task_id", null)
@@ -128,7 +128,7 @@ export async function listMaterializablePlanItemsForRange(
     .lte("planned_for", options.dateTo)
     .order("planned_for", { ascending: true })
     .order("equipment_id", { ascending: true })
-    .order("assignment_id", { ascending: true });
+    .order("template_id", { ascending: true });
   if (error) throw error;
 
   return (data ?? []) as Array<{
@@ -137,7 +137,6 @@ export async function listMaterializablePlanItemsForRange(
     month_plan_id: string;
     system_id: string;
     equipment_id: string;
-    assignment_id: string;
     template_id: string;
     planned_for: string;
     source_due_date: string;
@@ -145,7 +144,6 @@ export async function listMaterializablePlanItemsForRange(
     is_carried_over: boolean;
     task_id: string | null;
     status: "pending" | "carried_over";
-    assignment: { id: string } | Array<{ id: string }> | null;
     template:
       | { id: string; name: string; description: string | null; methodology: string | null; norm_hours: number | null }
       | Array<{ id: string; name: string; description: string | null; methodology: string | null; norm_hours: number | null }>
