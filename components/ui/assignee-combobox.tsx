@@ -32,6 +32,7 @@ export function AssigneeCombobox({
   const [query, setQuery] = useState(initialOption ? (initialOption.label ?? initialOption.full_name ?? "") : "");
   const [selectedId, setSelectedId] = useState(defaultValue);
   const containerRef = useRef<HTMLDivElement>(null);
+  const previousDefaultValueRef = useRef(defaultValue);
 
   const filteredOptions = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -55,6 +56,8 @@ export function AssigneeCombobox({
   }, [isOpen]);
 
   useEffect(() => {
+    if (previousDefaultValueRef.current === defaultValue) return;
+    previousDefaultValueRef.current = defaultValue;
     const option = options.find((item) => item.id === defaultValue);
     setSelectedId(defaultValue);
     setQuery(option ? (option.label ?? option.full_name ?? "") : "");
