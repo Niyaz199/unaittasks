@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from "next";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useTransition } from "react";
 import type { DailyChecklistTemplateProfile } from "@/lib/types";
@@ -30,7 +31,8 @@ export function ChecklistControlFilters({
       }
 
       startTransition(() => {
-        router.replace(`${pathname}?${params.toString()}`);
+        const nextHref = params.size ? `${pathname}?${params.toString()}` : pathname;
+        router.replace(nextHref as Route);
       });
     },
     [pathname, router, searchParams]
