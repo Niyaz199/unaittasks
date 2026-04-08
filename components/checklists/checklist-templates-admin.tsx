@@ -137,11 +137,6 @@ function TemplateProfileEditor({
     setExpandedItems(new Set(initialItems.map((_, i) => i)));
   }, [targetProfile.full_name, template]);
 
-  const versionLabel = useMemo(
-    () => (template ? `Активная версия: ${template.version}` : "Новый шаблон"),
-    [template]
-  );
-
   function toggleItem(index: number) {
     setExpandedItems((current) => {
       const next = new Set(current);

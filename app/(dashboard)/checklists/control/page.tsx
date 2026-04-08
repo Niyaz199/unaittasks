@@ -99,7 +99,7 @@ export default async function DailyChecklistControlPage({
                     </span>
                   </div>
                   <div className="row" style={{ alignItems: "center", gap: "0.5rem" }}>
-                    <Badge tone={isCompleted ? "success" : "neutral"} variant="outline">
+                    <Badge tone={isCompleted ? "success" : "neutral"}>
                       {isCompleted ? "День закрыт" : "В работе"}
                     </Badge>
                     <span className="text-soft">›</span>
