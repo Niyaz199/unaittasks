@@ -29,12 +29,14 @@ import { canAccessPprModule } from "@/lib/ppr/permissions";
 type Props = {
   role: Role;
   currentPath: string;
+  checklistPendingCount: number;
 };
 
 type NavItem = {
   href: string;
   label: string;
   show?: boolean;
+  badgeCount?: number;
 };
 
 type NavSection = {
@@ -95,7 +97,7 @@ const Icons = {
   ),
 };
 
-export function MainNav({ role, currentPath }: Props) {
+export function MainNav({ role, currentPath, checklistPendingCount }: Props) {
   const router = useRouter();
   const canOpenDirectories = canAccessDirectories(role);
   const canOpenPpr = canAccessPprModule(role);
@@ -123,7 +125,12 @@ export function MainNav({ role, currentPath }: Props) {
       show: true,
       items: [
         { href: "/my", label: "Мои задачи", show: true },
-        { href: "/checklists", label: "Мой чек-лист", show: canOpenChecklists && canOpenMyChecklist },
+        {
+          href: "/checklists",
+          label: "Мой чек-лист",
+          show: canOpenChecklists && canOpenMyChecklist,
+          badgeCount: checklistPendingCount > 0 ? checklistPendingCount : undefined,
+        },
         { href: "/checklists/control", label: "Контроль чек-листов", show: canOpenChecklists && canOpenChecklistControl },
         { href: "/checklists/templates", label: "Шаблоны чек-листов", show: canOpenChecklists && canOpenChecklistTemplates },
         { href: "/new", label: "Новые", show: true },
@@ -259,7 +266,8 @@ export function MainNav({ role, currentPath }: Props) {
                       href={item.href as Route}
                       className={`side-nav-link ${itemActive ? "active" : ""}`}
                     >
-                      {item.label}
+                      <span className="side-nav-link-label">{item.label}</span>
+                      {item.badgeCount ? <span className="side-nav-link-badge">{item.badgeCount}</span> : null}
                     </Link>
                   );
                 })}

@@ -28,11 +28,11 @@ export default async function DailyChecklistTemplatesPage() {
 
   return (
     <section className="grid" style={{ gap: "1rem" }}>
-      <PageHeader
-        title="Шаблоны чек-листов"
-        description="У каждого инженера свой персональный активный шаблон. Сохранение создаёт новую версию только для выбранного сотрудника."
-        actions={<BackButton fallback="/checklists" label="← К чек-листам" />}
-      />
+        <PageHeader
+          title="Шаблоны чек-листов"
+          description="У каждого инженера свой персональный шаблон. Сохранение создаёт новую активную версию."
+          actions={<BackButton fallback="/checklists" label="← К чек-листам" />}
+        />
       <ChecklistTemplatesAdmin templates={templates} profiles={profiles} />
     </section>
   );

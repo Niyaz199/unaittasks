@@ -1,12 +1,16 @@
 import { requireProfile } from "@/lib/auth";
+import { getDailyChecklistPendingCountForProfile } from "@/lib/daily-checklists/queries";
 import { NavShell } from "@/components/dashboard/nav-shell";
 import { OfflineSyncBootstrap } from "@/components/offline/offline-sync-bootstrap";
 import { MobileTabs } from "@/components/dashboard/mobile-tabs";
 import { RegisterSW } from "@/components/pwa/register-sw";
 import { SignOutButton } from "@/components/dashboard/sign-out-button";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { profile } = await requireProfile();
+  const supabase = await createSupabaseServerClient();
+  const checklistPendingCount = await getDailyChecklistPendingCountForProfile(supabase, profile);
 
   return (
     <div className="admin-shell">
@@ -19,7 +23,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <div className="sidebar-user-name">{profile.full_name}</div>
             <div className="sidebar-user-role">{profile.role}</div>
           </div>
-          <NavShell role={profile.role} />
+          <NavShell role={profile.role} checklistPendingCount={checklistPendingCount} />
         </div>
       </aside>
 

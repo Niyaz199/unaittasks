@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, useOptimistic } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -190,11 +190,13 @@ function ChecklistItemCard({
   objects,
   assignees,
   readOnly,
+  onOptimisticUpdate,
 }: {
   item: DailyChecklistItemRun;
   objects: ObjectItem[];
   assignees: TaskCandidate[];
   readOnly?: boolean;
+  onOptimisticUpdate?: (itemId: string, status: DailyChecklistItemStatus) => void;
 }) {
   const router = useRouter();
   const { addToast } = useToast();
@@ -206,6 +208,7 @@ function ChecklistItemCard({
 
   function save(status: DailyChecklistItemStatus) {
     startTransition(async () => {
+      onOptimisticUpdate?.(item.id, status);
       const response = await fetch(`/api/checklists/items/${item.id}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -216,7 +219,6 @@ function ChecklistItemCard({
         addToast(payload.error ?? "Не удалось обновить пункт", "error");
         return;
       }
-      addToast("Пункт обновлён", "success");
       router.refresh();
     });
   }
@@ -256,36 +258,58 @@ function ChecklistItemCard({
   return (
     <>
       <article className={`section-card grid ${isDone && !readOnly ? "clv-item-done" : ""}`} style={{ gap: "0", padding: 0, overflow: "hidden" }}>
-        <div className="grid" style={{ gap: "0.75rem", padding: "1rem" }}>
+        <div 
+          className="grid" 
+          style={{ gap: "0.75rem", padding: "1rem", cursor: "pointer" }}
+          onClick={() => setDetailsOpen(!detailsOpen)}
+        >
           <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: "0.75rem" }}>
-            <div className="grid" style={{ gap: "0.35rem" }}>
+            <div className="grid" style={{ gap: "0.25rem" }}>
               <div className="row" style={{ gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-                <strong style={{ fontSize: "1.05rem" }}>{item.title}</strong>
-                <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
-                {item.is_required ? <Badge tone="info">Обязательный</Badge> : null}
-                <Badge tone="neutral">{item.schedule_label}</Badge>
-                {item.operational_date ? <Badge tone="warning">{formatOperationalDateLabel(item.operational_date)}</Badge> : null}
+                <strong style={{ fontSize: "1.05rem" }}>
+                  {item.title}
+                  {item.is_required && <span style={{ color: "var(--danger)", marginLeft: "0.25rem" }}>*</span>}
+                </strong>
               </div>
-              {item.description ? <div className="text-soft" style={{ fontSize: "0.9rem" }}>{item.description}</div> : null}
+              <div className="text-soft" style={{ fontSize: "0.85rem" }}>
+                {item.schedule_label}
+                {item.operational_date ? ` • ${formatOperationalDateLabel(item.operational_date)}` : ""}
+              </div>
+              {item.description ? <div className="text-soft" style={{ fontSize: "0.9rem", marginTop: "0.25rem" }}>{item.description}</div> : null}
             </div>
 
-            {item.linked_task_id ? (
-              <a className="btn btn-ghost" style={{ padding: "0.25rem 0.5rem", fontSize: "0.85rem" }} href={`/tasks/${item.linked_task_id}`}>
-                К задаче
-              </a>
-            ) : null}
+            <div className="row" style={{ gap: "0.5rem", alignItems: "center" }}>
+              {readOnly && (
+                <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
+              )}
+              {item.linked_task_id ? (
+                <a className="btn btn-ghost" style={{ padding: "0.25rem 0.5rem", fontSize: "0.85rem" }} href={`/tasks/${item.linked_task_id}`} onClick={(e) => e.stopPropagation()}>
+                  К задаче
+                </a>
+              ) : null}
+              <span className="text-soft" style={{ transform: detailsOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>▼</span>
+            </div>
           </div>
 
           {!readOnly && (
             <div className="row" style={{ gap: "0.5rem", flexWrap: "wrap", marginTop: "0.25rem" }}>
-              <button className={`btn ${isDone ? "btn-accent" : "btn-ghost"}`} type="button" onClick={() => save("done")} disabled={pending}>
-                Выполнено
+              <button 
+                className={`btn ${isDone ? "btn-accent" : "btn-ghost"}`} 
+                style={{ flex: 1, minHeight: "44px", justifyContent: "center", background: isDone ? "var(--accent)" : "color-mix(in srgb, var(--accent) 10%, transparent)", color: isDone ? "#fff" : "var(--accent)", border: "none" }}
+                type="button" 
+                onClick={(e) => { e.stopPropagation(); save("done"); }} 
+                disabled={pending}
+              >
+                ✓ Выполнено
               </button>
-              <button className={`btn ${isProblem ? "btn-danger" : "btn-ghost"}`} type="button" onClick={() => save("problem")} disabled={pending}>
-                Проблема
-              </button>
-              <button className="btn btn-ghost" type="button" onClick={() => setDetailsOpen(!detailsOpen)}>
-                {detailsOpen ? "Скрыть детали" : "Подробнее..."}
+              <button 
+                className={`btn ${isProblem ? "btn-danger" : "btn-ghost"}`} 
+                style={{ flex: 1, minHeight: "44px", justifyContent: "center", background: isProblem ? "var(--danger)" : "color-mix(in srgb, var(--danger) 10%, transparent)", color: isProblem ? "#fff" : "var(--danger)", border: "none" }}
+                type="button" 
+                onClick={(e) => { e.stopPropagation(); save("problem"); }} 
+                disabled={pending}
+              >
+                ⚠️ Проблема
               </button>
             </div>
           )}
@@ -384,6 +408,8 @@ function ChecklistGroup({
   assignees,
   emptyMessage,
   readOnly,
+  defaultOpen = true,
+  onOptimisticUpdate,
 }: {
   title: string;
   items: DailyChecklistItemRun[];
@@ -391,60 +417,113 @@ function ChecklistGroup({
   assignees: TaskCandidate[];
   emptyMessage: string;
   readOnly?: boolean;
+  defaultOpen?: boolean;
+  onOptimisticUpdate?: (itemId: string, status: DailyChecklistItemStatus) => void;
 }) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
   return (
     <section className="grid" style={{ gap: "1rem" }}>
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "center", padding: "0 0.25rem" }}>
-        <h2 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 600 }}>{title}</h2>
-        <Badge tone="neutral">{items.length}</Badge>
-      </div>
-      {items.length ? (
-        <div className="grid" style={{ gap: "0.75rem" }}>
-          {items.map((item) => (
-            <ChecklistItemCard key={item.id} item={item} objects={objects} assignees={assignees} readOnly={readOnly} />
-          ))}
+      <button 
+        className="row" 
+        style={{ justifyContent: "space-between", alignItems: "center", padding: "0.5rem 0.25rem", background: "none", border: "none", cursor: "pointer", width: "100%", textAlign: "left" }}
+        onClick={() => setIsOpen(!isOpen)}
+        type="button"
+      >
+        <div className="row" style={{ gap: "0.5rem", alignItems: "center" }}>
+          <h2 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 600 }}>{title}</h2>
+          <Badge tone="neutral">{items.length}</Badge>
         </div>
-      ) : (
-        <div className="section-card text-soft" style={{ padding: "1rem", textAlign: "center", background: "transparent", border: "1px dashed color-mix(in srgb, var(--line) 50%, transparent)" }}>
-          {emptyMessage}
-        </div>
+        <span className="text-soft" style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>▼</span>
+      </button>
+      
+      {isOpen && (
+        items.length ? (
+          <div className="grid" style={{ gap: "0.75rem" }}>
+            {items.map((item) => (
+              <ChecklistItemCard key={item.id} item={item} objects={objects} assignees={assignees} readOnly={readOnly} onOptimisticUpdate={onOptimisticUpdate} />
+            ))}
+          </div>
+        ) : (
+          <div className="section-card text-soft" style={{ padding: "1rem", textAlign: "center", background: "transparent", border: "1px dashed color-mix(in srgb, var(--line) 50%, transparent)" }}>
+            {emptyMessage}
+          </div>
+        )
       )}
     </section>
   );
 }
 
 export function ChecklistDayView({ dayData, objects, assignees, readOnly }: Props) {
-  if (!dayData.run) {
+  const [optimisticDayData, addOptimisticUpdate] = useOptimistic(
+    dayData,
+    (state, update: { itemId: string; newStatus: DailyChecklistItemStatus }) => {
+      if (!state.run) return state;
+
+      const newItems = (state.run.items ?? []).map((item) =>
+        item.id === update.itemId ? { ...item, status: update.newStatus } : item
+      );
+
+      const newOverdue = state.overdueItems.map((item) =>
+        item.id === update.itemId ? { ...item, status: update.newStatus } : item
+      );
+
+      const completed = newItems.filter((i) => i.status === "done").length;
+      const problems = newItems.filter((i) => i.status === "problem").length;
+      const requiredResolved = newItems.filter((i) => i.is_required && i.status !== "pending").length;
+      const percentBase = state.completion.requiredTotal || newItems.length;
+      const percent = percentBase ? Math.round((requiredResolved / percentBase) * 100) : 100;
+
+      return {
+        ...state,
+        run: { ...state.run, items: newItems },
+        overdueItems: newOverdue,
+        completion: {
+          ...state.completion,
+          completed,
+          problems,
+          requiredResolved,
+          percent,
+        },
+      };
+    }
+  );
+
+  if (!optimisticDayData.run) {
     return (
-      <EmptyState
-        message="Для вашей роли ещё не настроен чек-лист."
-        hint="После публикации шаблона здесь появятся пункты на текущий день."
-      />
+      <div style={{ maxWidth: "800px", margin: "0 auto", width: "100%" }}>
+        <EmptyState
+          message="Для вашей роли ещё не настроен чек-лист."
+          hint="После публикации шаблона здесь появятся пункты на текущий день."
+        />
+      </div>
     );
   }
 
-  const currentItems = dayData.run.items ?? [];
+  const currentItems = optimisticDayData.run.items ?? [];
   const pendingItems = currentItems.filter((item) => item.status === "pending");
   const resolvedItems = currentItems.filter((item) => item.status !== "pending");
 
   return (
-    <div className="grid" style={{ gap: "1.5rem" }}>
-      <section className="section-card grid" style={{ gap: "1rem", padding: "1.25rem" }}>
+    <div className="grid" style={{ gap: "1.5rem", maxWidth: "800px", margin: "0 auto", width: "100%", paddingBottom: "env(safe-area-inset-bottom)" }}>
+      <section className="section-card grid" style={{ gap: "0.75rem", padding: "1rem", position: "sticky", top: "1rem", zIndex: 10, background: "var(--panel)", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
         <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
-          <div className="grid" style={{ gap: "0.35rem" }}>
-            <strong style={{ fontSize: "1.1rem" }}>{dayData.run.template_name}</strong>
-            <span className="text-soft" style={{ fontSize: "0.9rem" }}>Операционная дата: {formatOperationalDateLabel(dayData.run.operational_date)}</span>
+          <div className="grid" style={{ gap: "0.2rem" }}>
+            <strong style={{ fontSize: "1.05rem" }}>{optimisticDayData.run.template_name}</strong>
+            <span className="text-soft" style={{ fontSize: "0.85rem" }}>
+              {formatOperationalDateLabel(optimisticDayData.run.operational_date)}
+            </span>
           </div>
-          <Badge tone={dayData.run.status === "completed" ? "success" : "warning"}>
-            {dayData.run.status === "completed" ? "День закрыт" : "В работе"}
-          </Badge>
         </div>
 
-        <div className="row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
-          <Badge tone="info">Всего: {dayData.completion.total}</Badge>
-          <Badge tone="success">Выполнено: {dayData.completion.completed}</Badge>
-          <Badge tone="danger">Проблем: {dayData.completion.problems}</Badge>
-          <Badge tone="warning">Готовность: {dayData.completion.percent}%</Badge>
+        <div className="grid" style={{ gap: "0.35rem" }}>
+          <div className="row" style={{ justifyContent: "space-between", fontSize: "0.85rem" }}>
+            <span>Выполнено {optimisticDayData.completion.requiredResolved} из {optimisticDayData.completion.requiredTotal} обязательных</span>
+            {optimisticDayData.completion.problems > 0 && <span style={{ color: "var(--danger)", fontWeight: 500 }}>{optimisticDayData.completion.problems} проблем</span>}
+          </div>
+          <div style={{ height: "6px", background: "color-mix(in srgb, var(--line) 50%, transparent)", borderRadius: "3px", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${optimisticDayData.completion.percent}%`, background: "var(--accent)", transition: "width 0.3s ease" }} />
+          </div>
         </div>
       </section>
 
@@ -455,15 +534,19 @@ export function ChecklistDayView({ dayData, objects, assignees, readOnly }: Prop
         assignees={assignees}
         emptyMessage="Все сегодняшние пункты уже обработаны."
         readOnly={readOnly}
+        defaultOpen={true}
+        onOptimisticUpdate={(itemId, newStatus) => addOptimisticUpdate({ itemId, newStatus })}
       />
 
       <ChecklistGroup
-        title="Просроченные обязательные"
-        items={dayData.overdueItems}
+        title="Просрочено"
+        items={optimisticDayData.overdueItems}
         objects={objects}
         assignees={assignees}
         emptyMessage="Просроченных обязательных пунктов нет."
         readOnly={readOnly}
+        defaultOpen={optimisticDayData.overdueItems.length > 0}
+        onOptimisticUpdate={(itemId, newStatus) => addOptimisticUpdate({ itemId, newStatus })}
       />
 
       <ChecklistGroup
@@ -473,6 +556,8 @@ export function ChecklistDayView({ dayData, objects, assignees, readOnly }: Prop
         assignees={assignees}
         emptyMessage="Пока нет отмеченных пунктов."
         readOnly={readOnly}
+        defaultOpen={false}
+        onOptimisticUpdate={(itemId, newStatus) => addOptimisticUpdate({ itemId, newStatus })}
       />
     </div>
   );

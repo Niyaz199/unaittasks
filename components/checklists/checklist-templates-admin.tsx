@@ -78,34 +78,33 @@ function TemplateDirectoryCard({
   const itemCount = template?.items?.length ?? 0;
 
   return (
-    <article className="section-card grid" style={{ gap: "0.85rem", padding: "1rem" }}>
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: "0.75rem" }}>
-        <div className="grid" style={{ gap: "0.2rem" }}>
-          <strong style={{ fontSize: "1rem" }}>{profile.full_name}</strong>
-          <span className="text-soft">{ROLE_LABELS[profile.role]}</span>
-        </div>
-        <span className="text-soft" style={{ fontSize: "0.82rem" }}>
-          {template ? `v${template.version}` : "Нет шаблона"}
-        </span>
+    <article className="section-card row" style={{ gap: "1rem", padding: "1rem", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}>
+      <div className="grid" style={{ gap: "0.2rem", flex: "1 1 200px" }}>
+        <strong style={{ fontSize: "1.05rem" }}>{profile.full_name}</strong>
+        <span className="text-soft" style={{ fontSize: "0.85rem" }}>{ROLE_LABELS[profile.role]}</span>
       </div>
 
-      <div className="grid" style={{ gap: "0.3rem" }}>
-        <span>{template?.name ?? "Персональный чек-лист еще не создан"}</span>
-        <span className="text-soft" style={{ fontSize: "0.88rem" }}>
-          {template
-            ? `Пунктов: ${itemCount}${template.description ? " • есть описание" : ""}`
-            : "Создайте первый активный шаблон для этого сотрудника."}
-        </span>
+      <div className="grid" style={{ gap: "0.2rem", flex: "2 1 250px" }}>
+        {template ? (
+          <>
+            <div className="row" style={{ gap: "0.5rem", alignItems: "center" }}>
+              <span style={{ fontWeight: 500, color: "var(--success)" }}>Шаблон активен</span>
+              <span className="text-soft" style={{ fontSize: "0.85rem" }}>v{template.version} • {itemCount} пунктов</span>
+            </div>
+            {template.description ? (
+              <span className="text-soft" style={{ fontSize: "0.85rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {template.description}
+              </span>
+            ) : null}
+          </>
+        ) : (
+          <span className="text-soft">Шаблона нет</span>
+        )}
       </div>
 
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-        <span className="text-soft" style={{ fontSize: "0.82rem" }}>
-          {template ? "Откроется редактирование активной версии" : "Откроется создание нового шаблона"}
-        </span>
-        <button className="btn btn-accent" type="button" onClick={onOpen}>
-          {template ? "Открыть" : "Создать"}
-        </button>
-      </div>
+      <button className={template ? "btn btn-ghost" : "btn btn-accent"} type="button" onClick={onOpen} style={{ minWidth: "100px" }}>
+        {template ? "Открыть" : "Создать"}
+      </button>
     </article>
   );
 }
@@ -128,10 +127,14 @@ function TemplateProfileEditor({
   const [description, setDescription] = useState(template?.description ?? "");
   const [items, setItems] = useState<EditorItem[]>(template?.items?.length ? template.items.map(toEditorItem) : [defaultItem()]);
 
+  const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set([0]));
+
   useEffect(() => {
     setName(template?.name ?? `${targetProfile.full_name} — ежедневный чек-лист`);
     setDescription(template?.description ?? "");
-    setItems(template?.items?.length ? template.items.map(toEditorItem) : [defaultItem()]);
+    const initialItems = template?.items?.length ? template.items.map(toEditorItem) : [defaultItem()];
+    setItems(initialItems);
+    setExpandedItems(new Set(initialItems.map((_, i) => i)));
   }, [targetProfile.full_name, template]);
 
   const versionLabel = useMemo(
@@ -139,12 +142,25 @@ function TemplateProfileEditor({
     [template]
   );
 
+  function toggleItem(index: number) {
+    setExpandedItems((current) => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
+
   function updateItem(index: number, patch: Partial<EditorItem>) {
     setItems((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
   }
 
   function addItem() {
-    setItems((current) => [...current, defaultItem()]);
+    setItems((current) => {
+      const next = [...current, defaultItem()];
+      setExpandedItems((exp) => new Set(exp).add(next.length - 1));
+      return next;
+    });
   }
 
   function removeItem(index: number) {
@@ -166,206 +182,233 @@ function TemplateProfileEditor({
     });
   }
 
+  function handleBack() {
+    if (confirm("Выйти без сохранения? Все несохраненные изменения будут потеряны.")) {
+      onBack();
+    }
+  }
+
   return (
     <form className="grid" style={{ gap: "1rem" }} onSubmit={submit}>
       <input type="hidden" name="profile_id" value={targetProfile.id} />
 
+      {/* Блок A. Контекст */}
       <div className="section-card grid" style={{ gap: "1rem", padding: "1.25rem" }}>
-        <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: "0.75rem", flexWrap: "wrap" }}>
           <div className="grid" style={{ gap: "0.2rem" }}>
-            <span className="text-soft" style={{ fontSize: "0.82rem" }}>
-              {mode === "create" ? "Создание шаблона" : "Редактирование шаблона"}
+            <span className="text-soft" style={{ fontSize: "0.85rem" }}>
+              {mode === "create" ? "Новый шаблон" : "Редактирование активной версии"}
             </span>
-            <strong style={{ fontSize: "1.1rem" }}>{targetProfile.full_name}</strong>
-            <span className="text-soft">{ROLE_LABELS[targetProfile.role]}</span>
-            <span className="text-soft">{versionLabel}</span>
+            <strong style={{ fontSize: "1.15rem" }}>{targetProfile.full_name}</strong>
+            <span className="text-soft" style={{ fontSize: "0.9rem" }}>{ROLE_LABELS[targetProfile.role]}</span>
           </div>
-          <button className="btn btn-ghost" type="button" onClick={onBack}>
-            К списку шаблонов
+          <button className="btn btn-ghost" type="button" onClick={handleBack}>
+            Назад к списку
           </button>
         </div>
-
-        <div className="grid" style={{ gap: "0.75rem" }}>
-          <label className="grid" style={{ gap: "0.35rem" }}>
-            <span className="text-soft">Название шаблона</span>
-            <input className="input" name="name" value={name} onChange={(event) => setName(event.target.value)} />
-          </label>
-
-          <label className="grid" style={{ gap: "0.35rem" }}>
-            <span className="text-soft">Описание</span>
-            <textarea
-              className="input"
-              name="description"
-              rows={2}
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-            />
-          </label>
+        <div className="row" style={{ gap: "0.5rem", alignItems: "center", background: "color-mix(in srgb, var(--info) 15%, transparent)", padding: "0.75rem", borderRadius: "var(--radius)" }}>
+          <span style={{ fontSize: "1.2rem" }}>ℹ️</span>
+          <span style={{ fontSize: "0.9rem", color: "var(--info)" }}>
+            {template ? `Сохранение создаст новую активную версию (текущая: v${template.version}).` : "Сохранение создаст новую активную версию шаблона."}
+          </span>
         </div>
       </div>
 
-      <div className="grid" style={{ gap: "1rem" }}>
-        {items.map((item, index) => (
-          <div key={`${targetProfile.id}-${index}`} className="section-card" style={{ padding: "1.25rem" }}>
-            <div className="grid" style={{ gap: "1rem" }}>
-              <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-                <strong style={{ fontSize: "1.05rem" }}>Пункт {index + 1}</strong>
-                <button className="btn btn-ghost" type="button" onClick={() => removeItem(index)} disabled={pending}>
-                  Удалить
-                </button>
+      {/* Блок B. Общие данные */}
+      <div className="section-card grid" style={{ gap: "1rem", padding: "1.25rem" }}>
+        <label className="grid" style={{ gap: "0.35rem" }}>
+          <span className="text-soft" style={{ fontSize: "0.9rem" }}>Название шаблона</span>
+          <input className="input" name="name" value={name} onChange={(event) => setName(event.target.value)} />
+        </label>
+
+        <label className="grid" style={{ gap: "0.35rem" }}>
+          <span className="text-soft" style={{ fontSize: "0.9rem" }}>Описание</span>
+          <textarea
+            className="input"
+            name="description"
+            rows={2}
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+          />
+        </label>
+      </div>
+
+      {/* Блок C. Пункты чек-листа */}
+      <div className="grid" style={{ gap: "0.75rem" }}>
+        {items.map((item, index) => {
+          const isExpanded = expandedItems.has(index);
+          const scheduleLabel = 
+            item.scheduleType === "daily" ? "Каждый день" :
+            item.scheduleType === "weekday" ? "По дням недели" :
+            item.scheduleType === "month_days" ? "В определённые дни месяца" :
+            "В диапазон дней месяца";
+
+          return (
+            <div key={`${targetProfile.id}-${index}`} className="section-card" style={{ padding: "1rem" }}>
+              <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", cursor: "pointer" }} onClick={() => toggleItem(index)}>
+                <div className="grid" style={{ gap: "0.2rem", flex: 1 }}>
+                  <strong style={{ fontSize: "1.05rem" }}>Пункт {index + 1}{item.title ? `: ${item.title}` : ""}</strong>
+                  {!isExpanded && (
+                    <div className="row" style={{ gap: "0.5rem", flexWrap: "wrap", fontSize: "0.85rem", color: "var(--text-soft)" }}>
+                      <span>🕒 {scheduleLabel}</span>
+                      {item.isRequired && <span style={{ color: "var(--danger)" }}>• Обязательный</span>}
+                      {item.allowTaskEscalation && <span style={{ color: "var(--info)" }}>• Можно создать задачу</span>}
+                    </div>
+                  )}
+                </div>
+                <div className="row" style={{ gap: "0.5rem", alignItems: "center" }}>
+                  <button className="btn btn-ghost" type="button" onClick={(e) => { e.stopPropagation(); removeItem(index); }} disabled={pending} style={{ padding: "0.25rem 0.5rem", color: "var(--danger)" }}>
+                    Удалить
+                  </button>
+                  <span style={{ fontSize: "1.2rem", transform: isExpanded ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>▼</span>
+                </div>
               </div>
 
-              <div className="grid" style={{ gap: "0.75rem" }}>
-                <input
-                  className="input"
-                  name="item_title"
-                  placeholder="Что проверить (краткое название)"
-                  value={item.title}
-                  onChange={(event) => updateItem(index, { title: event.target.value })}
-                />
-                <textarea
-                  className="input"
-                  name="item_description"
-                  rows={2}
-                  placeholder="Подсказка или критерий проверки"
-                  value={item.description}
-                  onChange={(event) => updateItem(index, { description: event.target.value })}
-                />
-              </div>
-
-              <div className="grid" style={{ gap: "0.75rem", background: "color-mix(in srgb, var(--panel-soft) 40%, transparent)", padding: "1rem", borderRadius: "var(--radius)" }}>
-                <label className="grid" style={{ gap: "0.35rem" }}>
-                  <span className="text-soft" style={{ fontSize: "0.85rem" }}>
-                    Тип расписания
-                  </span>
-                  <select
-                    className="select"
-                    name="item_schedule_type"
-                    value={item.scheduleType}
-                    onChange={(event) => updateItem(index, { scheduleType: event.target.value as EditorItem["scheduleType"] })}
-                  >
-                    <option value="daily">Ежедневно</option>
-                    <option value="weekday">День недели</option>
-                    <option value="month_days">Список дней месяца</option>
-                    <option value="month_range">Диапазон дней месяца</option>
-                  </select>
-                </label>
-
-                {item.scheduleType !== "weekday" ? (
-                  <input type="hidden" name="item_weekday" value={item.weekday} />
-                ) : null}
-
-                {item.scheduleType !== "month_days" ? (
-                  <input type="hidden" name="item_month_days" value={item.monthDays} />
-                ) : null}
-
-                {item.scheduleType !== "month_range" ? (
-                  <>
-                    <input type="hidden" name="item_range_start" value={item.rangeStart} />
-                    <input type="hidden" name="item_range_end" value={item.rangeEnd} />
-                  </>
-                ) : null}
-
-                {item.scheduleType === "weekday" ? (
-                  <label className="grid" style={{ gap: "0.35rem" }}>
-                    <span className="text-soft" style={{ fontSize: "0.85rem" }}>
-                      День недели
-                    </span>
-                    <select
-                      className="select"
-                      name="item_weekday"
-                      value={item.weekday}
-                      onChange={(event) => updateItem(index, { weekday: event.target.value })}
-                    >
-                      <option value="1">Понедельник</option>
-                      <option value="2">Вторник</option>
-                      <option value="3">Среда</option>
-                      <option value="4">Четверг</option>
-                      <option value="5">Пятница</option>
-                      <option value="6">Суббота</option>
-                      <option value="7">Воскресенье</option>
-                    </select>
-                  </label>
-                ) : null}
-
-                {item.scheduleType === "month_days" ? (
-                  <label className="grid" style={{ gap: "0.35rem" }}>
-                    <span className="text-soft" style={{ fontSize: "0.85rem" }}>
-                      Дни месяца через запятую
-                    </span>
-                    <input
-                      className="input"
-                      name="item_month_days"
-                      placeholder="02,05,08,11"
-                      value={item.monthDays}
-                      onChange={(event) => updateItem(index, { monthDays: event.target.value })}
-                    />
-                  </label>
-                ) : null}
-
-                {item.scheduleType === "month_range" ? (
-                  <div className="grid" style={{ gap: "0.75rem", gridTemplateColumns: "1fr 1fr" }}>
+              {isExpanded && (
+                <div className="grid" style={{ gap: "1.25rem", marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid var(--border)" }}>
+                  {/* Секция Основное */}
+                  <div className="grid" style={{ gap: "0.75rem" }}>
                     <label className="grid" style={{ gap: "0.35rem" }}>
-                      <span className="text-soft" style={{ fontSize: "0.85rem" }}>
-                        От (день)
-                      </span>
+                      <span className="text-soft" style={{ fontSize: "0.85rem" }}>Название пункта</span>
                       <input
                         className="input"
-                        type="number"
-                        min={1}
-                        max={31}
-                        name="item_range_start"
-                        value={item.rangeStart}
-                        onChange={(event) => updateItem(index, { rangeStart: event.target.value })}
+                        name="item_title"
+                        placeholder="Что проверить"
+                        value={item.title}
+                        onChange={(event) => updateItem(index, { title: event.target.value })}
                       />
                     </label>
                     <label className="grid" style={{ gap: "0.35rem" }}>
-                      <span className="text-soft" style={{ fontSize: "0.85rem" }}>
-                        До (день)
-                      </span>
-                      <input
+                      <span className="text-soft" style={{ fontSize: "0.85rem" }}>Описание / критерий проверки</span>
+                      <textarea
                         className="input"
-                        type="number"
-                        min={1}
-                        max={31}
-                        name="item_range_end"
-                        value={item.rangeEnd}
-                        onChange={(event) => updateItem(index, { rangeEnd: event.target.value })}
+                        name="item_description"
+                        rows={2}
+                        placeholder="Подсказка для инженера"
+                        value={item.description}
+                        onChange={(event) => updateItem(index, { description: event.target.value })}
                       />
                     </label>
                   </div>
-                ) : null}
-              </div>
 
-              <div className="row" style={{ gap: "1.5rem", flexWrap: "wrap", marginTop: "0.25rem" }}>
-                <label className="row" style={{ gap: "0.5rem", alignItems: "center" }}>
-                  <input
-                    type="checkbox"
-                    name="item_is_required"
-                    value={String(index)}
-                    checked={item.isRequired}
-                    onChange={(event) => updateItem(index, { isRequired: event.target.checked })}
-                  />
-                  Обязательный пункт
-                </label>
+                  {/* Секция Когда показывать */}
+                  <div className="grid" style={{ gap: "0.75rem" }}>
+                    <strong style={{ fontSize: "0.95rem" }}>Когда показывать</strong>
+                    <div className="row" style={{ gap: "0.75rem", flexWrap: "wrap" }}>
+                      <select
+                        className="select"
+                        style={{ flex: "1 1 200px" }}
+                        name="item_schedule_type"
+                        value={item.scheduleType}
+                        onChange={(event) => updateItem(index, { scheduleType: event.target.value as EditorItem["scheduleType"] })}
+                      >
+                        <option value="daily">Каждый день</option>
+                        <option value="weekday">По дням недели</option>
+                        <option value="month_days">В определённые дни месяца</option>
+                        <option value="month_range">В диапазон дней месяца</option>
+                      </select>
 
-                <label className="row" style={{ gap: "0.5rem", alignItems: "center" }}>
-                  <input
-                    type="checkbox"
-                    name="item_allow_task_escalation"
-                    value={String(index)}
-                    checked={item.allowTaskEscalation}
-                    onChange={(event) => updateItem(index, { allowTaskEscalation: event.target.checked })}
-                  />
-                  Разрешить создание задачи
-                </label>
-              </div>
+                      {item.scheduleType !== "weekday" ? (
+                        <input type="hidden" name="item_weekday" value={item.weekday} />
+                      ) : (
+                        <select
+                          className="select"
+                          style={{ flex: "1 1 200px" }}
+                          name="item_weekday"
+                          value={item.weekday}
+                          onChange={(event) => updateItem(index, { weekday: event.target.value })}
+                        >
+                          <option value="1">Понедельник</option>
+                          <option value="2">Вторник</option>
+                          <option value="3">Среда</option>
+                          <option value="4">Четверг</option>
+                          <option value="5">Пятница</option>
+                          <option value="6">Суббота</option>
+                          <option value="7">Воскресенье</option>
+                        </select>
+                      )}
+
+                      {item.scheduleType !== "month_days" ? (
+                        <input type="hidden" name="item_month_days" value={item.monthDays} />
+                      ) : (
+                        <div className="grid" style={{ flex: "2 1 300px", gap: "0.2rem" }}>
+                          <input
+                            className="input"
+                            name="item_month_days"
+                            placeholder="Например: 1, 15, 28"
+                            value={item.monthDays}
+                            onChange={(event) => updateItem(index, { monthDays: event.target.value })}
+                          />
+                          <span className="text-soft" style={{ fontSize: "0.75rem" }}>Укажите числа через запятую</span>
+                        </div>
+                      )}
+
+                      {item.scheduleType !== "month_range" ? (
+                        <>
+                          <input type="hidden" name="item_range_start" value={item.rangeStart} />
+                          <input type="hidden" name="item_range_end" value={item.rangeEnd} />
+                        </>
+                      ) : (
+                        <div className="row" style={{ flex: "2 1 300px", gap: "0.5rem", alignItems: "center" }}>
+                          <span className="text-soft">с</span>
+                          <input
+                            className="input"
+                            type="number"
+                            min={1}
+                            max={31}
+                            name="item_range_start"
+                            value={item.rangeStart}
+                            onChange={(event) => updateItem(index, { rangeStart: event.target.value })}
+                            style={{ width: "80px" }}
+                          />
+                          <span className="text-soft">по</span>
+                          <input
+                            className="input"
+                            type="number"
+                            min={1}
+                            max={31}
+                            name="item_range_end"
+                            value={item.rangeEnd}
+                            onChange={(event) => updateItem(index, { rangeEnd: event.target.value })}
+                            style={{ width: "80px" }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Секция Поведение */}
+                  <div className="row" style={{ gap: "1.5rem", flexWrap: "wrap", paddingTop: "0.5rem" }}>
+                    <label className="row" style={{ gap: "0.5rem", alignItems: "center", cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        name="item_is_required"
+                        value={String(index)}
+                        checked={item.isRequired}
+                        onChange={(event) => updateItem(index, { isRequired: event.target.checked })}
+                      />
+                      Обязательный пункт
+                    </label>
+
+                    <label className="row" style={{ gap: "0.5rem", alignItems: "center", cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        name="item_allow_task_escalation"
+                        value={String(index)}
+                        checked={item.allowTaskEscalation}
+                        onChange={(event) => updateItem(index, { allowTaskEscalation: event.target.checked })}
+                      />
+                      Можно создать задачу
+                    </label>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", position: "sticky", bottom: "1rem", background: "var(--bg)", padding: "1rem", borderRadius: "var(--radius)", boxShadow: "0 -4px 20px rgba(0,0,0,0.1)", zIndex: 10 }}>
         <button className="btn btn-ghost" type="button" onClick={addItem} disabled={pending}>
           + Добавить пункт
         </button>
@@ -386,6 +429,7 @@ export function ChecklistTemplatesAdmin({
 }) {
   const [screenMode, setScreenMode] = useState<TemplateScreenMode>("directory");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedRole, setSelectedRole] = useState<DailyChecklistRole | "all">("all");
   const [selectedProfileId, setSelectedProfileId] = useState("");
 
   const templateByProfile = useMemo(
@@ -394,8 +438,11 @@ export function ChecklistTemplatesAdmin({
   );
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId) ?? null;
   const filteredProfiles = useMemo(
-    () => profiles.filter((profile) => profileMatchesQuery(profile, searchQuery)),
-    [profiles, searchQuery]
+    () => profiles.filter((profile) => {
+      if (selectedRole !== "all" && profile.role !== selectedRole) return false;
+      return profileMatchesQuery(profile, searchQuery);
+    }),
+    [profiles, searchQuery, selectedRole]
   );
 
   const assigneeOptions: AssigneeOption[] = profiles.map((profile) => ({
@@ -429,26 +476,31 @@ export function ChecklistTemplatesAdmin({
     <div className="grid" style={{ gap: "1rem" }}>
       {screenMode === "directory" ? (
         <>
-          <div className="section-card grid" style={{ gap: "0.85rem", padding: "1rem" }}>
-            <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-              <div className="grid" style={{ gap: "0.2rem" }}>
-                <strong style={{ fontSize: "1rem" }}>Все персональные шаблоны</strong>
-                <span className="text-soft">Откройте существующий шаблон сотрудника или создайте новый персональный чек-лист.</span>
-              </div>
-              <button className="btn btn-accent" type="button" onClick={startCreate}>
-                Создать новый чек-лист
-              </button>
-            </div>
-
-            <label className="grid" style={{ gap: "0.35rem" }}>
-              <span className="text-soft">Поиск по сотрудникам</span>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
+            <div className="row" style={{ gap: "0.5rem", flexWrap: "wrap", flex: "1 1 300px" }}>
               <input
                 className="input"
+                style={{ flex: "1 1 200px" }}
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Введите ФИО или роль..."
+                placeholder="Поиск по ФИО..."
               />
-            </label>
+              <select 
+                className="select" 
+                style={{ flex: "0 0 auto", minWidth: "160px" }}
+                value={selectedRole}
+                onChange={(e) => setSelectedRole(e.target.value as DailyChecklistRole | "all")}
+              >
+                <option value="all">Все роли</option>
+                <option value="lead">Ведущий инженер</option>
+                <option value="engineer">Инженер</option>
+                <option value="object_engineer">Инженер объекта</option>
+              </select>
+            </div>
+            
+            <button className="btn btn-accent" type="button" onClick={startCreate} style={{ flex: "0 0 auto" }}>
+              Новый шаблон
+            </button>
           </div>
 
           {filteredProfiles.length ? (
@@ -469,19 +521,15 @@ export function ChecklistTemplatesAdmin({
       ) : (
         <div className="grid" style={{ gap: "1rem" }}>
           {screenMode === "create" ? (
-            <div className="section-card grid" style={{ gap: "0.75rem", padding: "1rem" }}>
+            <div className="section-card grid" style={{ gap: "1rem", padding: "1.25rem" }}>
               <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-                <div className="grid" style={{ gap: "0.2rem" }}>
-                  <strong style={{ fontSize: "1rem" }}>Создать новый чек-лист</strong>
-                  <span className="text-soft">Сначала выберите сотрудника, для которого будет создан персональный шаблон.</span>
-                </div>
+                <strong style={{ fontSize: "1.1rem" }}>Для кого создаём шаблон</strong>
                 <button className="btn btn-ghost" type="button" onClick={backToDirectory}>
-                  К списку шаблонов
+                  К списку
                 </button>
               </div>
 
               <label className="grid" style={{ gap: "0.35rem" }}>
-                <span className="text-soft">Сотрудник</span>
                 <AssigneeCombobox
                   name="profile_id_create_search"
                   options={assigneeOptions}

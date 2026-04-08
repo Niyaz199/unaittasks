@@ -5,11 +5,12 @@ import {
   listDailyChecklistControlProfilesForProfile,
   listDailyChecklistControlRowsForProfile,
 } from "@/lib/daily-checklists/queries";
+import { toDailyChecklistOperationalDate } from "@/lib/daily-checklists/scheduler";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
 import { BackButton } from "@/components/ui/back-button";
-import { DataTable } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/page-header";
+import { ChecklistControlFilters } from "@/components/checklists/checklist-control-filters";
 import type { DailyChecklistRole } from "@/lib/types";
 
 const ROLE_LABELS: Record<DailyChecklistRole, string> = {
@@ -40,7 +41,9 @@ export default async function DailyChecklistControlPage({
       ? (search.role as DailyChecklistRole)
       : "all";
   const selectedProfileId = typeof search.profileId === "string" ? search.profileId : "all";
-  const selectedDate = typeof search.date === "string" ? search.date : "";
+  
+  const today = toDailyChecklistOperationalDate(new Date());
+  const selectedDate = typeof search.date === "string" ? search.date : today;
 
   const [profiles, rows] = await Promise.all([
     listDailyChecklistControlProfilesForProfile(supabase, profile),
@@ -59,81 +62,75 @@ export default async function DailyChecklistControlPage({
         actions={<BackButton fallback="/checklists" label="← К чек-листам" />}
       />
 
-      <form className="section-card row" style={{ gap: "0.75rem", flexWrap: "wrap", padding: "1rem" }}>
-        <label className="grid" style={{ gap: "0.35rem", minWidth: "12rem" }}>
-          <span className="text-soft">Дата</span>
-          <input className="input" type="date" name="date" defaultValue={selectedDate} />
-        </label>
-
-        <label className="grid" style={{ gap: "0.35rem", minWidth: "12rem" }}>
-          <span className="text-soft">Роль</span>
-          <select className="select" name="role" defaultValue={selectedRole}>
-            <option value="all">Все роли</option>
-            <option value="lead">Ведущий инженер</option>
-            <option value="engineer">Инженер</option>
-            <option value="object_engineer">Инженер объекта</option>
-          </select>
-        </label>
-
-        <label className="grid" style={{ gap: "0.35rem", minWidth: "14rem" }}>
-          <span className="text-soft">Сотрудник</span>
-          <select className="select" name="profileId" defaultValue={selectedProfileId}>
-            <option value="all">Все сотрудники</option>
-            {profiles.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.full_name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div className="row" style={{ alignItems: "flex-end" }}>
-          <button className="btn btn-accent" type="submit">
-            Применить
-          </button>
-        </div>
-      </form>
+      <ChecklistControlFilters 
+        selectedDate={selectedDate}
+        selectedRole={selectedRole}
+        selectedProfileId={selectedProfileId}
+        profiles={profiles}
+      />
 
       {rows.length ? (
-        <DataTable
-          columns={[
-            { key: "full_name", label: "Сотрудник" },
-            { key: "role", label: "Роль" },
-            { key: "date", label: "Дата" },
-            { key: "status", label: "Статус" },
-            { key: "metrics", label: "Метрики" },
-            { key: "actions", label: "" },
-          ]}
-        >
-          {rows.map((row) => (
-            <tr key={row.run_id}>
-              <td>{row.full_name}</td>
-              <td>{ROLE_LABELS[row.role]}</td>
-              <td>{new Date(`${row.operational_date}T00:00:00Z`).toLocaleDateString("ru-RU")}</td>
-              <td>
-                <Badge tone={row.status === "completed" ? "success" : "warning"}>
-                  {row.status === "completed" ? "День закрыт" : "В работе"}
-                </Badge>
-              </td>
-              <td>
-                <div className="row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
-                  <Badge tone="info">Всего: {row.total_items}</Badge>
-                  <Badge tone="success">Ок: {row.completed_items}</Badge>
-                  <Badge tone="danger">Проблем: {row.problem_items}</Badge>
-                  <Badge tone="warning">Хвосты: {row.pending_required_items}</Badge>
-                  <Badge tone="neutral">Задачи: {row.linked_tasks}</Badge>
+        <div className="grid" style={{ gap: "0.75rem" }}>
+          {rows.map((row) => {
+            const hasProblems = row.problem_items > 0;
+            const hasPending = row.pending_required_items > 0;
+            const borderColor = hasProblems ? "var(--danger)" : hasPending ? "var(--warning)" : "transparent";
+            const isCompleted = row.status === "completed";
+
+            return (
+              <Link 
+                key={row.run_id} 
+                href={`/checklists/runs/${row.run_id}`}
+                className="section-card grid"
+                style={{ 
+                  padding: "1rem", 
+                  gap: "0.75rem", 
+                  textDecoration: "none", 
+                  color: "inherit",
+                  borderLeft: `4px solid ${borderColor}`,
+                  transition: "background 0.2s"
+                }}
+              >
+                <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: "1rem" }}>
+                  <div className="grid" style={{ gap: "0.25rem" }}>
+                    <strong style={{ fontSize: "1.05rem" }}>{row.full_name}</strong>
+                    <span className="text-soft" style={{ fontSize: "0.85rem" }}>
+                      {ROLE_LABELS[row.role]} • {new Date(`${row.operational_date}T00:00:00Z`).toLocaleDateString("ru-RU")}
+                    </span>
+                  </div>
+                  <div className="row" style={{ alignItems: "center", gap: "0.5rem" }}>
+                    <Badge tone={isCompleted ? "success" : "neutral"} variant="outline">
+                      {isCompleted ? "День закрыт" : "В работе"}
+                    </Badge>
+                    <span className="text-soft">›</span>
+                  </div>
                 </div>
-              </td>
-              <td>
-                <Link className="btn btn-ghost" href={`/checklists/runs/${row.run_id}`}>
-                  Подробнее
-                </Link>
-              </td>
-            </tr>
-          ))}
-        </DataTable>
+
+                <div className="row" style={{ gap: "1rem", flexWrap: "wrap", fontSize: "0.9rem" }}>
+                  <span className="text-soft">
+                    Выполнено: <strong style={{ color: "var(--text)" }}>{row.completed_items} / {row.total_items}</strong>
+                  </span>
+                  
+                  {hasProblems ? (
+                    <span style={{ color: "var(--danger)", fontWeight: 500 }}>⚠️ {row.problem_items} проблем</span>
+                  ) : null}
+
+                  {hasPending ? (
+                    <span style={{ color: "var(--warning)", fontWeight: 500 }}>⏳ {row.pending_required_items} хвостов</span>
+                  ) : null}
+
+                  {row.linked_tasks > 0 ? (
+                    <span style={{ color: "var(--info)" }}>🔗 {row.linked_tasks} задач</span>
+                  ) : null}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
       ) : (
-        <div className="section-card text-soft">По выбранным фильтрам данных нет.</div>
+        <div className="section-card text-soft" style={{ padding: "1.5rem", textAlign: "center" }}>
+          По выбранным фильтрам данных нет.
+        </div>
       )}
     </section>
   );

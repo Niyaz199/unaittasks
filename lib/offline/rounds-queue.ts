@@ -68,21 +68,39 @@ function emitRoundsQueueChanged() {
 }
 
 async function getQueue() {
-  return (await queueStorage.getItem<PendingRoundsCheckin[]>("queue")) ?? [];
+  try {
+    return (await queueStorage.getItem<PendingRoundsCheckin[]>("queue")) ?? [];
+  } catch (error) {
+    console.error("Failed to read rounds queue from IndexedDB:", error);
+    return [];
+  }
 }
 
 async function setQueue(queue: PendingRoundsCheckin[]) {
-  await queueStorage.setItem("queue", queue);
-  emitRoundsQueueChanged();
+  try {
+    await queueStorage.setItem("queue", queue);
+    emitRoundsQueueChanged();
+  } catch (error) {
+    console.error("Failed to write rounds queue to IndexedDB:", error);
+  }
 }
 
 async function getMeta(): Promise<QueueMeta> {
-  return (await queueStorage.getItem<QueueMeta>("meta")) ?? { lastSyncedAt: null };
+  try {
+    return (await queueStorage.getItem<QueueMeta>("meta")) ?? { lastSyncedAt: null };
+  } catch (error) {
+    console.error("Failed to read rounds meta from IndexedDB:", error);
+    return { lastSyncedAt: null };
+  }
 }
 
 async function setMeta(meta: QueueMeta) {
-  await queueStorage.setItem("meta", meta);
-  emitRoundsQueueChanged();
+  try {
+    await queueStorage.setItem("meta", meta);
+    emitRoundsQueueChanged();
+  } catch (error) {
+    console.error("Failed to write rounds meta to IndexedDB:", error);
+  }
 }
 
 async function readApiError(response: Response, fallback: string) {
@@ -208,9 +226,18 @@ export async function pruneSyncedRoundsCheckins() {
 }
 
 export async function saveRoundsScannerSnapshot(snapshot: RoundsScannerSnapshot) {
-  await snapshotStorage.setItem("scanner_snapshot", snapshot);
+  try {
+    await snapshotStorage.setItem("scanner_snapshot", snapshot);
+  } catch (error) {
+    console.error("Failed to save rounds scanner snapshot to IndexedDB:", error);
+  }
 }
 
 export async function loadRoundsScannerSnapshot() {
-  return (await snapshotStorage.getItem<RoundsScannerSnapshot>("scanner_snapshot")) ?? null;
+  try {
+    return (await snapshotStorage.getItem<RoundsScannerSnapshot>("scanner_snapshot")) ?? null;
+  } catch (error) {
+    console.error("Failed to load rounds scanner snapshot from IndexedDB:", error);
+    return null;
+  }
 }

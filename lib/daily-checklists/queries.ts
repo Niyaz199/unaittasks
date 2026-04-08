@@ -206,6 +206,34 @@ async function getRunByProfileAndDate(supabase: SupabaseClient, profileId: strin
   return data ? mapRun(data as RunRow) : null;
 }
 
+export async function getDailyChecklistPendingCountForProfile(
+  supabase: SupabaseClient,
+  profile: Profile,
+  requestedDate?: string | null
+) {
+  if (!canAccessDailyChecklists(profile.role) || !isDailyChecklistTemplateRole(profile.role)) {
+    return 0;
+  }
+
+  const operationalDate = normalizeOperationalDate(requestedDate);
+  const run = await getRunByProfileAndDate(supabase, profile.id, operationalDate);
+
+  if (run) {
+    const { count, error } = await supabase
+      .from("daily_checklist_item_runs")
+      .select("id", { count: "exact", head: true })
+      .eq("run_id", run.id)
+      .eq("status", "pending");
+    if (error) throw error;
+    return count ?? 0;
+  }
+
+  const template = await getActiveTemplateForProfileId(supabase, profile.id);
+  if (!template) return 0;
+
+  return filterTemplateItemsForDate(template.items ?? [], operationalDate).length;
+}
+
 async function loadAttachmentsByItemRunIds(supabase: SupabaseClient, itemRunIds: string[]) {
   if (!itemRunIds.length) return new Map<string, DailyChecklistAttachment[]>();
   const { data, error } = await supabase
