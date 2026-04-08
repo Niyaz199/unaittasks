@@ -8,6 +8,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { writeAudit } from "@/lib/audit";
 import { createTaskFromPayload, parseTaskCreateFormData } from "@/lib/task-create";
 import {
+  canAddTaskTeamMember,
   canChangeStatus,
   canCreateOrAssignTask,
   canTransitionTaskStatus,
@@ -386,7 +387,9 @@ export async function addTaskTeamMemberAction(formData: FormData) {
 
   const memberRole = await getRoleByUserId(supabase, payload.userId);
   if (!memberRole) throw new Error("\u041d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d \u043f\u0440\u043e\u0444\u0438\u043b\u044c \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0430 \u043a\u043e\u043c\u0430\u043d\u0434\u044b");
-  if (!canCreateOrAssignTask(profile.role, memberRole, { objectEngineerScoped })) {
+  const isSelfAdd = payload.userId === profile.id;
+  const isAssigneeAdd = payload.userId === task.assigned_to;
+  if (!canAddTaskTeamMember(profile.role, memberRole, { objectEngineerScoped, isSelfAdd, isAssigneeAdd })) {
     throw new Error("\u041d\u0435\u0434\u043e\u0441\u0442\u0430\u0442\u043e\u0447\u043d\u043e \u043f\u0440\u0430\u0432 \u0434\u043b\u044f \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u0438\u044f \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u043e\u0433\u043e \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0430 \u043a\u043e\u043c\u0430\u043d\u0434\u044b");
   }
   await assertTaskObjectAccessForUser(

@@ -251,6 +251,21 @@ function TemplateProfileEditor({
                   </select>
                 </label>
 
+                {item.scheduleType !== "weekday" ? (
+                  <input type="hidden" name="item_weekday" value={item.weekday} />
+                ) : null}
+
+                {item.scheduleType !== "month_days" ? (
+                  <input type="hidden" name="item_month_days" value={item.monthDays} />
+                ) : null}
+
+                {item.scheduleType !== "month_range" ? (
+                  <>
+                    <input type="hidden" name="item_range_start" value={item.rangeStart} />
+                    <input type="hidden" name="item_range_end" value={item.rangeEnd} />
+                  </>
+                ) : null}
+
                 {item.scheduleType === "weekday" ? (
                   <label className="grid" style={{ gap: "0.35rem" }}>
                     <span className="text-soft" style={{ fontSize: "0.85rem" }}>

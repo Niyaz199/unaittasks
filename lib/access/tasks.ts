@@ -27,6 +27,23 @@ export function canCreateOrAssignTask(
   return canAssignRole(actorRole, targetRole);
 }
 
+export function canAddTaskTeamMember(
+  actorRole: Role,
+  targetRole: Role,
+  options: {
+    objectEngineerScoped: boolean;
+    isSelfAdd?: boolean;
+    isAssigneeAdd?: boolean;
+  }
+) {
+  if (options.isSelfAdd || options.isAssigneeAdd) {
+    if (!canCreateTasks(actorRole)) return false;
+    if (actorRole === "object_engineer" && !options.objectEngineerScoped) return false;
+    return true;
+  }
+  return canCreateOrAssignTask(actorRole, targetRole, options);
+}
+
 export function canManageTaskTeam(role: Role, options: { objectEngineerScoped: boolean }) {
   if (!canManageTaskTeamByRole(role)) return false;
   if (role !== "object_engineer") return true;

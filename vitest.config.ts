@@ -9,7 +9,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["lib/daily-checklists/**/*.test.ts"],
+    include: ["lib/daily-checklists/**/*.test.ts", "lib/access/**/*.test.ts"],
     exclude: ["tests/**"],
   },
 });

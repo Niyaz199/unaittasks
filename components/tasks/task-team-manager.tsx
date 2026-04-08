@@ -11,12 +11,23 @@ type Props = {
   taskId: string;
   canManage: boolean;
   currentUserId: string;
+  currentUserName: string;
   assigneeId: string;
+  assigneeName: string;
   initialMembers: Member[];
   allCandidates: Array<{ id: string; full_name: string; email?: string | null }>;
 };
 
-export function TaskTeamManager({ taskId, canManage, currentUserId, assigneeId, initialMembers, allCandidates }: Props) {
+export function TaskTeamManager({
+  taskId,
+  canManage,
+  currentUserId,
+  currentUserName,
+  assigneeId,
+  assigneeName,
+  initialMembers,
+  allCandidates
+}: Props) {
   const [members, setMembers] = useState<Member[]>(initialMembers);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -34,12 +45,18 @@ export function TaskTeamManager({ taskId, canManage, currentUserId, assigneeId, 
 
   const selectedIds = members.map((member) => member.user_id);
   const quickActions = [
-    ...(currentUserId && currentUserId !== assigneeId ? [{ id: currentUserId, label: "Добавить себя" }] : []),
-    ...(assigneeId ? [{ id: assigneeId, label: "Добавить ответственного" }] : [])
+    ...(currentUserId && currentUserId !== assigneeId
+      ? [{ id: currentUserId, label: "Добавить себя", fullName: currentUserName }]
+      : []),
+    ...(assigneeId ? [{ id: assigneeId, label: "Добавить ответственного", fullName: assigneeName }] : [])
   ];
 
   function resolveNameById(userId: string) {
-    return options.find((option) => option.id === userId)?.label ?? "Пользователь";
+    return (
+      quickActions.find((action) => action.id === userId)?.fullName ??
+      options.find((option) => option.id === userId)?.label ??
+      "Пользователь"
+    );
   }
 
   function addMember(userId: string) {

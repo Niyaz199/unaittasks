@@ -282,7 +282,9 @@ export default async function TaskDetailsPage({
             taskId={task.id}
             canManage={canManageTeam}
             currentUserId={profile.id}
+            currentUserName={profile.full_name}
             assigneeId={task.assigned_to}
+            assigneeName={assigneeName}
             initialMembers={teamMembers}
             allCandidates={teamCandidates.map((item) => ({ id: item.id, full_name: item.full_name }))}
           />

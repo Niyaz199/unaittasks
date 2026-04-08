@@ -1,6 +1,7 @@
 import type { Role, TaskStatus } from "@/lib/types";
 import {
   canArchiveTask,
+  canAddTaskTeamMember,
   canAssignRole,
   canChangeTaskStatus,
   canCreateOrAssignTask,
@@ -33,6 +34,7 @@ function getObjectEngineerId(task: TaskAccess) {
 
 export {
   canArchiveTask,
+  canAddTaskTeamMember,
   canAssignRole,
   canCreateOrAssignTask,
   canManageTaskTeam,
