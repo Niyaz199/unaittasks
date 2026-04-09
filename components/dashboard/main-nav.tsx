@@ -8,6 +8,8 @@ import type { Role } from "@/lib/types";
 import {
   canAccessDirectories,
   canAccessDailyChecklists,
+  canAccessPurchaseRequestsModule,
+  canAccessWarehouseModule,
   canManageObjectRooms,
   canManageObjects,
   canManageDailyChecklistTemplates,
@@ -90,6 +92,14 @@ const Icons = {
       <circle cx="12" cy="7" r="4"></circle>
     </svg>
   ),
+  Warehouse: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 7.5 12 3l9 4.5"></path>
+      <path d="M3 7.5V18l9 3 9-3V7.5"></path>
+      <path d="M12 21V12"></path>
+      <path d="m3 7.5 9 4.5 9-4.5"></path>
+    </svg>
+  ),
   Chevron: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="9 18 15 12 9 6"></polyline>
@@ -107,6 +117,8 @@ export function MainNav({ role, currentPath, checklistPendingCount }: Props) {
   const canOpenPprCalendar = canAccessPprCalendarScreens(role);
   const canOpenPprTasks = canAccessPprTaskScreens(role);
   const canOpenPprTaskRegistry = canOpenPprTasks && role !== "tech";
+  const canOpenWarehouse = canAccessWarehouseModule(role);
+  const canOpenPurchaseRequests = canAccessPurchaseRequestsModule(role);
   const canOpenChecklists = canAccessDailyChecklists(role);
   const canOpenChecklistTemplates = canManageDailyChecklistTemplates(role);
   const canOpenChecklistControl = canReadDailyChecklistControl(role);
@@ -135,6 +147,18 @@ export function MainNav({ role, currentPath, checklistPendingCount }: Props) {
         { href: "/checklists/templates", label: "Шаблоны чек-листов", show: canOpenChecklists && canOpenChecklistTemplates },
         { href: "/new", label: "Новые", show: true },
         { href: "/archive", label: "Архив", show: true },
+      ],
+    },
+    {
+      id: "warehouse",
+      title: "Склад",
+      icon: Icons.Warehouse,
+      show: canOpenWarehouse || canOpenPurchaseRequests,
+      href: "/warehouse/items",
+      items: [
+        { href: "/warehouse/items", label: "ТМЦ", show: canOpenWarehouse },
+        { href: "/warehouse/locations", label: "Места хранения", show: canOpenWarehouse },
+        { href: "/purchase-requests", label: "Заявки на закупку", show: canOpenPurchaseRequests },
       ],
     },
     {

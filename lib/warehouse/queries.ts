@@ -1,0 +1,347 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { listActorScopedObjectsForProfile, hasActorScopedObjectAccessForProfile } from "@/lib/access/object-scope";
+import { isGlobalObjectScopeRole } from "@/lib/access/matrix";
+import { canAccessWarehouseModule, canManageWarehouseCatalog } from "@/lib/capabilities";
+import type { Profile } from "@/lib/types";
+
+type NamedRelation = { name: string } | Array<{ name: string }> | null;
+
+export type StockItemRow = {
+  id: string;
+  object_id: string;
+  name: string;
+  kind: "material" | "spare_part" | "consumable" | "component";
+  unit: string;
+  sku: string | null;
+  min_qty: number;
+  current_qty: number;
+  comment: string | null;
+  is_active: boolean;
+  created_at: string;
+  object: NamedRelation;
+};
+
+export type StockLocationRow = {
+  id: string;
+  object_id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  object: NamedRelation;
+};
+
+export type StockLocationQrCode = {
+  id: string;
+  object_id: string;
+  location_id: string;
+  qr_token: string;
+  is_active: boolean;
+  generated_at: string;
+};
+
+export type StockBalanceRow = {
+  id: string;
+  object_id: string;
+  item_id: string;
+  location_id: string;
+  qty: number;
+  updated_at: string;
+  item: {
+    id: string;
+    name: string;
+    kind: StockItemRow["kind"];
+    unit: string;
+    min_qty: number;
+    current_qty: number;
+    is_active: boolean;
+  } | Array<{
+    id: string;
+    name: string;
+    kind: StockItemRow["kind"];
+    unit: string;
+    min_qty: number;
+    current_qty: number;
+    is_active: boolean;
+  }> | null;
+};
+
+export type StockMovementRow = {
+  id: string;
+  object_id: string;
+  item_id: string;
+  location_id: string;
+  movement_type: "receipt" | "issue" | "adjustment_in" | "adjustment_out";
+  quantity: number;
+  note: string | null;
+  actor_id: string;
+  created_at: string;
+  actor: { full_name: string } | Array<{ full_name: string }> | null;
+  item: { name: string; unit: string } | Array<{ name: string; unit: string }> | null;
+};
+
+export type EquipmentComponentRow = {
+  id: string;
+  object_id: string;
+  equipment_id: string;
+  stock_item_id: string;
+  quantity: number;
+  reserve_qty: number;
+  is_critical: boolean;
+  note: string | null;
+  created_at: string;
+  stock_item:
+    | {
+        id: string;
+        name: string;
+        kind: StockItemRow["kind"];
+        unit: string;
+        min_qty: number;
+        current_qty: number;
+      }
+    | Array<{
+        id: string;
+        name: string;
+        kind: StockItemRow["kind"];
+        unit: string;
+        min_qty: number;
+        current_qty: number;
+      }>
+    | null;
+};
+
+async function listWarehouseScopedObjects(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">
+) {
+  return listActorScopedObjectsForProfile(supabase, profile);
+}
+
+export async function listWarehouseReadableObjectsForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">
+) {
+  if (!canAccessWarehouseModule(profile.role)) {
+    throw new Error("Недостаточно прав для чтения склада");
+  }
+
+  return listWarehouseScopedObjects(supabase, profile);
+}
+
+export async function listWarehouseManageableObjectsForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">
+) {
+  if (!canManageWarehouseCatalog(profile.role)) {
+    throw new Error("Недостаточно прав для управления складом");
+  }
+
+  return listWarehouseScopedObjects(supabase, profile);
+}
+
+export async function listStockItemsForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">,
+  options: { objectId?: string; lowStockOnly?: boolean } = {}
+) {
+  if (!canAccessWarehouseModule(profile.role)) {
+    throw new Error("Недостаточно прав для чтения ТМЦ");
+  }
+
+  const objects = await listWarehouseReadableObjectsForProfile(supabase, profile);
+  if (!objects.length && !isGlobalObjectScopeRole(profile.role)) return [];
+
+  let query = supabase
+    .from("stock_items")
+    .select("id,object_id,name,kind,unit,sku,min_qty,current_qty,comment,is_active,created_at,object:objects(name)")
+    .order("name", { ascending: true });
+
+  if (options.objectId) {
+    query = query.eq("object_id", options.objectId);
+  }
+
+  const { data, error } =
+    isGlobalObjectScopeRole(profile.role) ? await query : await query.in("object_id", objects.map((item) => item.id));
+  if (error) throw error;
+
+  const rows = (data ?? []) as StockItemRow[];
+  return options.lowStockOnly ? rows.filter((row) => row.current_qty <= row.min_qty) : rows;
+}
+
+export async function listStockItemOptionsForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">,
+  options: { objectId?: string; includeInactive?: boolean } = {}
+) {
+  const rows = await listStockItemsForProfile(supabase, profile, { objectId: options.objectId });
+  return rows.filter((row) => options.includeInactive || row.is_active);
+}
+
+export async function listStockLocationsForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">,
+  options: { objectId?: string } = {}
+) {
+  if (!canAccessWarehouseModule(profile.role)) {
+    throw new Error("Недостаточно прав для чтения мест хранения");
+  }
+
+  const objects = await listWarehouseReadableObjectsForProfile(supabase, profile);
+  if (!objects.length && !isGlobalObjectScopeRole(profile.role)) return [];
+
+  let query = supabase
+    .from("stock_locations")
+    .select("id,object_id,name,description,is_active,created_at,object:objects(name)")
+    .order("name", { ascending: true });
+
+  if (options.objectId) {
+    query = query.eq("object_id", options.objectId);
+  }
+
+  const { data, error } =
+    isGlobalObjectScopeRole(profile.role) ? await query : await query.in("object_id", objects.map((item) => item.id));
+  if (error) throw error;
+  return (data ?? []) as StockLocationRow[];
+}
+
+export async function getStockLocationByIdForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">,
+  locationId: string
+) {
+  if (!canAccessWarehouseModule(profile.role)) {
+    throw new Error("Недостаточно прав для чтения места хранения");
+  }
+
+  const { data: location, error } = await supabase
+    .from("stock_locations")
+    .select("id,object_id,name,description,is_active,created_at,object:objects(name)")
+    .eq("id", locationId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!location) return null;
+
+  const canAccess =
+    isGlobalObjectScopeRole(profile.role) ||
+    (await hasActorScopedObjectAccessForProfile(supabase, profile, location.object_id));
+  if (!canAccess) return null;
+
+  const [{ data: qrCode, error: qrError }, { data: balances, error: balancesError }, { data: movements, error: movementsError }] =
+    await Promise.all([
+      supabase
+        .from("stock_location_qr_codes")
+        .select("id,object_id,location_id,qr_token,is_active,generated_at")
+        .eq("location_id", locationId)
+        .eq("is_active", true)
+        .maybeSingle(),
+      supabase
+        .from("stock_balances")
+        .select(
+          "id,object_id,item_id,location_id,qty,updated_at,item:stock_items(id,name,kind,unit,min_qty,current_qty,is_active)"
+        )
+        .eq("location_id", locationId)
+        .order("updated_at", { ascending: false }),
+      supabase
+        .from("stock_movements")
+        .select(
+          "id,object_id,item_id,location_id,movement_type,quantity,note,actor_id,created_at,actor:profiles(full_name),item:stock_items(name,unit)"
+        )
+        .eq("location_id", locationId)
+        .order("created_at", { ascending: false })
+        .limit(20),
+    ]);
+
+  if (qrError) throw qrError;
+  if (balancesError) throw balancesError;
+  if (movementsError) throw movementsError;
+
+  return {
+    location: location as StockLocationRow,
+    qrCode: (qrCode ?? null) as StockLocationQrCode | null,
+    balances: (balances ?? []) as StockBalanceRow[],
+    movements: (movements ?? []) as StockMovementRow[],
+  };
+}
+
+export async function getStockLocationQrCodeByTokenForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "role">,
+  qrToken: string
+) {
+  if (!canAccessWarehouseModule(profile.role)) {
+    throw new Error("Недостаточно прав для QR склада");
+  }
+
+  const { data, error } = await supabase.rpc("stock_location_resolve_qr_token", { _token: qrToken.trim() });
+  if (error) throw error;
+
+  const row = Array.isArray(data) ? data[0] ?? null : data ?? null;
+  return row as StockLocationQrCode | null;
+}
+
+export async function regenerateStockLocationQrCodeForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">,
+  locationId: string
+) {
+  if (!canManageWarehouseCatalog(profile.role)) {
+    throw new Error("Недостаточно прав для регенерации QR места хранения");
+  }
+
+  const { data: location, error: locationError } = await supabase
+    .from("stock_locations")
+    .select("id,object_id")
+    .eq("id", locationId)
+    .maybeSingle();
+  if (locationError) throw locationError;
+  if (!location) {
+    throw new Error("Место хранения не найдено");
+  }
+
+  const canManage =
+    isGlobalObjectScopeRole(profile.role) ||
+    (await hasActorScopedObjectAccessForProfile(supabase, profile, location.object_id));
+  if (!canManage) {
+    throw new Error("Место хранения недоступно для регенерации QR");
+  }
+
+  const { data, error } = await supabase.rpc("stock_location_regenerate_qr", { _location_id: locationId });
+  if (error) throw error;
+
+  const row = Array.isArray(data) ? data[0] ?? null : data ?? null;
+  return row as StockLocationQrCode | null;
+}
+
+export async function listEquipmentComponentsForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">,
+  equipmentId: string
+) {
+  if (!canAccessWarehouseModule(profile.role)) {
+    throw new Error("Недостаточно прав для чтения состава оборудования");
+  }
+
+  const { data: equipment, error: equipmentError } = await supabase
+    .from("ppr_equipment")
+    .select("id,object_id")
+    .eq("id", equipmentId)
+    .maybeSingle();
+  if (equipmentError) throw equipmentError;
+  if (!equipment) return [];
+
+  const canAccess =
+    isGlobalObjectScopeRole(profile.role) ||
+    (await hasActorScopedObjectAccessForProfile(supabase, profile, equipment.object_id));
+  if (!canAccess) return [];
+
+  const { data, error } = await supabase
+    .from("ppr_equipment_components")
+    .select(
+      "id,object_id,equipment_id,stock_item_id,quantity,reserve_qty,is_critical,note,created_at,stock_item:stock_items(id,name,kind,unit,min_qty,current_qty)"
+    )
+    .eq("equipment_id", equipmentId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+
+  return (data ?? []) as EquipmentComponentRow[];
+}

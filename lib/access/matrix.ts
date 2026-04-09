@@ -28,6 +28,9 @@ const ROUNDS_CONFIG_ROLES: Role[] = ["admin", "chief", "lead", "engineer", "obje
 const DAILY_CHECKLIST_ROLES: Role[] = ["admin", "chief", "lead", "engineer", "object_engineer"];
 const DAILY_CHECKLIST_TEMPLATE_MANAGEMENT_ROLES: Role[] = ["admin", "chief"];
 const DAILY_CHECKLIST_CONTROL_ROLES: Role[] = ["admin", "chief", "lead"];
+const WAREHOUSE_MODULE_ROLES: Role[] = ["admin", "chief", "lead", "engineer", "object_engineer", "tech"];
+const WAREHOUSE_MANAGE_ROLES: Role[] = ["admin", "chief", "lead", "engineer", "object_engineer"];
+const PURCHASE_REQUEST_MANAGE_ROLES: Role[] = ["admin", "chief", "lead", "object_engineer"];
 const GLOBAL_OBJECT_SCOPE_ROLES: Role[] = ["admin", "chief", "lead"];
 
 function includesRole(roles: readonly Role[], role: Role) {
@@ -147,6 +150,22 @@ export function canManageRoundsConfig(role: Role) {
 
 export function canAccessDailyChecklists(role: Role) {
   return includesRole(DAILY_CHECKLIST_ROLES, role);
+}
+
+export function canAccessWarehouseModule(role: Role) {
+  return includesRole(WAREHOUSE_MODULE_ROLES, role);
+}
+
+export function canManageWarehouseCatalog(role: Role) {
+  return includesRole(WAREHOUSE_MANAGE_ROLES, role);
+}
+
+export function canCreatePurchaseRequests(role: Role) {
+  return canAccessWarehouseModule(role);
+}
+
+export function canManagePurchaseRequests(role: Role) {
+  return includesRole(PURCHASE_REQUEST_MANAGE_ROLES, role);
 }
 
 export function canManageDailyChecklistTemplates(role: Role) {

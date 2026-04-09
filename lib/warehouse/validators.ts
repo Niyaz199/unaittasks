@@ -1,0 +1,42 @@
+import { z } from "zod";
+
+const uuidSchema = z.string().uuid();
+
+export const stockItemKindSchema = z.enum(["material", "spare_part", "consumable", "component"]);
+export const stockMovementTypeSchema = z.enum(["receipt", "issue", "adjustment_in", "adjustment_out"]);
+
+export const stockItemFormSchema = z.object({
+  objectId: uuidSchema,
+  name: z.string().trim().min(2),
+  kind: stockItemKindSchema.default("material"),
+  unit: z.string().trim().min(1).max(20),
+  sku: z.string().trim().max(120).optional().nullable(),
+  minQty: z.coerce.number().min(0),
+  comment: z.string().trim().max(4000).optional().nullable(),
+  isActive: z.boolean().default(true),
+});
+
+export const stockLocationFormSchema = z.object({
+  objectId: uuidSchema,
+  name: z.string().trim().min(2),
+  description: z.string().trim().max(2000).optional().nullable(),
+  isActive: z.boolean().default(true),
+});
+
+export const stockMovementFormSchema = z.object({
+  objectId: uuidSchema,
+  itemId: uuidSchema,
+  locationId: uuidSchema,
+  movementType: stockMovementTypeSchema,
+  quantity: z.coerce.number().positive(),
+  note: z.string().trim().max(2000).optional().nullable(),
+});
+
+export const equipmentComponentFormSchema = z.object({
+  equipmentId: uuidSchema,
+  stockItemId: uuidSchema,
+  quantity: z.coerce.number().positive(),
+  reserveQty: z.coerce.number().min(0),
+  isCritical: z.boolean().default(false),
+  note: z.string().trim().max(2000).optional().nullable(),
+});

@@ -79,6 +79,47 @@ export type TaskAttachment = {
   url?: string | null;
 };
 
+export type StockItemKind = "material" | "spare_part" | "consumable" | "component";
+export type StockMovementType = "receipt" | "issue" | "adjustment_in" | "adjustment_out";
+export type PurchaseRequestStatus = "new" | "in_progress" | "fulfilled" | "cancelled";
+
+export type StockItem = {
+  id: string;
+  object_id: string;
+  name: string;
+  kind: StockItemKind;
+  unit: string;
+  sku: string | null;
+  min_qty: number;
+  current_qty: number;
+  comment: string | null;
+  is_active: boolean;
+  created_at: string;
+};
+
+export type StockLocation = {
+  id: string;
+  object_id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+};
+
+export type PurchaseRequest = {
+  id: string;
+  object_id: string;
+  status: PurchaseRequestStatus;
+  source: "manual" | "low_stock";
+  description: string | null;
+  requested_by: string;
+  assigned_to: string | null;
+  created_at: string;
+  updated_at: string;
+  fulfilled_at: string | null;
+  cancelled_at: string | null;
+};
+
 export type DailyChecklistRole = Extract<Role, "lead" | "engineer" | "object_engineer">;
 export type DailyChecklistTemplateStatus = "in_progress" | "completed";
 export type DailyChecklistItemStatus = "pending" | "done" | "problem";

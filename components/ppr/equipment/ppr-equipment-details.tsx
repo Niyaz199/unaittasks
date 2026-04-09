@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { pprEquipmentStatusMeta } from "@/lib/ppr/presentation";
 import { PprEquipmentQrBlock } from "@/components/ppr/equipment/ppr-equipment-qr-block";
+import { PprEquipmentComponentsManager } from "@/components/ppr/equipment/ppr-equipment-components-manager";
 
 type EquipmentDetails = {
   id: string;
@@ -26,14 +27,42 @@ type ActiveQrCode = {
   is_active: boolean;
 } | null;
 
+type EquipmentComponentItem = {
+  id: string;
+  name: string;
+  kind: "material" | "spare_part" | "consumable" | "component";
+  unit: string;
+  min_qty: number;
+  current_qty: number;
+};
+
+type EquipmentComponentRow = {
+  id: string;
+  stock_item_id: string;
+  quantity: number;
+  reserve_qty: number;
+  is_critical: boolean;
+  note: string | null;
+  stock_item: EquipmentComponentItem | EquipmentComponentItem[] | null;
+};
+
 function resolveName(raw: { name: string } | Array<{ name: string }> | null | undefined) {
   if (Array.isArray(raw)) return raw[0]?.name ?? "—";
   return raw?.name ?? "—";
 }
-
-
-
-export function PprEquipmentDetails({ equipment, qrCode }: { equipment: EquipmentDetails; qrCode: ActiveQrCode }) {
+export function PprEquipmentDetails({
+  equipment,
+  qrCode,
+  components,
+  stockItems,
+  canManageComponents,
+}: {
+  equipment: EquipmentDetails;
+  qrCode: ActiveQrCode;
+  components: EquipmentComponentRow[];
+  stockItems: EquipmentComponentItem[];
+  canManageComponents: boolean;
+}) {
   const statusMeta = pprEquipmentStatusMeta[equipment.status];
 
   return (
@@ -113,6 +142,19 @@ export function PprEquipmentDetails({ equipment, qrCode }: { equipment: Equipmen
                 </div>
               )}
             </div>
+          </div>
+
+          <div className="section-card" style={{ padding: "1.5rem" }}>
+            <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.1rem", fontWeight: 600 }}>Составляющие</h3>
+            <div className="text-soft" style={{ marginBottom: "1rem", fontSize: "0.9rem" }}>
+              Здесь указывается, из каких ТМЦ состоит оборудование и какие элементы должны постоянно быть в резерве на складе.
+            </div>
+            <PprEquipmentComponentsManager
+              equipmentId={equipment.id}
+              components={components}
+              stockItems={stockItems}
+              canManage={canManageComponents}
+            />
           </div>
 
           <div className="section-card" style={{ padding: "1.5rem" }}>

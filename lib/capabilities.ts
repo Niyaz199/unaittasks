@@ -2,12 +2,16 @@ import type { Role } from "@/lib/types";
 import {
   canAccessDailyChecklists as canAccessDailyChecklistsByRole,
   canAccessDirectories as canAccessDirectoriesByRole,
+  canAccessWarehouseModule as canAccessWarehouseModuleByRole,
   canAccessUserManagement,
+  canCreatePurchaseRequests as canCreatePurchaseRequestsByRole,
   canCreateTasks,
   canManageDailyChecklistTemplates as canManageDailyChecklistTemplatesByRole,
   canManageFloorsDirectory as canManageFloorsDirectoryByRole,
   canManageObjects as canManageObjectsByRole,
   canManageTaskTeam as canManageTaskTeamByRole,
+  canManagePurchaseRequests as canManagePurchaseRequestsByRole,
+  canManageWarehouseCatalog as canManageWarehouseCatalogByRole,
   canManageObjectRoomsDirectory as canManageObjectRoomsDirectoryByRole,
   canManageRoomTypesDirectory as canManageRoomTypesDirectoryByRole,
   canReadDailyChecklistControl as canReadDailyChecklistControlByRole,
@@ -64,6 +68,26 @@ export function canManageObjectRooms(role: Role) {
 
 export function canAccessDailyChecklists(role: Role) {
   return canAccessDailyChecklistsByRole(role);
+}
+
+export function canAccessWarehouseModule(role: Role) {
+  return canAccessWarehouseModuleByRole(role);
+}
+
+export function canManageWarehouseCatalog(role: Role) {
+  return canManageWarehouseCatalogByRole(role);
+}
+
+export function canAccessPurchaseRequestsModule(role: Role) {
+  return canAccessWarehouseModuleByRole(role);
+}
+
+export function canCreatePurchaseRequests(role: Role) {
+  return canCreatePurchaseRequestsByRole(role);
+}
+
+export function canManagePurchaseRequests(role: Role) {
+  return canManagePurchaseRequestsByRole(role);
 }
 
 export function canManageDailyChecklistTemplates(role: Role) {
