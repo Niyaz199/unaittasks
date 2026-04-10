@@ -80,49 +80,35 @@ export function StockLocationQrBlock({ locationId, objectName, locationName, qrC
   }
 
   return (
-    <div className="grid" style={{ gap: "1rem" }}>
-      <div className="row" style={{ alignItems: "flex-start", gap: "1.5rem", flexWrap: "wrap" }}>
-        <div
-          style={{
-            padding: "0.75rem",
-            background: "#fff",
-            borderRadius: "12px",
-            width: "max-content",
-            display: "grid",
-            gap: "0.6rem",
-            justifyItems: "center",
-          }}
-        >
-          <QRCodeSVG value={baseUrl ? qrUrl : qrHref} size={160} level="H" includeMargin ref={svgRef} />
-          <div style={{ color: "#4b5563", fontSize: "0.85rem", fontWeight: 500, maxWidth: "180px", textAlign: "center", lineHeight: 1.35 }}>
-            {objectName}
-          </div>
-          <div style={{ color: "#111827", fontWeight: 700, maxWidth: "180px", textAlign: "center", lineHeight: 1.35 }}>
-            {locationName}
-          </div>
+    <div className="warehouse-qr-shell">
+      <div className="warehouse-qr-layout">
+        <div className="warehouse-qr-preview">
+          <QRCodeSVG value={baseUrl ? qrUrl : qrHref} size={132} level="H" includeMargin ref={svgRef} />
+          <div className="warehouse-qr-preview-eyebrow">{objectName}</div>
+          <div className="warehouse-qr-preview-title">{locationName}</div>
         </div>
 
-        <div className="grid" style={{ gap: "0.75rem", flex: 1, minWidth: "220px" }}>
-          <div>
+        <div className="warehouse-qr-content">
+          <div className="warehouse-qr-meta">
             <div className="text-soft">Токен</div>
-            <div style={{ fontFamily: "monospace", fontSize: "1.05rem", wordBreak: "break-all" }}>{activeQrCode.qr_token}</div>
+            <div className="warehouse-qr-token">{activeQrCode.qr_token}</div>
           </div>
-          <div className="row" style={{ gap: "1rem", flexWrap: "wrap" }}>
-            <div>
+          <div className="warehouse-qr-stats">
+            <div className="warehouse-qr-stat">
               <div className="text-soft">Сгенерирован</div>
               <div>{new Date(activeQrCode.generated_at).toLocaleString("ru-RU")}</div>
             </div>
-            <div>
+            <div className="warehouse-qr-stat">
               <div className="text-soft">Статус</div>
               <div>{activeQrCode.is_active ? "Активен" : "Неактивен"}</div>
             </div>
           </div>
 
-          <div className="row" style={{ gap: "0.5rem", marginTop: "0.5rem", flexWrap: "wrap" }}>
+          <div className="warehouse-qr-actions">
             <button type="button" className="btn btn-ghost" onClick={handleCopy}>
               {copied ? "Скопировано!" : "Копировать ссылку"}
             </button>
-            <a href={qrHref} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ textDecoration: "none" }}>
+            <a href={qrHref} target="_blank" rel="noopener noreferrer" className="btn btn-ghost warehouse-qr-link">
               Открыть
             </a>
             <button type="button" className="btn btn-ghost" onClick={handleDownload}>
@@ -135,7 +121,7 @@ export function StockLocationQrBlock({ locationId, objectName, locationName, qrC
             ) : null}
           </div>
 
-          {message ? <div className="text-soft">{message}</div> : null}
+          {message ? <div className="text-soft warehouse-qr-message">{message}</div> : null}
         </div>
       </div>
     </div>

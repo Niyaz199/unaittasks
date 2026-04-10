@@ -58,6 +58,29 @@ function assertObjectAllowed(role: string, objectIds: string[], objectId: string
   }
 }
 
+async function replaceStockItemSystemGroups(
+  supabase: Awaited<ReturnType<typeof requireProfile>>["supabase"],
+  itemId: string,
+  objectId: string,
+  systemGroupIds: string[]
+) {
+  const uniqueIds = [...new Set(systemGroupIds)];
+
+  const { error: deleteError } = await supabase.from("stock_item_system_groups").delete().eq("stock_item_id", itemId);
+  if (deleteError) throw deleteError;
+
+  if (!uniqueIds.length) return;
+
+  const { error: insertError } = await supabase.from("stock_item_system_groups").insert(
+    uniqueIds.map((systemGroupId) => ({
+      object_id: objectId,
+      stock_item_id: itemId,
+      system_group_id: systemGroupId,
+    }))
+  );
+  if (insertError) throw insertError;
+}
+
 async function getStockItemObjectId(
   supabase: Awaited<ReturnType<typeof requireProfile>>["supabase"],
   itemId: string
@@ -87,6 +110,7 @@ async function getLocationObjectId(
 
 export async function createStockItemAction(formData: FormData) {
   const { profile, supabase, managedObjectIds } = await requireWarehouseManager();
+  const initialQtyRaw = formData.get("initial_qty");
   const payload = stockItemFormSchema.parse({
     objectId: String(formData.get("object_id") ?? ""),
     name: String(formData.get("name") ?? ""),
@@ -94,11 +118,21 @@ export async function createStockItemAction(formData: FormData) {
     unit: String(formData.get("unit") ?? "шт"),
     sku: String(formData.get("sku") ?? "") || null,
     minQty: String(formData.get("min_qty") ?? "0"),
+    storageLocationId: String(formData.get("storage_location_id") ?? ""),
+    systemGroupIds: formData
+      .getAll("system_group_ids")
+      .map((value) => String(value))
+      .filter(Boolean),
+    initialQty: initialQtyRaw === null || String(initialQtyRaw).trim() === "" ? null : String(initialQtyRaw),
     comment: String(formData.get("comment") ?? "") || null,
     isActive: formData.get("is_active") === "on",
   });
 
   assertObjectAllowed(profile.role, managedObjectIds, payload.objectId, "Объект недоступен для управления ТМЦ");
+  const locationObjectId = await getLocationObjectId(supabase, payload.storageLocationId);
+  if (locationObjectId !== payload.objectId) {
+    throw new Error("Место хранения должно принадлежать выбранному объекту");
+  }
 
   const { data, error } = await supabase
     .from("stock_items")
@@ -109,12 +143,48 @@ export async function createStockItemAction(formData: FormData) {
       unit: payload.unit.trim(),
       sku: payload.sku?.trim() || null,
       min_qty: payload.minQty,
+      storage_location_id: payload.storageLocationId,
       comment: payload.comment?.trim() || null,
       is_active: payload.isActive,
     })
     .select("id")
     .single();
   if (error) throw error;
+
+  await replaceStockItemSystemGroups(supabase, data.id, payload.objectId, payload.systemGroupIds);
+
+  if (payload.initialQty && payload.initialQty > 0) {
+    const { data: movement, error: movementError } = await supabase
+      .from("stock_movements")
+      .insert({
+        object_id: payload.objectId,
+        item_id: data.id,
+        location_id: payload.storageLocationId,
+        movement_type: "receipt",
+        quantity: payload.initialQty,
+        note: "Первичное оприходование при создании карточки ТМЦ",
+        actor_id: profile.id,
+      })
+      .select("id")
+      .single();
+    if (movementError) throw movementError;
+
+    await writeAudit({
+      actorId: profile.id,
+      action: "create_stock_movement",
+      entityType: "stock_movement",
+      entityId: movement.id,
+      meta: {
+        object_id: payload.objectId,
+        item_id: data.id,
+        location_id: payload.storageLocationId,
+        movement_type: "receipt",
+        quantity: payload.initialQty,
+        source: "stock_item_create",
+      },
+      supabase,
+    });
+  }
 
   await writeAudit({
     actorId: profile.id,
@@ -126,11 +196,15 @@ export async function createStockItemAction(formData: FormData) {
       kind: payload.kind,
       unit: payload.unit.trim(),
       min_qty: payload.minQty,
+      storage_location_id: payload.storageLocationId,
+      system_group_ids: payload.systemGroupIds,
+      initial_qty: payload.initialQty,
     },
     supabase,
   });
 
-  revalidateWarehousePaths();
+  revalidateWarehousePaths(payload.storageLocationId);
+  return { id: data.id };
 }
 
 export async function updateStockItemAction(formData: FormData) {
@@ -143,11 +217,21 @@ export async function updateStockItemAction(formData: FormData) {
     unit: String(formData.get("unit") ?? "шт"),
     sku: String(formData.get("sku") ?? "") || null,
     minQty: String(formData.get("min_qty") ?? "0"),
+    storageLocationId: String(formData.get("storage_location_id") ?? ""),
+    systemGroupIds: formData
+      .getAll("system_group_ids")
+      .map((value) => String(value))
+      .filter(Boolean),
+    initialQty: null,
     comment: String(formData.get("comment") ?? "") || null,
     isActive: formData.get("is_active") === "on",
   });
 
   assertObjectAllowed(profile.role, managedObjectIds, payload.objectId, "Объект недоступен для управления ТМЦ");
+  const locationObjectId = await getLocationObjectId(supabase, payload.storageLocationId);
+  if (locationObjectId !== payload.objectId) {
+    throw new Error("Место хранения должно принадлежать выбранному объекту");
+  }
 
   const { error } = await supabase
     .from("stock_items")
@@ -158,11 +242,14 @@ export async function updateStockItemAction(formData: FormData) {
       unit: payload.unit.trim(),
       sku: payload.sku?.trim() || null,
       min_qty: payload.minQty,
+      storage_location_id: payload.storageLocationId,
       comment: payload.comment?.trim() || null,
       is_active: payload.isActive,
     })
     .eq("id", itemId);
   if (error) throw error;
+
+  await replaceStockItemSystemGroups(supabase, itemId, payload.objectId, payload.systemGroupIds);
 
   await writeAudit({
     actorId: profile.id,
@@ -174,12 +261,15 @@ export async function updateStockItemAction(formData: FormData) {
       kind: payload.kind,
       unit: payload.unit.trim(),
       min_qty: payload.minQty,
+      storage_location_id: payload.storageLocationId,
+      system_group_ids: payload.systemGroupIds,
       is_active: payload.isActive,
     },
     supabase,
   });
 
-  revalidateWarehousePaths();
+  revalidateWarehousePaths(payload.storageLocationId);
+  return { id: itemId };
 }
 
 export async function createStockLocationAction(formData: FormData) {

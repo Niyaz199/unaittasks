@@ -38,8 +38,8 @@ export default async function StockLocationDetailsPage({ params }: { params: Pro
   return (
     <section className="grid">
       <PageHeader
-        title="Место хранения"
-        description="Карточка места хранения с QR, остатками и журналом складских движений."
+        title={details.location.name}
+        description={`Объект: ${Array.isArray(details.location.object) ? (details.location.object[0]?.name ?? "—") : (details.location.object?.name ?? "—")}. Остатки, движения и QR-доступ в одной карточке.`}
         actions={<BackButton fallback="/warehouse/locations" />}
       />
       <StockLocationDetails

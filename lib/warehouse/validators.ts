@@ -12,6 +12,9 @@ export const stockItemFormSchema = z.object({
   unit: z.string().trim().min(1).max(20),
   sku: z.string().trim().max(120).optional().nullable(),
   minQty: z.coerce.number().min(0),
+  storageLocationId: uuidSchema,
+  systemGroupIds: z.array(uuidSchema).default([]),
+  initialQty: z.coerce.number().min(0).optional().nullable(),
   comment: z.string().trim().max(4000).optional().nullable(),
   isActive: z.boolean().default(true),
 });

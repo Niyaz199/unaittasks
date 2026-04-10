@@ -9,6 +9,8 @@ interface SummaryMetric {
   value: string | number;
   tone?: "neutral" | "info" | "success" | "warning" | "danger" | "violet";
   icon?: ReactNode;
+  onClick?: () => void;
+  isActive?: boolean;
 }
 
 export interface PprPageShellProps {
@@ -17,6 +19,9 @@ export interface PprPageShellProps {
   onSearch?: (value: string) => void;
   searchPlaceholder?: string;
   filters?: ReactNode;
+  actions?: ReactNode;
+  toolbarClassName?: string;
+  toolbarBodyClassName?: string;
   
   isEmpty: boolean;
   emptyState: {
@@ -40,6 +45,9 @@ export function PprPageShell({
   onSearch,
   searchPlaceholder,
   filters,
+  actions,
+  toolbarClassName,
+  toolbarBodyClassName,
   isEmpty,
   emptyState,
   isFilteredEmpty,
@@ -52,8 +60,14 @@ export function PprPageShell({
         <DirectorySummary metrics={metrics} />
       )}
 
-      {(onSearch || filters) && (
-        <DirectoryToolbar onSearch={onSearch} searchPlaceholder={searchPlaceholder}>
+      {(onSearch || filters || actions) && (
+        <DirectoryToolbar
+          onSearch={onSearch}
+          searchPlaceholder={searchPlaceholder}
+          actions={actions}
+          className={toolbarClassName}
+          bodyClassName={toolbarBodyClassName}
+        >
           {filters}
         </DirectoryToolbar>
       )}

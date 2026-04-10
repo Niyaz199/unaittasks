@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
+import { ArrowLeft, Boxes, Building2, Filter, Layers3, MapPinned, PackagePlus, Search, TriangleAlert } from "lucide-react";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { PprModal } from "@/components/ppr/ui/ppr-modal";
@@ -25,16 +26,44 @@ type StockItemRow = {
   sku: string | null;
   min_qty: number;
   current_qty: number;
+  storage_location_id: string | null;
   comment: string | null;
   is_active: boolean;
   object: { name: string } | Array<{ name: string }> | null;
+  storage_location: { id: string; name: string } | Array<{ id: string; name: string }> | null;
+  system_group_links:
+    | Array<{
+        id: string;
+        system_group_id: string;
+        system_group: { id: string; name: string; code: string } | Array<{ id: string; name: string; code: string }> | null;
+      }>
+    | null;
 };
 
 type ObjectOption = { id: string; name: string };
+type LocationOption = { id: string; object_id: string; name: string; is_active?: boolean };
+type SystemGroupOption = { id: string; name: string; code: string; is_active?: boolean };
 
 function resolveName(raw: { name: string } | Array<{ name: string }> | null | undefined) {
   if (Array.isArray(raw)) return raw[0]?.name ?? "—";
   return raw?.name ?? "—";
+}
+
+function resolveLocationName(raw: { id: string; name: string } | Array<{ id: string; name: string }> | null | undefined) {
+  if (Array.isArray(raw)) return raw[0]?.name ?? "—";
+  return raw?.name ?? "—";
+}
+
+function resolveSystemGroupLabel(
+  raw:
+    | { id: string; name: string; code: string }
+    | Array<{ id: string; name: string; code: string }>
+    | null
+    | undefined
+) {
+  const group = Array.isArray(raw) ? raw[0] ?? null : raw;
+  if (!group) return null;
+  return group.code ? `${group.name} (${group.code})` : group.name;
 }
 
 function formatQty(value: number, unit: string) {
@@ -44,31 +73,52 @@ function formatQty(value: number, unit: string) {
 export function StockItemsAdmin({
   items,
   objects,
+  locations,
+  systemGroups,
+  canManage,
   initialFilterObjectId = "",
+  currentObject = null,
+  isAllObjectsMode = false,
 }: {
   items: StockItemRow[];
   objects: ObjectOption[];
+  locations: LocationOption[];
+  systemGroups: SystemGroupOption[];
+  canManage: boolean;
   initialFilterObjectId?: string;
+  currentObject?: ObjectOption | null;
+  isAllObjectsMode?: boolean;
 }) {
   const router = useRouter();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterObjectId, setFilterObjectId] = useState(initialFilterObjectId);
+  const scopedObjectId = currentObject?.id ?? initialFilterObjectId;
+  const isObjectScoped = Boolean(currentObject);
+  const [filterObjectId, setFilterObjectId] = useState(scopedObjectId);
   const [filterKind, setFilterKind] = useState<StockItemRow["kind"] | "">("");
+  const [filterLocationId, setFilterLocationId] = useState("");
+  const [filterSystemGroupId, setFilterSystemGroupId] = useState("");
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [lowStockOnly, setLowStockOnly] = useState(false);
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 50;
 
   useEffect(() => {
-    setFilterObjectId(initialFilterObjectId);
-  }, [initialFilterObjectId]);
+    setFilterObjectId(scopedObjectId);
+  }, [scopedObjectId]);
 
   const editingItem = editingId ? items.find((item) => item.id === editingId) ?? null : null;
 
   const filteredItems = useMemo(() => {
-    return items.filter((item) => {
+    const result = items.filter((item) => {
       const matchesObject = filterObjectId === "" || item.object_id === filterObjectId;
       const matchesKind = filterKind === "" || item.kind === filterKind;
+      const matchesLocation = filterLocationId === "" || item.storage_location_id === filterLocationId;
+      const matchesSystemGroup =
+        filterSystemGroupId === "" ||
+        (item.system_group_links ?? []).some((link) => link.system_group_id === filterSystemGroupId);
       const matchesLowStock = !lowStockOnly || item.current_qty <= item.min_qty;
       const search = searchTerm.trim().toLowerCase();
       const matchesSearch =
@@ -76,116 +126,450 @@ export function StockItemsAdmin({
         item.name.toLowerCase().includes(search) ||
         item.sku?.toLowerCase().includes(search) ||
         resolveName(item.object).toLowerCase().includes(search);
-      return matchesObject && matchesKind && matchesLowStock && matchesSearch;
+      return matchesObject && matchesKind && matchesLocation && matchesSystemGroup && matchesLowStock && matchesSearch;
     });
-  }, [filterKind, filterObjectId, items, lowStockOnly, searchTerm]);
 
-  function updateSearchParams(nextObjectId: string) {
+    // Default sort by name, but put critical items first if lowStockOnly is not checked
+    return result.sort((a, b) => {
+      const aCritical = a.current_qty <= a.min_qty;
+      const bCritical = b.current_qty <= b.min_qty;
+      if (!lowStockOnly && aCritical !== bCritical) {
+        return aCritical ? -1 : 1;
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }, [filterKind, filterObjectId, filterLocationId, filterSystemGroupId, items, lowStockOnly, searchTerm]);
+
+  const paginatedItems = useMemo(() => {
+    return filteredItems.slice(0, page * itemsPerPage);
+  }, [filteredItems, page]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filterKind, filterObjectId, filterLocationId, filterSystemGroupId, lowStockOnly, searchTerm]);
+
+  function updateSearchParams({
+    nextObjectId = "",
+    nextShowAll = false,
+  }: {
+    nextObjectId?: string;
+    nextShowAll?: boolean;
+  }) {
     const params = new URLSearchParams();
-    if (nextObjectId) params.set("objectId", nextObjectId);
+    if (nextObjectId) {
+      params.set("objectId", nextObjectId);
+    } else if (nextShowAll) {
+      params.set("showAll", "1");
+    }
     router.replace((`/warehouse/items${params.toString() ? `?${params.toString()}` : ""}`) as Route);
   }
 
-  const metrics = useMemo(() => {
-    const total = items.length;
-    const active = items.filter((item) => item.is_active).length;
-    const lowStock = items.filter((item) => item.current_qty <= item.min_qty).length;
-    const spareParts = items.filter((item) => item.kind === "spare_part").length;
-    return [
-      { label: "Всего карточек", value: total, tone: "neutral" as const },
-      { label: "Активных", value: active, tone: "success" as const },
-      { label: "Ниже минимума", value: lowStock, tone: "danger" as const },
-      { label: "ЗИП", value: spareParts, tone: "info" as const },
-    ];
-  }, [items]);
+  const filteredLocationOptions = useMemo(
+    () => locations.filter((item) => (filterObjectId ? item.object_id === filterObjectId : true)),
+    [filterObjectId, locations]
+  );
+  const lowStockCount = useMemo(() => items.filter((item) => item.current_qty <= item.min_qty).length, [items]);
+  const activeCount = useMemo(() => items.filter((item) => item.is_active).length, [items]);
+  const activeFiltersCount = [filterKind, filterLocationId, filterSystemGroupId, lowStockOnly ? "low-stock" : ""].filter(Boolean).length;
+  const selectedLocationName = filteredLocationOptions.find((item) => item.id === filterLocationId)?.name ?? null;
+  const selectedSystemGroupName = systemGroups.find((item) => item.id === filterSystemGroupId)?.name ?? null;
+  const searchPlaceholder = isObjectScoped
+    ? "Найти ТМЦ по названию или SKU..."
+    : "Поиск по названию, SKU или объекту...";
+
+  useEffect(() => {
+    if (!filterLocationId) return;
+    if (filteredLocationOptions.some((item) => item.id === filterLocationId)) return;
+    setFilterLocationId("");
+  }, [filterLocationId, filteredLocationOptions]);
+
+  const metrics = useMemo(
+    () => [
+      { label: "Всего карточек", value: items.length, tone: "neutral" as const },
+      { label: "Активные", value: activeCount, tone: "success" as const },
+      {
+        label: "Ниже минимума",
+        value: lowStockCount,
+        tone: "danger" as const,
+        isActive: lowStockOnly,
+        onClick: () => setLowStockOnly((current) => !current),
+      },
+      {
+        label: activeFiltersCount > 0 ? "После фильтров" : "В выдаче",
+        value: filteredItems.length,
+        tone: "info" as const,
+      },
+    ],
+    [activeCount, activeFiltersCount, filteredItems.length, items.length, lowStockCount, lowStockOnly]
+  );
+  const scopeBadges = isObjectScoped
+    ? [
+        { key: "items", label: `${items.length} ТМЦ`, tone: "info" as const },
+        { key: "locations", label: `${locations.length} мест хранения`, tone: "neutral" as const },
+        {
+          key: "low-stock",
+          label: lowStockCount > 0 ? `${lowStockCount} ниже минимума` : "Остатки в норме",
+          tone: lowStockCount > 0 ? ("danger" as const) : ("success" as const),
+        },
+      ]
+    : [
+        { key: "all", label: `${objects.length} объектов`, tone: "info" as const },
+        {
+          key: "low-stock",
+          label: lowStockCount > 0 ? `${lowStockCount} ниже минимума` : "Без критичных остатков",
+          tone: lowStockCount > 0 ? ("danger" as const) : ("success" as const),
+        },
+      ];
+
+  const activeFilterChips = [
+    filterKind
+      ? {
+          key: "kind",
+          label: `Тип: ${stockItemKindMeta[filterKind].label}`,
+          onRemove: () => setFilterKind(""),
+        }
+      : null,
+    selectedLocationName
+      ? {
+          key: "location",
+          label: `Хранение: ${selectedLocationName}`,
+          onRemove: () => setFilterLocationId(""),
+        }
+      : null,
+    selectedSystemGroupName
+      ? {
+          key: "system-group",
+          label: `Система: ${selectedSystemGroupName}`,
+          onRemove: () => setFilterSystemGroupId(""),
+        }
+      : null,
+    lowStockOnly
+      ? {
+          key: "low-stock",
+          label: "Ниже минимума",
+          onRemove: () => setLowStockOnly(false),
+        }
+      : null,
+  ].filter(Boolean) as Array<{ key: string; label: string; onRemove: () => void }>;
+
+  function resetFilters() {
+    setFilterKind("");
+    setFilterLocationId("");
+    setFilterSystemGroupId("");
+    setLowStockOnly(false);
+  }
 
   return (
     <>
       <PprPageShell
-        metrics={metrics}
+        metrics={isObjectScoped ? undefined : metrics}
         onSearch={setSearchTerm}
-        searchPlaceholder="Поиск по названию, SKU или объекту..."
+        searchPlaceholder={searchPlaceholder}
+        toolbarClassName={isObjectScoped ? "warehouse-scoped-toolbar" : undefined}
+        toolbarBodyClassName={isObjectScoped ? "warehouse-scoped-toolbar-body" : undefined}
         isEmpty={items.length === 0}
         emptyState={{
           message: "Карточки ТМЦ пока не созданы",
           hint: "Добавьте первую карточку материала, расходника или запасной части.",
         }}
         isFilteredEmpty={filteredItems.length === 0}
-        filters={
+        filteredEmptyState={{
+          message: "Ничего не найдено по текущим условиям",
+          hint:
+            activeFiltersCount > 0
+              ? isObjectScoped
+                ? "Снимите часть фильтров или переключитесь на другое место хранения."
+                : "Снимите часть фильтров или откройте конкретный объект."
+              : "Попробуйте изменить поисковый запрос.",
+        }}
+        actions={
           <>
-            <select
-              className="select"
-              value={filterObjectId}
-              onChange={(event) => {
-                const nextObjectId = event.target.value;
-                setFilterObjectId(nextObjectId);
-                updateSearchParams(nextObjectId);
-              }}
-              style={{ maxWidth: "220px" }}
+            {isAllObjectsMode ? (
+              <select
+                className="select warehouse-toolbar-select"
+                value=""
+                onChange={(event) => {
+                  if (!event.target.value) return;
+                  updateSearchParams({ nextObjectId: event.target.value });
+                }}
+              >
+                <option value="">Открыть объект...</option>
+                {objects.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <button
+              className={`btn warehouse-toolbar-btn ${lowStockOnly ? "btn-danger" : "btn-ghost"}`}
+              type="button"
+              onClick={() => setLowStockOnly(!lowStockOnly)}
             >
-              <option value="">Все объекты</option>
-              {objects.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-
-            <select className="select" value={filterKind} onChange={(event) => setFilterKind(event.target.value as StockItemRow["kind"] | "")}>
-              <option value="">Все типы</option>
-              {Object.entries(stockItemKindMeta).map(([key, meta]) => (
-                <option key={key} value={key}>
-                  {meta.label}
-                </option>
-              ))}
-            </select>
-
-            <label className="row" style={{ gap: "0.4rem", alignItems: "center" }}>
-              <input type="checkbox" checked={lowStockOnly} onChange={(event) => setLowStockOnly(event.target.checked)} />
-              <span>Только критический остаток</span>
-            </label>
-
-            <button className="btn btn-accent" type="button" onClick={() => setIsCreateOpen(true)}>
-              + ТМЦ
+              <TriangleAlert size={15} aria-hidden="true" />
+              Ниже минимума
+              {lowStockCount > 0 && (
+                <span className={`warehouse-toolbar-badge${lowStockOnly ? " is-inverted" : ""}`}>
+                  {lowStockCount}
+                </span>
+              )}
             </button>
+            <button
+              className={`btn warehouse-toolbar-btn ${isFiltersOpen ? "btn-neutral" : "btn-ghost"}`}
+              type="button"
+              onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+            >
+              <Filter size={15} aria-hidden="true" />
+              Фильтры
+              {activeFiltersCount > 0 && (
+                <span className="warehouse-toolbar-badge warehouse-toolbar-badge-accent">
+                  {activeFiltersCount}
+                </span>
+              )}
+            </button>
+            {canManage ? (
+              <button className="btn btn-accent" type="button" onClick={() => setIsCreateOpen(true)}>
+                <PackagePlus size={15} aria-hidden="true" />
+                Новая ТМЦ
+              </button>
+            ) : null}
           </>
         }
+        filters={
+          isFiltersOpen || activeFilterChips.length > 0 ? (
+            <div className="warehouse-filters-shell">
+              {activeFilterChips.length > 0 ? (
+                <div className="warehouse-filter-chips">
+                  {activeFilterChips.map((chip) => (
+                    <button key={chip.key} type="button" className="warehouse-filter-chip" onClick={chip.onRemove}>
+                      {chip.label}
+                      <span aria-hidden="true">×</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
+              {isFiltersOpen ? (
+                <div className="warehouse-filter-grid">
+                  <select className="select" value={filterKind} onChange={(event) => setFilterKind(event.target.value as StockItemRow["kind"] | "")}>
+                    <option value="">Все типы ТМЦ</option>
+                    {Object.entries(stockItemKindMeta).map(([key, meta]) => (
+                      <option key={key} value={key}>
+                        {meta.label}
+                      </option>
+                    ))}
+                  </select>
+
+                  {!isObjectScoped ? (
+                    <select
+                      className="select"
+                      value={filterLocationId}
+                      onChange={(event) => setFilterLocationId(event.target.value)}
+                      disabled={!filteredLocationOptions.length}
+                    >
+                      <option value="">Все места хранения</option>
+                      {filteredLocationOptions.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
+
+                  <select
+                    className="select"
+                    value={filterSystemGroupId}
+                    onChange={(event) => setFilterSystemGroupId(event.target.value)}
+                  >
+                    <option value="">Все группы систем</option>
+                    {systemGroups.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name} {item.code ? `(${item.code})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+
+              <div className="warehouse-filters-meta">
+                <div className="text-soft warehouse-filters-results">
+                  Найдено карточек: {filteredItems.length}
+                </div>
+                
+                {activeFiltersCount > 0 && (
+                  <button 
+                    className="btn btn-ghost" 
+                    type="button" 
+                    onClick={resetFilters}
+                  >
+                    Сбросить всё
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : null
+        }
       >
+        {isObjectScoped || isAllObjectsMode ? (
+          <div className="section-card warehouse-items-scope">
+            <div className="warehouse-items-scope-top">
+              <div className="warehouse-items-scope-copy">
+                <div className="warehouse-items-scope-eyebrow">{isObjectScoped ? "Каталог объекта" : "Обзорный режим"}</div>
+                <div className="warehouse-items-scope-head">
+                  <div className="warehouse-items-scope-title-row">
+                    {isObjectScoped ? <Building2 size={18} aria-hidden="true" /> : <Layers3 size={18} aria-hidden="true" />}
+                    <div className="warehouse-items-scope-title">{isObjectScoped ? currentObject?.name : "Все объекты"}</div>
+                  </div>
+                  <div className="warehouse-items-scope-badges">
+                    {scopeBadges.map((badge) => (
+                      <Badge key={badge.key} tone={badge.tone}>
+                        {badge.label}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                <div className="text-soft warehouse-items-scope-subtitle">
+                  {isObjectScoped
+                    ? "Сначала уточните место хранения, затем используйте фильтры только для детализации списка."
+                    : "Этот режим нужен для обзора. Для повседневной работы удобнее открыть один объект и работать уже внутри него."}
+                </div>
+              </div>
+
+              <div className="warehouse-items-scope-actions">
+                <button className="btn btn-ghost" type="button" onClick={() => updateSearchParams({})}>
+                  <ArrowLeft size={15} aria-hidden="true" />
+                  К объектам
+                </button>
+                {isObjectScoped ? (
+                  <button className="btn btn-ghost" type="button" onClick={() => updateSearchParams({ nextShowAll: true })}>
+                    <Layers3 size={15} aria-hidden="true" />
+                    Весь каталог
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="warehouse-items-scope-grid">
+              {isObjectScoped ? (
+                <>
+                  <label className="warehouse-items-scope-field">
+                    <span className="warehouse-items-scope-label">Объект</span>
+                    <div className="warehouse-items-scope-input">
+                      <Building2 size={16} aria-hidden="true" />
+                      <select
+                        className="select"
+                        value={currentObject?.id ?? ""}
+                        onChange={(event) => updateSearchParams({ nextObjectId: event.target.value })}
+                      >
+                        {objects.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </label>
+
+                  <label className="warehouse-items-scope-field">
+                    <span className="warehouse-items-scope-label">Место хранения</span>
+                    <div className="warehouse-items-scope-input">
+                      <MapPinned size={16} aria-hidden="true" />
+                      <select
+                        className="select"
+                        value={filterLocationId}
+                        onChange={(event) => setFilterLocationId(event.target.value)}
+                        disabled={!filteredLocationOptions.length}
+                      >
+                        <option value="">Все места хранения</option>
+                        {filteredLocationOptions.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </label>
+
+                  <div className="warehouse-items-scope-field">
+                    <span className="warehouse-items-scope-label">Как работать с каталогом</span>
+                    <div className="warehouse-items-scope-hint-list">
+                      <div className="warehouse-items-scope-hint-item">
+                        <Search size={15} aria-hidden="true" />
+                        Сначала ищите по SKU или названию
+                      </div>
+                      <div className="warehouse-items-scope-hint-item">
+                        <Boxes size={15} aria-hidden="true" />
+                        Затем уточняйте место хранения и тип
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="warehouse-items-scope-note text-soft">
+                  Выберите объект через список сверху или вернитесь к карточкам объектов, если нужен более спокойный вход в каталог.
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
+
         <div className="desktop-only">
           <DataTable
+            className="table-zebra table-dense warehouse-items-table"
             columns={[
               { key: "name", label: "ТМЦ" },
               { key: "kind", label: "Тип" },
-              { key: "object", label: "Объект" },
-              { key: "stock", label: "Остаток" },
+              ...(isObjectScoped ? [] : [{ key: "object", label: "Объект" }]),
+              { key: "storage", label: "Хранение" },
+              { key: "stock", label: "Остаток", className: "text-right" },
               { key: "status", label: "Статус" },
-              { key: "actions", label: "Действия" },
+              { key: "actions", label: "Действия", className: "text-right" },
             ]}
           >
-            {filteredItems.map((item) => {
+            {paginatedItems.map((item) => {
               const isLowStock = item.current_qty <= item.min_qty;
+              const systemGroupsLabel = (item.system_group_links ?? [])
+                .map((link) => resolveSystemGroupLabel(link.system_group))
+                .filter(Boolean)
+                .join(", ");
               return (
-                <tr key={item.id}>
+                <tr key={item.id} className={isLowStock ? "warehouse-row-alert" : undefined}>
                   <td>
                     <div style={{ fontWeight: 600 }}>{item.name}</div>
-                    <div className="text-soft">{item.sku ? `SKU: ${item.sku}` : `Ед. изм.: ${item.unit}`}</div>
+                    <div className="text-soft" style={{ fontSize: "0.85rem" }}>
+                      {item.sku ? `SKU: ${item.sku}` : null}
+                    </div>
+                    {systemGroupsLabel ? (
+                      <div className="text-soft" style={{ fontSize: "0.8rem", marginTop: "0.2rem", maxWidth: "250px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={systemGroupsLabel}>
+                        {systemGroupsLabel}
+                      </div>
+                    ) : null}
                   </td>
                   <td>{stockItemKindMeta[item.kind].label}</td>
-                  <td>{resolveName(item.object)}</td>
-                  <td>
-                    <div>{formatQty(item.current_qty, item.unit)}</div>
-                    <div className="text-soft">Мин.: {formatQty(item.min_qty, item.unit)}</div>
-                  </td>
-                  <td>
-                    <div className="row" style={{ gap: "0.4rem", flexWrap: "wrap" }}>
-                      <Badge tone={item.is_active ? "success" : "neutral"}>{item.is_active ? "Активна" : "Неактивна"}</Badge>
-                      {isLowStock ? <Badge tone="danger">Ниже минимума</Badge> : <Badge tone="info">Остаток в норме</Badge>}
+                  {!isObjectScoped ? <td>{resolveName(item.object)}</td> : null}
+                  <td>{resolveLocationName(item.storage_location)}</td>
+                  <td className="text-right tabular-nums">
+                    <div style={{ fontWeight: 500, color: isLowStock ? "var(--danger)" : "inherit" }}>
+                      {formatQty(item.current_qty, item.unit)}
+                    </div>
+                    <div className="text-soft" style={{ fontSize: "0.8rem" }}>
+                      мин. {formatQty(item.min_qty, item.unit)}
                     </div>
                   </td>
                   <td>
-                    <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(item.id)}>
-                      Изменить
-                    </button>
+                    <div className="row" style={{ gap: "0.4rem", flexWrap: "wrap" }}>
+                      {!item.is_active && <Badge tone="neutral">Неактивна</Badge>}
+                      {isLowStock && <Badge tone="danger">Ниже минимума</Badge>}
+                    </div>
+                  </td>
+                  <td className="text-right">
+                    {canManage ? (
+                      <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(item.id)}>
+                        Изменить
+                      </button>
+                    ) : (
+                      <span className="text-soft">Просмотр</span>
+                    )}
                   </td>
                 </tr>
               );
@@ -194,36 +578,82 @@ export function StockItemsAdmin({
         </div>
 
         <div className="mobile-cards mobile-only">
-          {filteredItems.map((item) => {
+          {paginatedItems.map((item) => {
             const isLowStock = item.current_qty <= item.min_qty;
             return (
-              <div key={item.id} className="section-card mobile-card">
-                <div className="grid" style={{ gap: "0.55rem" }}>
-                  <div style={{ fontWeight: 600 }}>{item.name}</div>
-                  <div className="text-soft">{stockItemKindMeta[item.kind].label}</div>
-                  <div className="text-soft">Объект: {resolveName(item.object)}</div>
-                  <div className="text-soft">Остаток: {formatQty(item.current_qty, item.unit)}</div>
-                  <div className="text-soft">Мин.: {formatQty(item.min_qty, item.unit)}</div>
-                  <div className="row" style={{ gap: "0.4rem", flexWrap: "wrap" }}>
-                    <Badge tone={item.is_active ? "success" : "neutral"}>{item.is_active ? "Активна" : "Неактивна"}</Badge>
-                    {isLowStock ? <Badge tone="danger">Ниже минимума</Badge> : null}
+              <div key={item.id} className="section-card mobile-card" style={{ padding: "0.8rem", display: "grid", gap: "0.6rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: "1rem", lineHeight: 1.2 }}>{item.name}</div>
+                    <div className="text-soft" style={{ fontSize: "0.8rem", marginTop: "0.2rem" }}>
+                      {isObjectScoped ? stockItemKindMeta[item.kind].label : `${stockItemKindMeta[item.kind].label} • ${resolveName(item.object)}`}
+                    </div>
+                    {item.sku ? (
+                      <div className="text-soft" style={{ fontSize: "0.76rem", marginTop: "0.18rem" }}>
+                        SKU: {item.sku}
+                      </div>
+                    ) : null}
                   </div>
-                  <div className="ppr-table-actions">
-                    <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(item.id)}>
+                  {isLowStock && <Badge tone="danger">Ниже мин.</Badge>}
+                </div>
+                
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", fontSize: "0.85rem", background: "color-mix(in srgb, var(--panel-soft) 40%, transparent)", padding: "0.6rem", borderRadius: "8px" }}>
+                  <div>
+                    <div className="text-soft" style={{ fontSize: "0.75rem", marginBottom: "0.1rem" }}>Остаток</div>
+                    <div style={{ fontWeight: 600, color: isLowStock ? "var(--danger)" : "inherit" }} className="tabular-nums">
+                      {formatQty(item.current_qty, item.unit)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-soft" style={{ fontSize: "0.75rem", marginBottom: "0.1rem" }}>Минимум</div>
+                    <div className="tabular-nums">{formatQty(item.min_qty, item.unit)}</div>
+                  </div>
+                  {item.storage_location_id && (
+                    <div style={{ gridColumn: "1 / -1", paddingTop: "0.2rem", borderTop: "1px solid color-mix(in srgb, var(--line) 30%, transparent)", marginTop: "0.2rem" }}>
+                      <div className="text-soft" style={{ fontSize: "0.75rem", marginBottom: "0.1rem" }}>Хранение</div>
+                      <div>{resolveLocationName(item.storage_location)}</div>
+                    </div>
+                  )}
+                </div>
+
+                {item.system_group_links?.length ? (
+                  <div className="text-soft" style={{ fontSize: "0.76rem", lineHeight: 1.35 }}>
+                    {item.system_group_links
+                      .map((link) => resolveSystemGroupLabel(link.system_group))
+                      .filter(Boolean)
+                      .join(", ")}
+                  </div>
+                ) : null}
+
+                {canManage && (
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.2rem" }}>
+                    <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(item.id)} style={{ width: "100%", justifyContent: "center" }}>
                       Изменить
                     </button>
                   </div>
-                </div>
+                )}
               </div>
             );
           })}
         </div>
+
+        {paginatedItems.length < filteredItems.length && (
+          <div className="row" style={{ justifyContent: "center", marginTop: "1rem" }}>
+            <button className="btn btn-ghost" type="button" onClick={() => setPage((p) => p + 1)}>
+              Показать еще ({filteredItems.length - paginatedItems.length} осталось)
+            </button>
+          </div>
+        )}
       </PprPageShell>
 
       <PprModal open={isCreateOpen} onClose={() => { setIsCreateOpen(false); setIsDirty(false); }} title="Новая карточка ТМЦ" isDirty={isDirty}>
         <StockItemForm
           action={createStockItemAction}
           objects={objects}
+          locations={locations}
+          systemGroups={systemGroups}
+          fixedObjectId={isObjectScoped ? currentObject?.id : undefined}
+          fixedObjectName={isObjectScoped ? currentObject?.name : undefined}
           onSubmitted={() => { setIsCreateOpen(false); setIsDirty(false); }}
           onChange={() => setIsDirty(true)}
           submitLabel="Создать"
@@ -236,6 +666,8 @@ export function StockItemsAdmin({
             action={updateStockItemAction}
             itemId={editingItem.id}
             objects={objects}
+            locations={locations}
+            systemGroups={systemGroups}
             onSubmitted={() => { setEditingId(null); setIsDirty(false); }}
             onChange={() => setIsDirty(true)}
             submitLabel="Сохранить"
@@ -246,6 +678,8 @@ export function StockItemsAdmin({
               unit: editingItem.unit,
               sku: editingItem.sku ?? "",
               min_qty: String(editingItem.min_qty),
+              storage_location_id: editingItem.storage_location_id ?? "",
+              system_group_ids: (editingItem.system_group_links ?? []).map((link) => link.system_group_id),
               comment: editingItem.comment ?? "",
               is_active: editingItem.is_active,
             }}

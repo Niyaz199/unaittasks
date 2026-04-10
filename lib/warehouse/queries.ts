@@ -5,6 +5,17 @@ import { canAccessWarehouseModule, canManageWarehouseCatalog } from "@/lib/capab
 import type { Profile } from "@/lib/types";
 
 type NamedRelation = { name: string } | Array<{ name: string }> | null;
+type StockLocationRelation = { id: string; name: string } | Array<{ id: string; name: string }> | null;
+type SystemGroupRelation = { id: string; name: string; code: string } | Array<{ id: string; name: string; code: string }> | null;
+
+export type StockItemSystemGroupLinkRow = {
+  id: string;
+  object_id: string;
+  stock_item_id: string;
+  system_group_id: string;
+  created_at: string;
+  system_group: SystemGroupRelation;
+};
 
 export type StockItemRow = {
   id: string;
@@ -15,10 +26,13 @@ export type StockItemRow = {
   sku: string | null;
   min_qty: number;
   current_qty: number;
+  storage_location_id: string | null;
   comment: string | null;
   is_active: boolean;
   created_at: string;
   object: NamedRelation;
+  storage_location: StockLocationRelation;
+  system_group_links: StockItemSystemGroupLinkRow[] | null;
 };
 
 export type StockLocationRow = {
@@ -38,6 +52,15 @@ export type StockLocationQrCode = {
   qr_token: string;
   is_active: boolean;
   generated_at: string;
+};
+
+export type WarehouseObjectSummaryRow = {
+  object_id: string;
+  object_name: string;
+  item_count: number;
+  active_item_count: number;
+  location_count: number;
+  low_stock_count: number;
 };
 
 export type StockBalanceRow = {
@@ -139,6 +162,57 @@ export async function listWarehouseManageableObjectsForProfile(
   return listWarehouseScopedObjects(supabase, profile);
 }
 
+export async function listWarehouseObjectSummariesForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">
+) {
+  if (!canAccessWarehouseModule(profile.role)) {
+    throw new Error("Недостаточно прав для чтения склада");
+  }
+
+  const objects = await listWarehouseReadableObjectsForProfile(supabase, profile);
+  if (!objects.length) return [];
+
+  const objectIds = objects.map((item) => item.id);
+  const [{ data: items, error: itemsError }, { data: locations, error: locationsError }] = await Promise.all([
+    supabase.from("stock_items").select("object_id,current_qty,min_qty,is_active").in("object_id", objectIds),
+    supabase.from("stock_locations").select("object_id,is_active").in("object_id", objectIds),
+  ]);
+  if (itemsError) throw itemsError;
+  if (locationsError) throw locationsError;
+
+  const itemStats = new Map<
+    string,
+    { item_count: number; active_item_count: number; low_stock_count: number }
+  >();
+  for (const row of items ?? []) {
+    const current = itemStats.get(row.object_id) ?? { item_count: 0, active_item_count: 0, low_stock_count: 0 };
+    current.item_count += 1;
+    if (row.is_active) current.active_item_count += 1;
+    if (row.current_qty <= row.min_qty) current.low_stock_count += 1;
+    itemStats.set(row.object_id, current);
+  }
+
+  const locationStats = new Map<string, number>();
+  for (const row of locations ?? []) {
+    locationStats.set(row.object_id, (locationStats.get(row.object_id) ?? 0) + 1);
+  }
+
+  return objects
+    .map((object) => {
+      const itemSummary = itemStats.get(object.id);
+      return {
+        object_id: object.id,
+        object_name: object.name,
+        item_count: itemSummary?.item_count ?? 0,
+        active_item_count: itemSummary?.active_item_count ?? 0,
+        location_count: locationStats.get(object.id) ?? 0,
+        low_stock_count: itemSummary?.low_stock_count ?? 0,
+      };
+    })
+    .sort((a, b) => a.object_name.localeCompare(b.object_name, "ru"));
+}
+
 export async function listStockItemsForProfile(
   supabase: SupabaseClient,
   profile: Pick<Profile, "id" | "role">,
@@ -153,7 +227,9 @@ export async function listStockItemsForProfile(
 
   let query = supabase
     .from("stock_items")
-    .select("id,object_id,name,kind,unit,sku,min_qty,current_qty,comment,is_active,created_at,object:objects(name)")
+    .select(
+      "id,object_id,name,kind,unit,sku,min_qty,current_qty,storage_location_id,comment,is_active,created_at,object:objects(name),storage_location:stock_locations(id,name),system_group_links:stock_item_system_groups(id,object_id,stock_item_id,system_group_id,created_at,system_group:ppr_system_groups(id,name,code))"
+    )
     .order("name", { ascending: true });
 
   if (options.objectId) {

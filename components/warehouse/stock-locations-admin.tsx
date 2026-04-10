@@ -73,6 +73,9 @@ export function StockLocationsAdmin({
     router.replace((`/warehouse/locations${params.toString() ? `?${params.toString()}` : ""}`) as Route);
   }
 
+  const selectedObjectName = objects.find((item) => item.id === filterObjectId)?.name ?? null;
+  const activeFilterCount = filterObjectId ? 1 : 0;
+
   const metrics = useMemo(() => {
     const total = locations.length;
     const active = locations.filter((item) => item.is_active).length;
@@ -81,8 +84,14 @@ export function StockLocationsAdmin({
       { label: "Всего мест хранения", value: total, tone: "neutral" as const },
       { label: "Активных", value: active, tone: "success" as const },
       { label: "Неактивных", value: inactive, tone: "warning" as const },
+      { label: activeFilterCount > 0 ? "После фильтра" : "В выдаче", value: filteredLocations.length, tone: "info" as const },
     ];
-  }, [locations]);
+  }, [activeFilterCount, filteredLocations.length, locations]);
+
+  function resetFilters() {
+    setFilterObjectId("");
+    updateSearchParams("");
+  }
 
   return (
     <>
@@ -96,17 +105,38 @@ export function StockLocationsAdmin({
           hint: "Создайте первое место хранения и начните использовать QR для склада.",
         }}
         isFilteredEmpty={filteredLocations.length === 0}
+        filteredEmptyState={{
+          message: "Ничего не найдено по текущему фильтру",
+          hint: "Смените объект или сбросьте фильтр, чтобы увидеть другие места хранения.",
+        }}
         filters={
+          filterObjectId ? (
+            <div className="warehouse-filters-shell">
+              <div className="warehouse-filter-chips">
+                <button type="button" className="warehouse-filter-chip" onClick={resetFilters}>
+                  Объект: {selectedObjectName}
+                  <span aria-hidden="true">×</span>
+                </button>
+              </div>
+              <div className="warehouse-filters-meta">
+                <div className="text-soft warehouse-filters-results">Найдено мест хранения: {filteredLocations.length}</div>
+                <button className="btn btn-ghost" type="button" onClick={resetFilters}>
+                  Сбросить фильтр
+                </button>
+              </div>
+            </div>
+          ) : null
+        }
+        actions={
           <>
             <select
-              className="select"
+              className="select warehouse-toolbar-select"
               value={filterObjectId}
               onChange={(event) => {
                 const nextObjectId = event.target.value;
                 setFilterObjectId(nextObjectId);
                 updateSearchParams(nextObjectId);
               }}
-              style={{ maxWidth: "220px" }}
             >
               <option value="">Все объекты</option>
               {objects.map((item) => (
@@ -124,6 +154,7 @@ export function StockLocationsAdmin({
       >
         <div className="desktop-only">
           <DataTable
+            className="table-dense"
             columns={[
               { key: "name", label: "Место хранения" },
               { key: "object", label: "Объект" },
@@ -157,21 +188,23 @@ export function StockLocationsAdmin({
             <div
               key={item.id}
               className="section-card mobile-card"
-              style={{ cursor: "pointer" }}
+              style={{ cursor: "pointer", display: "grid", gap: "0.7rem" }}
               onClick={() => router.push(`/warehouse/locations/${item.id}` as Route)}
             >
-              <div className="grid" style={{ gap: "0.55rem" }}>
-                <div style={{ fontWeight: 600 }}>{item.name}</div>
-                <div className="text-soft">Объект: {resolveName(item.object)}</div>
-                <div className="text-soft">{item.description?.trim() || "Без описания"}</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.7rem" }}>
+                <div className="grid" style={{ gap: "0.24rem" }}>
+                  <div style={{ fontWeight: 600 }}>{item.name}</div>
+                  <div className="text-soft" style={{ fontSize: "0.82rem" }}>Объект: {resolveName(item.object)}</div>
+                </div>
                 <div>
                   <Badge tone={item.is_active ? "success" : "neutral"}>{item.is_active ? "Активно" : "Неактивно"}</Badge>
                 </div>
-                <div className="ppr-table-actions" onClick={(event) => event.stopPropagation()}>
-                  <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(item.id)}>
-                    Изменить
-                  </button>
-                </div>
+              </div>
+              <div className="text-soft">{item.description?.trim() || "Без описания"}</div>
+              <div className="ppr-table-actions" onClick={(event) => event.stopPropagation()}>
+                <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(item.id)}>
+                  Изменить
+                </button>
               </div>
             </div>
           ))}

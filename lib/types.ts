@@ -92,6 +92,7 @@ export type StockItem = {
   sku: string | null;
   min_qty: number;
   current_qty: number;
+  storage_location_id?: string | null;
   comment: string | null;
   is_active: boolean;
   created_at: string;
@@ -103,6 +104,21 @@ export type StockLocation = {
   name: string;
   description: string | null;
   is_active: boolean;
+  created_at: string;
+};
+
+export type PprSystemGroupRef = {
+  id: string;
+  name: string;
+  code: string;
+  is_active?: boolean;
+};
+
+export type StockItemSystemGroupLink = {
+  id: string;
+  object_id: string;
+  stock_item_id: string;
+  system_group_id: string;
   created_at: string;
 };
 

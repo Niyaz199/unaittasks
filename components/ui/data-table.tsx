@@ -9,12 +9,13 @@ export type DataTableColumn = {
 type Props = {
   columns: DataTableColumn[];
   children: ReactNode;
+  className?: string;
 };
 
-export function DataTable({ columns, children }: Props) {
+export function DataTable({ columns, children, className = "" }: Props) {
   return (
-    <div className="table-wrap">
-      <table className="data-table">
+    <div className={`table-wrap ${className.includes("table-dense") ? "table-wrap-dense" : ""}`.trim()}>
+      <table className={`data-table ${className}`.trim()}>
         <thead>
           <tr>
             {columns.map((column) => (

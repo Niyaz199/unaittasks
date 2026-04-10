@@ -5,6 +5,7 @@ import { PprEquipmentComponentsManager } from "@/components/ppr/equipment/ppr-eq
 
 type EquipmentDetails = {
   id: string;
+  object_id: string;
   inventory_no: string;
   name: string;
   dispatch_name: string;
@@ -36,6 +37,20 @@ type EquipmentComponentItem = {
   current_qty: number;
 };
 
+type LocationOption = {
+  id: string;
+  object_id: string;
+  name: string;
+  is_active?: boolean;
+};
+
+type SystemGroupOption = {
+  id: string;
+  name: string;
+  code: string;
+  is_active?: boolean;
+};
+
 type EquipmentComponentRow = {
   id: string;
   stock_item_id: string;
@@ -55,12 +70,16 @@ export function PprEquipmentDetails({
   qrCode,
   components,
   stockItems,
+  storageLocations,
+  systemGroups,
   canManageComponents,
 }: {
   equipment: EquipmentDetails;
   qrCode: ActiveQrCode;
   components: EquipmentComponentRow[];
   stockItems: EquipmentComponentItem[];
+  storageLocations: LocationOption[];
+  systemGroups: SystemGroupOption[];
   canManageComponents: boolean;
 }) {
   const statusMeta = pprEquipmentStatusMeta[equipment.status];
@@ -151,8 +170,12 @@ export function PprEquipmentDetails({
             </div>
             <PprEquipmentComponentsManager
               equipmentId={equipment.id}
+              objectId={equipment.object_id}
+              objectName={resolveName(equipment.object)}
               components={components}
               stockItems={stockItems}
+              storageLocations={storageLocations}
+              systemGroups={systemGroups}
               canManage={canManageComponents}
             />
           </div>

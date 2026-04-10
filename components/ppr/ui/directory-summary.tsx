@@ -5,6 +5,8 @@ interface SummaryMetric {
   value: string | number;
   tone?: "neutral" | "info" | "success" | "warning" | "danger" | "violet";
   icon?: ReactNode;
+  onClick?: () => void;
+  isActive?: boolean;
 }
 
 interface DirectorySummaryProps {
@@ -13,34 +15,27 @@ interface DirectorySummaryProps {
 
 export function DirectorySummary({ metrics }: DirectorySummaryProps) {
   return (
-    <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem" }}>
-      {metrics.map((metric, index) => (
-        <div key={index} className="section-card" style={{ padding: "1rem" }}>
-          <div className="grid" style={{ gap: "0.25rem" }}>
-            <span className="text-soft" style={{ fontSize: "0.85rem" }}>
-              {metric.label}
-            </span>
-            <div className="row" style={{ alignItems: "center", gap: "0.5rem" }}>
-              <span style={{ fontSize: "1.5rem", fontWeight: 600 }}>
-                {metric.value}
-              </span>
-              {metric.icon}
+    <div className="directory-summary-grid">
+      {metrics.map((metric, index) => {
+        const isClickable = !!metric.onClick;
+        return (
+          <div
+            key={index}
+            className={`section-card directory-summary-card${isClickable ? " is-clickable" : ""}${metric.isActive ? " is-active" : ""}`}
+            data-tone={metric.tone ?? "neutral"}
+            onClick={metric.onClick}
+          >
+            <div className="directory-summary-card-inner">
+              <span className="directory-summary-label">{metric.label}</span>
+              <div className="directory-summary-value-row">
+                <span className="directory-summary-value">{metric.value}</span>
+                {metric.icon}
+              </div>
+              <div className="directory-summary-accent" />
             </div>
-            {metric.tone && (
-              <div
-                style={{
-                  height: "4px",
-                  width: "100%",
-                  borderRadius: "2px",
-                  background: `var(--${metric.tone})`,
-                  marginTop: "0.5rem",
-                  opacity: 0.6,
-                }}
-              />
-            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

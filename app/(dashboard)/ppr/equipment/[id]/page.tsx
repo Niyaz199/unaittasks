@@ -3,8 +3,9 @@ import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { canManageWarehouseCatalog } from "@/lib/capabilities";
+import { listPprSystemGroups } from "@/lib/ppr/structure-queries";
 import { canAccessPprStructureScreens, getPprEquipmentByIdForProfile } from "@/lib/ppr/queries";
-import { listEquipmentComponentsForProfile, listStockItemOptionsForProfile } from "@/lib/warehouse/queries";
+import { listEquipmentComponentsForProfile, listStockItemOptionsForProfile, listStockLocationsForProfile } from "@/lib/warehouse/queries";
 import { PageHeader } from "@/components/ui/page-header";
 import { BackButton } from "@/components/ui/back-button";
 import { PprEquipmentDetails } from "@/components/ppr/equipment/ppr-equipment-details";
@@ -19,12 +20,15 @@ export default async function PprEquipmentDetailsPage({ params }: { params: Prom
   const supabase = await createSupabaseServerClient();
   const details = await getPprEquipmentByIdForProfile(supabase, profile, id).catch(() => null);
   if (!details) notFound();
-  const [components, stockItems] = await Promise.all([
+  const canManageComponents = canManageWarehouseCatalog(profile.role);
+  const [components, stockItems, locations, systemGroups] = await Promise.all([
     listEquipmentComponentsForProfile(supabase, profile, id),
     listStockItemOptionsForProfile(supabase, profile, {
       objectId: details.equipment.object_id,
       includeInactive: true,
     }),
+    canManageComponents ? listStockLocationsForProfile(supabase, profile, { objectId: details.equipment.object_id }) : Promise.resolve([]),
+    canManageComponents ? listPprSystemGroups(supabase, profile) : Promise.resolve([]),
   ]);
 
   return (
@@ -47,7 +51,14 @@ export default async function PprEquipmentDetailsPage({ params }: { params: Prom
           min_qty: item.min_qty,
           current_qty: item.current_qty,
         }))}
-        canManageComponents={canManageWarehouseCatalog(profile.role)}
+        storageLocations={locations.map((item) => ({
+          id: item.id,
+          object_id: item.object_id,
+          name: item.name,
+          is_active: item.is_active,
+        }))}
+        systemGroups={systemGroups}
+        canManageComponents={canManageComponents}
       />
     </section>
   );

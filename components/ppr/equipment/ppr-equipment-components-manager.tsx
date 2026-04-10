@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
+import { StockItemForm } from "@/components/warehouse/stock-item-form";
 import { PprModal } from "@/components/ppr/ui/ppr-modal";
 import { useToast } from "@/components/ui/toast";
 import { stockItemKindMeta } from "@/lib/warehouse/presentation";
-import { removeEquipmentComponentAction, upsertEquipmentComponentAction } from "@/app/actions/warehouse-actions";
+import { createStockItemAction, removeEquipmentComponentAction, upsertEquipmentComponentAction } from "@/app/actions/warehouse-actions";
 
 type ComponentItem = {
   id: string;
@@ -28,6 +29,8 @@ type ComponentRow = {
 };
 
 type StockItemOption = ComponentItem;
+type LocationOption = { id: string; object_id: string; name: string; is_active?: boolean };
+type SystemGroupOption = { id: string; name: string; code: string; is_active?: boolean };
 
 function resolveItem(raw: ComponentItem | ComponentItem[] | null) {
   if (Array.isArray(raw)) return raw[0] ?? null;
@@ -40,17 +43,33 @@ function formatQty(value: number, unit: string) {
 
 type Props = {
   equipmentId: string;
+  objectId: string;
+  objectName: string;
   components: ComponentRow[];
   stockItems: StockItemOption[];
+  storageLocations: LocationOption[];
+  systemGroups: SystemGroupOption[];
   canManage: boolean;
 };
 
-export function PprEquipmentComponentsManager({ equipmentId, components, stockItems, canManage }: Props) {
+export function PprEquipmentComponentsManager({
+  equipmentId,
+  objectId,
+  objectName,
+  components,
+  stockItems,
+  storageLocations,
+  systemGroups,
+  canManage,
+}: Props) {
   const router = useRouter();
   const { addToast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
+  const [isStockItemOpen, setIsStockItemOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
+  const [isStockItemDirty, setIsStockItemDirty] = useState(false);
+  const [preferredStockItemId, setPreferredStockItemId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const editingComponent = editingId ? components.find((component) => component.id === editingId) ?? null : null;
@@ -66,10 +85,20 @@ export function PprEquipmentComponentsManager({ equipmentId, components, stockIt
       setIsOpen(false);
       setEditingId(null);
       setIsDirty(false);
+      setPreferredStockItemId(null);
       router.refresh();
     } catch (error) {
       addToast(error instanceof Error ? error.message : "Не удалось сохранить составляющую", "error");
     }
+  }
+
+  function handleStockItemCreated(result?: { id?: string } | void) {
+    if (result && typeof result === "object" && result.id) {
+      setPreferredStockItemId(result.id);
+    }
+    setIsStockItemOpen(false);
+    setIsStockItemDirty(false);
+    router.refresh();
   }
 
   function handleDelete(componentId: string) {
@@ -161,6 +190,7 @@ export function PprEquipmentComponentsManager({ equipmentId, components, stockIt
           setIsOpen(false);
           setEditingId(null);
           setIsDirty(false);
+          setPreferredStockItemId(null);
         }}
         title={editingComponent ? "Редактирование составляющей" : "Новая составляющая"}
         isDirty={isDirty}
@@ -168,10 +198,45 @@ export function PprEquipmentComponentsManager({ equipmentId, components, stockIt
         <EquipmentComponentForm
           equipmentId={equipmentId}
           items={availableItems}
+          hasStorageLocations={storageLocations.length > 0}
           initialComponent={editingComponent}
+          preferredStockItemId={preferredStockItemId}
+          onCreateItemRequested={() => setIsStockItemOpen(true)}
           onChange={() => setIsDirty(true)}
           onSubmit={handleSubmit}
         />
+      </PprModal>
+
+      <PprModal
+        open={isStockItemOpen}
+        onClose={() => {
+          setIsStockItemOpen(false);
+          setIsStockItemDirty(false);
+        }}
+        title="Новая карточка ТМЦ"
+        isDirty={isStockItemDirty}
+      >
+        {storageLocations.length ? (
+          <StockItemForm
+            action={createStockItemAction}
+            objects={[]}
+            locations={storageLocations}
+            systemGroups={systemGroups}
+            fixedObjectId={objectId}
+            fixedObjectName={objectName}
+            onSubmitted={handleStockItemCreated}
+            onChange={() => setIsStockItemDirty(true)}
+            submitLabel="Создать"
+          />
+        ) : (
+          <div className="ppr-modal-content">
+            <div className="ppr-modal-body">
+              <div className="text-soft">
+                На объекте пока нет мест хранения. Сначала создайте склад, коробку или ящик для хранения ТМЦ.
+              </div>
+            </div>
+          </div>
+        )}
       </PprModal>
     </>
   );
@@ -180,13 +245,19 @@ export function PprEquipmentComponentsManager({ equipmentId, components, stockIt
 function EquipmentComponentForm({
   equipmentId,
   items,
+  hasStorageLocations,
   initialComponent,
+  preferredStockItemId,
+  onCreateItemRequested,
   onChange,
   onSubmit,
 }: {
   equipmentId: string;
   items: StockItemOption[];
+  hasStorageLocations: boolean;
   initialComponent: ComponentRow | null;
+  preferredStockItemId?: string | null;
+  onCreateItemRequested: () => void;
   onChange?: () => void;
   onSubmit: (formData: FormData) => Promise<void>;
 }) {
@@ -198,6 +269,12 @@ function EquipmentComponentForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const selectedItem = useMemo(() => items.find((item) => item.id === stockItemId) ?? null, [items, stockItemId]);
+
+  useEffect(() => {
+    if (preferredStockItemId) {
+      setStockItemId(preferredStockItemId);
+    }
+  }, [preferredStockItemId]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -217,16 +294,24 @@ function EquipmentComponentForm({
 
         <label className="grid" style={{ gap: "0.35rem" }}>
           <span className="text-soft">ТМЦ</span>
-          <select className="select" name="stock_item_id" required value={stockItemId} onChange={(event) => setStockItemId(event.target.value)}>
-            <option value="" disabled>
-              Выберите ТМЦ
-            </option>
-            {items.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name} • {stockItemKindMeta[item.kind].label}
+          <div className="grid" style={{ gap: "0.6rem" }}>
+            <select className="select" name="stock_item_id" required value={stockItemId} onChange={(event) => setStockItemId(event.target.value)}>
+              <option value="" disabled>
+                Выберите ТМЦ
               </option>
-            ))}
-          </select>
+              {items.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name} • {stockItemKindMeta[item.kind].label}
+                </option>
+              ))}
+            </select>
+            <div className="row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
+              <button className="btn btn-ghost ppr-action-btn" type="button" onClick={onCreateItemRequested} disabled={!hasStorageLocations}>
+                + Создать новую ТМЦ
+              </button>
+              {!hasStorageLocations ? <span className="text-soft">Нужно создать место хранения на объекте.</span> : null}
+            </div>
+          </div>
         </label>
 
         {selectedItem ? (
