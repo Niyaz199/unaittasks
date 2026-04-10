@@ -24,6 +24,7 @@ export interface PprPageShellProps {
   toolbarBodyClassName?: string;
   
   isEmpty: boolean;
+  keepChildrenWhenEmpty?: boolean;
   emptyState: {
     message: string;
     hint?: string;
@@ -32,6 +33,7 @@ export interface PprPageShellProps {
   };
   
   isFilteredEmpty?: boolean;
+  keepChildrenWhenFilteredEmpty?: boolean;
   filteredEmptyState?: {
     message?: string;
     hint?: string;
@@ -49,8 +51,10 @@ export function PprPageShell({
   toolbarClassName,
   toolbarBodyClassName,
   isEmpty,
+  keepChildrenWhenEmpty = false,
   emptyState,
   isFilteredEmpty,
+  keepChildrenWhenFilteredEmpty = false,
   filteredEmptyState,
   children,
 }: PprPageShellProps) {
@@ -72,20 +76,36 @@ export function PprPageShell({
         </DirectoryToolbar>
       )}
 
-      {isEmpty ? (
+      {isEmpty && !keepChildrenWhenEmpty ? (
         <EmptyState
           message={emptyState.message}
           hint={emptyState.hint}
           actionLabel={emptyState.actionLabel}
           actionHref={emptyState.actionHref}
         />
-      ) : isFilteredEmpty ? (
+      ) : isFilteredEmpty && !keepChildrenWhenFilteredEmpty ? (
         <EmptyState 
           message={filteredEmptyState?.message || "Ничего не найдено"} 
           hint={filteredEmptyState?.hint || "Попробуйте изменить параметры фильтрации."} 
         />
       ) : (
-        children
+        <>
+          {children}
+          {isEmpty ? (
+            <EmptyState
+              message={emptyState.message}
+              hint={emptyState.hint}
+              actionLabel={emptyState.actionLabel}
+              actionHref={emptyState.actionHref}
+            />
+          ) : null}
+          {!isEmpty && isFilteredEmpty ? (
+            <EmptyState
+              message={filteredEmptyState?.message || "Ничего не найдено"}
+              hint={filteredEmptyState?.hint || "Попробуйте изменить параметры фильтрации."}
+            />
+          ) : null}
+        </>
       )}
     </div>
   );

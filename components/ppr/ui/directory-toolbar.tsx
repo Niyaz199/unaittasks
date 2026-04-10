@@ -41,7 +41,7 @@ export function DirectoryToolbar({
 
         {children && (
           <div className={`directory-toolbar-body${bodyClassName ? ` ${bodyClassName}` : ""}`}>
-            {children}
+            <div className="directory-toolbar-filters">{children}</div>
           </div>
         )}
       </div>

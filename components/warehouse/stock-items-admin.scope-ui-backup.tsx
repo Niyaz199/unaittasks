@@ -1,10 +1,10 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Boxes, Building2, Filter, Layers3, MapPinned, PackagePlus, Search, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Boxes, Building2, Filter, Layers3, MapPinned, PackagePlus, TriangleAlert } from "lucide-react";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { PprModal } from "@/components/ppr/ui/ppr-modal";
@@ -206,6 +206,11 @@ export function StockItemsAdmin({
     ? [
         { key: "items", label: `${items.length} ТМЦ`, tone: "info" as const },
         { key: "locations", label: `${locations.length} мест хранения`, tone: "neutral" as const },
+        {
+          key: "low-stock",
+          label: lowStockCount > 0 ? `${lowStockCount} ниже минимума` : "Остатки в норме",
+          tone: lowStockCount > 0 ? ("danger" as const) : ("success" as const),
+        },
       ]
     : [
         { key: "all", label: `${objects.length} объектов`, tone: "info" as const },
@@ -258,10 +263,11 @@ export function StockItemsAdmin({
     <>
       <PprPageShell
         metrics={isObjectScoped ? undefined : metrics}
-        onSearch={isObjectScoped ? undefined : setSearchTerm}
-        searchPlaceholder={isObjectScoped ? undefined : searchPlaceholder}
+        onSearch={setSearchTerm}
+        searchPlaceholder={searchPlaceholder}
+        toolbarClassName={isObjectScoped ? "warehouse-scoped-toolbar" : undefined}
+        toolbarBodyClassName={isObjectScoped ? "warehouse-scoped-toolbar-body" : undefined}
         isEmpty={items.length === 0}
-        keepChildrenWhenEmpty={isObjectScoped || isAllObjectsMode}
         emptyState={{
           message: "Карточки ТМЦ пока не созданы",
           hint: "Добавьте первую карточку материала, расходника или запасной части.",
@@ -277,7 +283,7 @@ export function StockItemsAdmin({
                 : "Снимите часть фильтров или откройте конкретный объект."
               : "Попробуйте изменить поисковый запрос.",
         }}
-        actions={!isObjectScoped ? (
+        actions={
           <>
             {isAllObjectsMode ? (
               <select
@@ -333,7 +339,7 @@ export function StockItemsAdmin({
               </button>
             ) : null}
           </>
-        ) : undefined}
+        }
         filters={
           !isObjectScoped && (isFiltersOpen || activeFilterChips.length > 0) ? (
             <div className="warehouse-filters-shell">
@@ -413,6 +419,7 @@ export function StockItemsAdmin({
           <div className="section-card warehouse-items-scope">
             <div className="warehouse-items-scope-top">
               <div className="warehouse-items-scope-copy">
+                <div className="warehouse-items-scope-eyebrow">{isObjectScoped ? "Каталог объекта" : "Обзорный режим"}</div>
                 <div className="warehouse-items-scope-head">
                   <div className="warehouse-items-scope-title-row">
                     {isObjectScoped ? <Building2 size={18} aria-hidden="true" /> : <Layers3 size={18} aria-hidden="true" />}
@@ -426,11 +433,11 @@ export function StockItemsAdmin({
                     ))}
                   </div>
                 </div>
-                {!isObjectScoped ? (
-                  <div className="text-soft warehouse-items-scope-subtitle">
-                    Этот режим нужен для обзора. Для повседневной работы удобнее открыть один объект и работать уже внутри него.
-                  </div>
-                ) : null}
+                <div className="text-soft warehouse-items-scope-subtitle">
+                  {isObjectScoped
+                    ? "Сначала уточните место хранения, затем используйте фильтры только для детализации списка."
+                    : "Этот режим нужен для обзора. Для повседневной работы удобнее открыть один объект и работать уже внутри него."}
+                </div>
               </div>
 
               <div className="warehouse-items-scope-actions">
@@ -450,20 +457,6 @@ export function StockItemsAdmin({
             <div className="warehouse-items-scope-grid">
               {isObjectScoped ? (
                 <>
-                  <label className="warehouse-items-scope-field">
-                    <span className="warehouse-items-scope-label">Поиск ТМЦ</span>
-                    <div className="warehouse-items-scope-input">
-                      <Search size={16} aria-hidden="true" />
-                      <input
-                        className="input"
-                        type="text"
-                        value={searchTerm}
-                        onChange={(event) => setSearchTerm(event.target.value)}
-                        placeholder="По названию или SKU..."
-                      />
-                    </div>
-                  </label>
-
                   <label className="warehouse-items-scope-field">
                     <span className="warehouse-items-scope-label">Объект</span>
                     <div className="warehouse-items-scope-input">
@@ -547,12 +540,6 @@ export function StockItemsAdmin({
               <div className="warehouse-items-scope-filter-bar">
                 <div className="text-soft warehouse-filters-results">Найдено карточек: {filteredItems.length}</div>
                 <div className="warehouse-items-scope-filter-actions">
-                  {canManage ? (
-                    <button className="btn btn-accent warehouse-items-scope-primary-btn" type="button" onClick={() => setIsCreateOpen(true)}>
-                      <PackagePlus size={15} aria-hidden="true" />
-                      Новая ТМЦ
-                    </button>
-                  ) : null}
                   <button
                     className={`btn warehouse-toolbar-btn ${lowStockOnly ? "btn-danger" : "btn-ghost"}`}
                     type="button"
@@ -577,141 +564,137 @@ export function StockItemsAdmin({
           </div>
         ) : null}
 
-        {filteredItems.length > 0 ? (
-          <>
-            <div className="desktop-only">
-              <DataTable
-                className="table-zebra table-dense warehouse-items-table"
-                columns={[
-                  { key: "name", label: "ТМЦ" },
-                  { key: "kind", label: "Тип" },
-                  ...(isObjectScoped ? [] : [{ key: "object", label: "Объект" }]),
-                  { key: "storage", label: "Хранение" },
-                  { key: "stock", label: "Остаток", className: "text-right" },
-                  { key: "status", label: "Статус" },
-                  { key: "actions", label: "Действия", className: "text-right" },
-                ]}
-              >
-                {paginatedItems.map((item) => {
-                  const isLowStock = item.current_qty <= item.min_qty;
-                  const systemGroupsLabel = (item.system_group_links ?? [])
-                    .map((link) => resolveSystemGroupLabel(link.system_group))
-                    .filter(Boolean)
-                    .join(", ");
-                  return (
-                    <tr key={item.id} className={isLowStock ? "warehouse-row-alert" : undefined}>
-                      <td>
-                        <div style={{ fontWeight: 600 }}>{item.name}</div>
-                        <div className="text-soft" style={{ fontSize: "0.85rem" }}>
-                          {item.sku ? `SKU: ${item.sku}` : null}
-                        </div>
-                        {systemGroupsLabel ? (
-                          <div className="text-soft" style={{ fontSize: "0.8rem", marginTop: "0.2rem", maxWidth: "250px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={systemGroupsLabel}>
-                            {systemGroupsLabel}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td>{stockItemKindMeta[item.kind].label}</td>
-                      {!isObjectScoped ? <td>{resolveName(item.object)}</td> : null}
-                      <td>{resolveLocationName(item.storage_location)}</td>
-                      <td className="text-right tabular-nums">
-                        <div style={{ fontWeight: 500, color: isLowStock ? "var(--danger)" : "inherit" }}>
-                          {formatQty(item.current_qty, item.unit)}
-                        </div>
-                        <div className="text-soft" style={{ fontSize: "0.8rem" }}>
-                          мин. {formatQty(item.min_qty, item.unit)}
-                        </div>
-                      </td>
-                      <td>
-                        <div className="row" style={{ gap: "0.4rem", flexWrap: "wrap" }}>
-                          {!item.is_active && <Badge tone="neutral">Неактивна</Badge>}
-                          {isLowStock && <Badge tone="danger">Ниже минимума</Badge>}
-                        </div>
-                      </td>
-                      <td className="text-right">
-                        {canManage ? (
-                          <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(item.id)}>
-                            Изменить
-                          </button>
-                        ) : (
-                          <span className="text-soft">Просмотр</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </DataTable>
-            </div>
-
-            <div className="mobile-cards mobile-only">
-              {paginatedItems.map((item) => {
-                const isLowStock = item.current_qty <= item.min_qty;
-                return (
-                  <div key={item.id} className="section-card mobile-card" style={{ padding: "0.8rem", display: "grid", gap: "0.6rem" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: "1rem", lineHeight: 1.2 }}>{item.name}</div>
-                        <div className="text-soft" style={{ fontSize: "0.8rem", marginTop: "0.2rem" }}>
-                          {isObjectScoped ? stockItemKindMeta[item.kind].label : `${stockItemKindMeta[item.kind].label} • ${resolveName(item.object)}`}
-                        </div>
-                        {item.sku ? (
-                          <div className="text-soft" style={{ fontSize: "0.76rem", marginTop: "0.18rem" }}>
-                            SKU: {item.sku}
-                          </div>
-                        ) : null}
-                      </div>
-                      {isLowStock && <Badge tone="danger">Ниже мин.</Badge>}
+        <div className="desktop-only">
+          <DataTable
+            className="table-zebra table-dense warehouse-items-table"
+            columns={[
+              { key: "name", label: "ТМЦ" },
+              { key: "kind", label: "Тип" },
+              ...(isObjectScoped ? [] : [{ key: "object", label: "Объект" }]),
+              { key: "storage", label: "Хранение" },
+              { key: "stock", label: "Остаток", className: "text-right" },
+              { key: "status", label: "Статус" },
+              { key: "actions", label: "Действия", className: "text-right" },
+            ]}
+          >
+            {paginatedItems.map((item) => {
+              const isLowStock = item.current_qty <= item.min_qty;
+              const systemGroupsLabel = (item.system_group_links ?? [])
+                .map((link) => resolveSystemGroupLabel(link.system_group))
+                .filter(Boolean)
+                .join(", ");
+              return (
+                <tr key={item.id} className={isLowStock ? "warehouse-row-alert" : undefined}>
+                  <td>
+                    <div style={{ fontWeight: 600 }}>{item.name}</div>
+                    <div className="text-soft" style={{ fontSize: "0.85rem" }}>
+                      {item.sku ? `SKU: ${item.sku}` : null}
                     </div>
-                    
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", fontSize: "0.85rem", background: "color-mix(in srgb, var(--panel-soft) 40%, transparent)", padding: "0.6rem", borderRadius: "8px" }}>
-                      <div>
-                        <div className="text-soft" style={{ fontSize: "0.75rem", marginBottom: "0.1rem" }}>Остаток</div>
-                        <div style={{ fontWeight: 600, color: isLowStock ? "var(--danger)" : "inherit" }} className="tabular-nums">
-                          {formatQty(item.current_qty, item.unit)}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-soft" style={{ fontSize: "0.75rem", marginBottom: "0.1rem" }}>Минимум</div>
-                        <div className="tabular-nums">{formatQty(item.min_qty, item.unit)}</div>
-                      </div>
-                      {item.storage_location_id && (
-                        <div style={{ gridColumn: "1 / -1", paddingTop: "0.2rem", borderTop: "1px solid color-mix(in srgb, var(--line) 30%, transparent)", marginTop: "0.2rem" }}>
-                          <div className="text-soft" style={{ fontSize: "0.75rem", marginBottom: "0.1rem" }}>Хранение</div>
-                          <div>{resolveLocationName(item.storage_location)}</div>
-                        </div>
-                      )}
-                    </div>
-
-                    {item.system_group_links?.length ? (
-                      <div className="text-soft" style={{ fontSize: "0.76rem", lineHeight: 1.35 }}>
-                        {item.system_group_links
-                          .map((link) => resolveSystemGroupLabel(link.system_group))
-                          .filter(Boolean)
-                          .join(", ")}
+                    {systemGroupsLabel ? (
+                      <div className="text-soft" style={{ fontSize: "0.8rem", marginTop: "0.2rem", maxWidth: "250px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={systemGroupsLabel}>
+                        {systemGroupsLabel}
                       </div>
                     ) : null}
-
-                    {canManage && (
-                      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.2rem" }}>
-                        <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(item.id)} style={{ width: "100%", justifyContent: "center" }}>
-                          Изменить
-                        </button>
-                      </div>
+                  </td>
+                  <td>{stockItemKindMeta[item.kind].label}</td>
+                  {!isObjectScoped ? <td>{resolveName(item.object)}</td> : null}
+                  <td>{resolveLocationName(item.storage_location)}</td>
+                  <td className="text-right tabular-nums">
+                    <div style={{ fontWeight: 500, color: isLowStock ? "var(--danger)" : "inherit" }}>
+                      {formatQty(item.current_qty, item.unit)}
+                    </div>
+                    <div className="text-soft" style={{ fontSize: "0.8rem" }}>
+                      мин. {formatQty(item.min_qty, item.unit)}
+                    </div>
+                  </td>
+                  <td>
+                    <div className="row" style={{ gap: "0.4rem", flexWrap: "wrap" }}>
+                      {!item.is_active && <Badge tone="neutral">Неактивна</Badge>}
+                      {isLowStock && <Badge tone="danger">Ниже минимума</Badge>}
+                    </div>
+                  </td>
+                  <td className="text-right">
+                    {canManage ? (
+                      <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(item.id)}>
+                        Изменить
+                      </button>
+                    ) : (
+                      <span className="text-soft">Просмотр</span>
                     )}
-                  </div>
-                );
-              })}
-            </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </DataTable>
+        </div>
 
-            {paginatedItems.length < filteredItems.length && (
-              <div className="row" style={{ justifyContent: "center", marginTop: "1rem" }}>
-                <button className="btn btn-ghost" type="button" onClick={() => setPage((p) => p + 1)}>
-                  Показать еще ({filteredItems.length - paginatedItems.length} осталось)
-                </button>
+        <div className="mobile-cards mobile-only">
+          {paginatedItems.map((item) => {
+            const isLowStock = item.current_qty <= item.min_qty;
+            return (
+              <div key={item.id} className="section-card mobile-card" style={{ padding: "0.8rem", display: "grid", gap: "0.6rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: "1rem", lineHeight: 1.2 }}>{item.name}</div>
+                    <div className="text-soft" style={{ fontSize: "0.8rem", marginTop: "0.2rem" }}>
+                      {isObjectScoped ? stockItemKindMeta[item.kind].label : `${stockItemKindMeta[item.kind].label} • ${resolveName(item.object)}`}
+                    </div>
+                    {item.sku ? (
+                      <div className="text-soft" style={{ fontSize: "0.76rem", marginTop: "0.18rem" }}>
+                        SKU: {item.sku}
+                      </div>
+                    ) : null}
+                  </div>
+                  {isLowStock && <Badge tone="danger">Ниже мин.</Badge>}
+                </div>
+                
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", fontSize: "0.85rem", background: "color-mix(in srgb, var(--panel-soft) 40%, transparent)", padding: "0.6rem", borderRadius: "8px" }}>
+                  <div>
+                    <div className="text-soft" style={{ fontSize: "0.75rem", marginBottom: "0.1rem" }}>Остаток</div>
+                    <div style={{ fontWeight: 600, color: isLowStock ? "var(--danger)" : "inherit" }} className="tabular-nums">
+                      {formatQty(item.current_qty, item.unit)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-soft" style={{ fontSize: "0.75rem", marginBottom: "0.1rem" }}>Минимум</div>
+                    <div className="tabular-nums">{formatQty(item.min_qty, item.unit)}</div>
+                  </div>
+                  {item.storage_location_id && (
+                    <div style={{ gridColumn: "1 / -1", paddingTop: "0.2rem", borderTop: "1px solid color-mix(in srgb, var(--line) 30%, transparent)", marginTop: "0.2rem" }}>
+                      <div className="text-soft" style={{ fontSize: "0.75rem", marginBottom: "0.1rem" }}>Хранение</div>
+                      <div>{resolveLocationName(item.storage_location)}</div>
+                    </div>
+                  )}
+                </div>
+
+                {item.system_group_links?.length ? (
+                  <div className="text-soft" style={{ fontSize: "0.76rem", lineHeight: 1.35 }}>
+                    {item.system_group_links
+                      .map((link) => resolveSystemGroupLabel(link.system_group))
+                      .filter(Boolean)
+                      .join(", ")}
+                  </div>
+                ) : null}
+
+                {canManage && (
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.2rem" }}>
+                    <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(item.id)} style={{ width: "100%", justifyContent: "center" }}>
+                      Изменить
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-          </>
-        ) : null}
+            );
+          })}
+        </div>
+
+        {paginatedItems.length < filteredItems.length && (
+          <div className="row" style={{ justifyContent: "center", marginTop: "1rem" }}>
+            <button className="btn btn-ghost" type="button" onClick={() => setPage((p) => p + 1)}>
+              Показать еще ({filteredItems.length - paginatedItems.length} осталось)
+            </button>
+          </div>
+        )}
       </PprPageShell>
 
       <PprModal open={isCreateOpen} onClose={() => { setIsCreateOpen(false); setIsDirty(false); }} title="Новая карточка ТМЦ" isDirty={isDirty}>
