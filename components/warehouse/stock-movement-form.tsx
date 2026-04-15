@@ -40,10 +40,10 @@ function getMovementSubmitLabel(type: keyof typeof stockMovementTypeMeta) {
 }
 
 function getMovementHint(type: keyof typeof stockMovementTypeMeta) {
-  if (type === "receipt") return "Добавьте новую поставку или найденный остаток на это место хранения.";
-  if (type === "issue") return "Используйте для выдачи или списания с этого места хранения.";
-  if (type === "adjustment_in") return "Используйте, если нужно увеличить остаток без отдельного прихода.";
-  return "Используйте, если нужно уменьшить остаток без отдельной выдачи.";
+  if (type === "receipt") return "Поставка или найденный остаток.";
+  if (type === "issue") return "Выдача или списание.";
+  if (type === "adjustment_in") return "Увеличение без прихода.";
+  return "Уменьшение без отдельной выдачи.";
 }
 
 export function StockMovementForm({ objectId, locationId, items, action }: Props) {
@@ -120,13 +120,13 @@ export function StockMovementForm({ objectId, locationId, items, action }: Props
         </div>
 
         <label className="grid" style={{ gap: "0.35rem" }}>
-          <span className="text-soft">Найти ТМЦ</span>
+          <span className="text-soft">Поиск</span>
           <input
             className="input"
             type="search"
             value={itemQuery}
             onChange={(event) => setItemQuery(event.target.value)}
-            placeholder="По названию или типу"
+            placeholder="Название или тип"
           />
         </label>
 

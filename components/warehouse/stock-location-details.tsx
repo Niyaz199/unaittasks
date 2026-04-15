@@ -109,7 +109,7 @@ export function StockLocationDetails({
   recordMovementAction: (formData: FormData) => void | Promise<void>;
 }) {
   const objectName = resolveName(location.object);
-  const [activeView, setActiveView] = useState<"state" | "history">("state");
+  const [activeView, setActiveView] = useState<"state" | "movement" | "history" | "qr">("state");
   const totals = useMemo(() => {
     const locationQty = balances.reduce((sum, balance) => sum + balance.qty, 0);
     const lowStockCount = balances.reduce((sum, balance) => {
@@ -121,27 +121,26 @@ export function StockLocationDetails({
       positions: balances.length,
       locationQty,
       lowStockCount,
-      movementsCount: movements.length,
     };
-  }, [balances, movements.length]);
+  }, [balances]);
   const historyCaption =
     movements.length === 20
       ? "Показаны последние 20 операций по этому месту хранения."
       : movements.length > 0
         ? "Все доступные операции по этому месту хранения отображены ниже."
         : "Движений по этому месту хранения пока не было.";
+  const hasDescription = Boolean(location.description?.trim());
 
   return (
     <div className="warehouse-location-page">
       <div className="section-card warehouse-location-hero">
         <div className="warehouse-location-hero-head">
-          <div className="grid" style={{ gap: "0.35rem" }}>
-            <div className="warehouse-location-eyebrow">Объект • {objectName}</div>
-            <h2 className="warehouse-location-title">Операционный обзор</h2>
-            <div className="warehouse-location-context">{location.name}</div>
-            <div className="text-soft warehouse-location-description">
-              {location.description?.trim() || "Актуальные остатки, быстрые движения и QR-доступ без лишнего шума."}
-            </div>
+          <div className="warehouse-location-hero-copy">
+            <div className="warehouse-location-eyebrow">Объект</div>
+            <div className="warehouse-location-context">{objectName}</div>
+            {hasDescription ? (
+              <div className="text-soft warehouse-location-description">{location.description?.trim()}</div>
+            ) : null}
           </div>
           <Badge tone={location.is_active ? "success" : "neutral"}>{location.is_active ? "Активно" : "Неактивно"}</Badge>
         </div>
@@ -159,39 +158,48 @@ export function StockLocationDetails({
             <span className="warehouse-location-metric-label">Ниже минимума</span>
             <strong className={totals.lowStockCount > 0 ? "warehouse-danger-text" : ""}>{totals.lowStockCount}</strong>
           </div>
-          <div className="warehouse-location-metric">
-            <span className="warehouse-location-metric-label">Операции</span>
-            <strong>{totals.movementsCount}</strong>
-          </div>
         </div>
       </div>
 
-      <div className="warehouse-location-layout">
-        <div className="warehouse-location-primary">
-          <div className="warehouse-view-switch" role="tablist" aria-label="Раздел карточки склада">
-            <button
-              type="button"
-              className={`warehouse-view-tab ${activeView === "state" ? "is-active" : ""}`}
-              onClick={() => setActiveView("state")}
-            >
-              Состояние
-            </button>
-            <button
-              type="button"
-              className={`warehouse-view-tab ${activeView === "history" ? "is-active" : ""}`}
-              onClick={() => setActiveView("history")}
-            >
-              История
-              <span className="warehouse-view-tab-count">{movements.length}</span>
-            </button>
-          </div>
+      <div className="warehouse-location-stack">
+        <div className="warehouse-view-switch" role="tablist" aria-label="Раздел карточки склада">
+          <button
+            type="button"
+            className={`warehouse-view-tab ${activeView === "state" ? "is-active" : ""}`}
+            onClick={() => setActiveView("state")}
+          >
+            Состояние
+          </button>
+          <button
+            type="button"
+            className={`warehouse-view-tab ${activeView === "movement" ? "is-active" : ""}`}
+            onClick={() => setActiveView("movement")}
+          >
+            Движение
+          </button>
+          <button
+            type="button"
+            className={`warehouse-view-tab ${activeView === "history" ? "is-active" : ""}`}
+            onClick={() => setActiveView("history")}
+          >
+            История
+            <span className="warehouse-view-tab-count">{movements.length}</span>
+          </button>
+          <button
+            type="button"
+            className={`warehouse-view-tab ${activeView === "qr" ? "is-active" : ""}`}
+            onClick={() => setActiveView("qr")}
+          >
+            QR
+          </button>
+        </div>
 
+        <div className="section-card warehouse-location-section warehouse-location-tab-panel">
           {activeView === "state" ? (
-            <div className="section-card warehouse-location-section">
+            <>
               <div className="warehouse-section-head">
                 <div className="grid" style={{ gap: "0.2rem" }}>
-                  <h3 className="warehouse-section-title">Текущее наполнение</h3>
-                  <div className="text-soft">Что сейчас лежит на месте хранения и какие позиции требуют внимания.</div>
+                  <h3 className="warehouse-section-title">Состояние</h3>
                 </div>
                 {totals.lowStockCount > 0 ? <Badge tone="danger">Ниже минимума: {totals.lowStockCount}</Badge> : null}
               </div>
@@ -244,12 +252,33 @@ export function StockLocationDetails({
               ) : (
                 <div className="text-soft">На этом месте хранения пока нет остатков.</div>
               )}
-            </div>
-          ) : (
-            <div className="section-card warehouse-location-section">
+            </>
+          ) : null}
+
+          {activeView === "movement" ? (
+            <>
               <div className="warehouse-section-head">
                 <div className="grid" style={{ gap: "0.2rem" }}>
-                  <h3 className="warehouse-section-title">История движений</h3>
+                  <h3 className="warehouse-section-title">Движение</h3>
+                </div>
+              </div>
+              {canRecordMovement ? (
+                movementItems.length ? (
+                  <StockMovementForm objectId={location.object_id} locationId={location.id} items={movementItems} action={recordMovementAction} />
+                ) : (
+                  <div className="text-soft">Сначала создайте карточки ТМЦ, чтобы фиксировать движения.</div>
+                )
+              ) : (
+                <div className="text-soft">У вас нет прав на фиксацию движений по складу.</div>
+              )}
+            </>
+          ) : null}
+
+          {activeView === "history" ? (
+            <>
+              <div className="warehouse-section-head">
+                <div className="grid" style={{ gap: "0.2rem" }}>
+                  <h3 className="warehouse-section-title">История</h3>
                   <div className="text-soft">{historyCaption}</div>
                 </div>
                 {movements.length === 20 ? <Badge tone="warning">Последние 20</Badge> : null}
@@ -280,44 +309,25 @@ export function StockLocationDetails({
               ) : (
                 <div className="text-soft">Движений по этому месту хранения пока не было.</div>
               )}
-            </div>
-          )}
-        </div>
+            </>
+          ) : null}
 
-        <div className="warehouse-location-actions">
-          <div className="section-card warehouse-location-section warehouse-action-panel">
-            <div className="warehouse-section-head">
-              <div className="grid" style={{ gap: "0.2rem" }}>
-                <h3 className="warehouse-section-title">Зафиксировать движение</h3>
-                <div className="text-soft">Выберите тип операции, ТМЦ и сразу проверьте прогноз по остатку.</div>
+          {activeView === "qr" ? (
+            <>
+              <div className="warehouse-section-head">
+                <div className="grid" style={{ gap: "0.2rem" }}>
+                  <h3 className="warehouse-section-title">QR</h3>
+                </div>
               </div>
-            </div>
-            {canRecordMovement ? (
-              movementItems.length ? (
-                <StockMovementForm objectId={location.object_id} locationId={location.id} items={movementItems} action={recordMovementAction} />
-              ) : (
-                <div className="text-soft">Сначала создайте карточки ТМЦ, чтобы фиксировать движения.</div>
-              )
-            ) : (
-              <div className="text-soft">У вас нет прав на фиксацию движений по складу.</div>
-            )}
-          </div>
-
-          <div className="section-card warehouse-location-section warehouse-secondary-panel">
-            <div className="warehouse-section-head">
-              <div className="grid" style={{ gap: "0.2rem" }}>
-                <h3 className="warehouse-section-title">QR-доступ</h3>
-                <div className="text-soft">Сканирование для быстрого перехода в карточку места хранения и служебных операций.</div>
-              </div>
-            </div>
-            <StockLocationQrBlock
-              locationId={location.id}
-              objectName={objectName}
-              locationName={location.name}
-              qrCode={qrCode}
-              canRegenerate={canRegenerateQr}
-            />
-          </div>
+              <StockLocationQrBlock
+                locationId={location.id}
+                objectName={objectName}
+                locationName={location.name}
+                qrCode={qrCode}
+                canRegenerate={canRegenerateQr}
+              />
+            </>
+          ) : null}
         </div>
       </div>
     </div>

@@ -90,7 +90,7 @@ export function StockLocationQrBlock({ locationId, objectName, locationName, qrC
 
         <div className="warehouse-qr-content">
           <div className="warehouse-qr-meta">
-            <div className="text-soft">Токен</div>
+            <div className="text-soft">Код</div>
             <div className="warehouse-qr-token">{activeQrCode.qr_token}</div>
           </div>
           <div className="warehouse-qr-stats">
@@ -105,15 +105,15 @@ export function StockLocationQrBlock({ locationId, objectName, locationName, qrC
           </div>
 
           <div className="warehouse-qr-actions">
+            <button type="button" className="btn btn-accent" onClick={handleDownload}>
+              Скачать PNG
+            </button>
             <button type="button" className="btn btn-ghost" onClick={handleCopy}>
               {copied ? "Скопировано!" : "Копировать ссылку"}
             </button>
             <a href={qrHref} target="_blank" rel="noopener noreferrer" className="btn btn-ghost warehouse-qr-link">
-              Открыть
+              Открыть ссылку
             </a>
-            <button type="button" className="btn btn-ghost" onClick={handleDownload}>
-              Скачать PNG
-            </button>
             {canRegenerate ? (
               <button type="button" className="btn btn-ghost" onClick={handleRegenerate} disabled={pending}>
                 {pending ? "Пересоздание..." : "Пересоздать"}
