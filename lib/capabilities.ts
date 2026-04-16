@@ -2,6 +2,7 @@ import type { Role } from "@/lib/types";
 import {
   canAccessDailyChecklists as canAccessDailyChecklistsByRole,
   canAccessDirectories as canAccessDirectoriesByRole,
+  canAccessPurchaseRequests as canAccessPurchaseRequestsByRole,
   canAccessWarehouseModule as canAccessWarehouseModuleByRole,
   canAccessUserManagement,
   canCreatePurchaseRequests as canCreatePurchaseRequestsByRole,
@@ -79,7 +80,7 @@ export function canManageWarehouseCatalog(role: Role) {
 }
 
 export function canAccessPurchaseRequestsModule(role: Role) {
-  return canAccessWarehouseModuleByRole(role);
+  return canAccessPurchaseRequestsByRole(role);
 }
 
 export function canCreatePurchaseRequests(role: Role) {

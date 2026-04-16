@@ -21,7 +21,9 @@ type StockItemRow = {
   id: string;
   object_id: string;
   name: string;
-  kind: "material" | "spare_part" | "consumable" | "component";
+  kind: "zip" | "component";
+  is_spare_part: boolean;
+  procurement_method: "engineer" | "procurement";
   unit: string;
   sku: string | null;
   min_qty: number;
@@ -119,7 +121,7 @@ export function StockItemsAdmin({
       const matchesSystemGroup =
         filterSystemGroupId === "" ||
         (item.system_group_links ?? []).some((link) => link.system_group_id === filterSystemGroupId);
-      const matchesLowStock = !lowStockOnly || item.current_qty <= item.min_qty;
+      const matchesLowStock = !lowStockOnly || item.current_qty < item.min_qty;
       const search = searchTerm.trim().toLowerCase();
       const matchesSearch =
         search === "" ||
@@ -131,8 +133,8 @@ export function StockItemsAdmin({
 
     // Default sort by name, but put critical items first if lowStockOnly is not checked
     return result.sort((a, b) => {
-      const aCritical = a.current_qty <= a.min_qty;
-      const bCritical = b.current_qty <= b.min_qty;
+      const aCritical = a.current_qty < a.min_qty;
+      const bCritical = b.current_qty < b.min_qty;
       if (!lowStockOnly && aCritical !== bCritical) {
         return aCritical ? -1 : 1;
       }
@@ -168,7 +170,7 @@ export function StockItemsAdmin({
     () => locations.filter((item) => (filterObjectId ? item.object_id === filterObjectId : true)),
     [filterObjectId, locations]
   );
-  const lowStockCount = useMemo(() => items.filter((item) => item.current_qty <= item.min_qty).length, [items]);
+  const lowStockCount = useMemo(() => items.filter((item) => item.current_qty < item.min_qty).length, [items]);
   const activeCount = useMemo(() => items.filter((item) => item.is_active).length, [items]);
   const activeFiltersCount = [filterKind, filterLocationId, filterSystemGroupId, lowStockOnly ? "low-stock" : ""].filter(Boolean).length;
   const selectedLocationName = filteredLocationOptions.find((item) => item.id === filterLocationId)?.name ?? null;
@@ -264,7 +266,7 @@ export function StockItemsAdmin({
         keepChildrenWhenEmpty={isObjectScoped || isAllObjectsMode}
         emptyState={{
           message: "Карточки ТМЦ пока не созданы",
-          hint: "Добавьте первую карточку материала, расходника или запасной части.",
+          hint: "Добавьте первую карточку ЗИП или компонента.",
         }}
         isFilteredEmpty={filteredItems.length === 0}
         keepChildrenWhenFilteredEmpty={isObjectScoped || isAllObjectsMode}
@@ -593,7 +595,7 @@ export function StockItemsAdmin({
                 ]}
               >
                 {paginatedItems.map((item) => {
-                  const isLowStock = item.current_qty <= item.min_qty;
+                  const isLowStock = item.current_qty < item.min_qty;
                   const systemGroupsLabel = (item.system_group_links ?? [])
                     .map((link) => resolveSystemGroupLabel(link.system_group))
                     .filter(Boolean)
@@ -645,7 +647,7 @@ export function StockItemsAdmin({
 
             <div className="mobile-cards mobile-only">
               {paginatedItems.map((item) => {
-                const isLowStock = item.current_qty <= item.min_qty;
+                const isLowStock = item.current_qty < item.min_qty;
                 return (
                   <div key={item.id} className="section-card mobile-card" style={{ padding: "0.8rem", display: "grid", gap: "0.6rem" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
@@ -743,6 +745,8 @@ export function StockItemsAdmin({
               object_id: editingItem.object_id,
               name: editingItem.name,
               kind: editingItem.kind,
+              is_spare_part: editingItem.is_spare_part,
+              procurement_method: editingItem.procurement_method,
               unit: editingItem.unit,
               sku: editingItem.sku ?? "",
               min_qty: String(editingItem.min_qty),

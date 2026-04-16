@@ -1,8 +1,11 @@
 export const stockItemKindMeta = {
-  material: { label: "Материал" },
-  spare_part: { label: "ЗИП" },
-  consumable: { label: "Расходник" },
+  zip: { label: "ЗИП" },
   component: { label: "Компонент" },
+} as const;
+
+export const procurementMethodMeta = {
+  engineer: { label: "Покупает инженер объекта" },
+  procurement: { label: "Покупает менеджер по закупкам" },
 } as const;
 
 export const stockMovementTypeMeta = {

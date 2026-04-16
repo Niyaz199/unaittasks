@@ -31,7 +31,7 @@ type ActiveQrCode = {
 type EquipmentComponentItem = {
   id: string;
   name: string;
-  kind: "material" | "spare_part" | "consumable" | "component";
+  kind: "zip" | "component";
   unit: string;
   min_qty: number;
   current_qty: number;

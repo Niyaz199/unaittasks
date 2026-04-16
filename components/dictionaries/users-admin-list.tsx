@@ -33,6 +33,7 @@ function roleTone(role: Role) {
   if (role === "chief") return "warning";
   if (role === "lead") return "violet";
   if (role === "object_engineer") return "success";
+  if (role === "procurement_manager") return "info";
   if (role === "tech") return "neutral";
   return "info";
 }
@@ -42,6 +43,7 @@ function roleLabel(role: Role) {
   if (role === "chief") return "Руководитель";
   if (role === "lead") return "Лид";
   if (role === "object_engineer") return "Инженер объекта";
+  if (role === "procurement_manager") return "Менеджер по закупкам";
   if (role === "tech") return "Техник";
   return "Инженер";
 }

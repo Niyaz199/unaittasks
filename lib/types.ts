@@ -1,4 +1,4 @@
-export type Role = "admin" | "chief" | "lead" | "engineer" | "object_engineer" | "tech";
+export type Role = "admin" | "chief" | "lead" | "engineer" | "object_engineer" | "tech" | "procurement_manager";
 export type TaskStatus = "new" | "accepted" | "in_progress" | "paused" | "done";
 export type TaskPriority = "low" | "medium" | "high" | "critical";
 
@@ -79,15 +79,20 @@ export type TaskAttachment = {
   url?: string | null;
 };
 
-export type StockItemKind = "material" | "spare_part" | "consumable" | "component";
+export type StockItemKind = "zip" | "component";
 export type StockMovementType = "receipt" | "issue" | "adjustment_in" | "adjustment_out";
 export type PurchaseRequestStatus = "new" | "in_progress" | "fulfilled" | "cancelled";
+export type ProcurementMethod = "engineer" | "procurement";
+export type PurchaseRequestKind = "draft" | "final";
+export type PurchaseRequestExecutorRole = "engineer" | "procurement_manager";
 
 export type StockItem = {
   id: string;
   object_id: string;
   name: string;
   kind: StockItemKind;
+  is_spare_part: boolean;
+  procurement_method: ProcurementMethod;
   unit: string;
   sku: string | null;
   min_qty: number;
@@ -101,6 +106,8 @@ export type StockItem = {
 export type StockLocation = {
   id: string;
   object_id: string;
+  system_id?: string | null;
+  room_id?: string | null;
   name: string;
   description: string | null;
   is_active: boolean;
@@ -126,10 +133,16 @@ export type PurchaseRequest = {
   id: string;
   object_id: string;
   status: PurchaseRequestStatus;
-  source: "manual" | "low_stock";
+  source: "manual" | "warehouse_daily";
+  request_kind: PurchaseRequestKind;
+  executor_role: PurchaseRequestExecutorRole | null;
   description: string | null;
-  requested_by: string;
+  requested_by: string | null;
   assigned_to: string | null;
+  draft_date?: string | null;
+  origin_request_id?: string | null;
+  processed_at?: string | null;
+  approved_by?: string | null;
   created_at: string;
   updated_at: string;
   fulfilled_at: string | null;

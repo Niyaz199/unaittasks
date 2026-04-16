@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { canEditTasks, requireProfile } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { listTasksForProfile, type TaskFiltersInput } from "@/lib/tasks";
@@ -35,6 +36,9 @@ function listTaskPeople(tasks: TaskItem[]) {
 export default async function MyTasksPage({ searchParams }: { searchParams: Promise<Search> }) {
   const params = await searchParams;
   const { profile } = await requireProfile();
+  if (profile.role === "procurement_manager") {
+    redirect("/purchase-requests");
+  }
   const supabase = await createSupabaseServerClient();
 
   const filters: TaskFiltersInput = {

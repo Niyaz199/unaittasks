@@ -1,5 +1,5 @@
 import { requireProfile } from "@/lib/auth";
-import { canAccessPurchaseRequestsModule, canManagePurchaseRequests } from "@/lib/capabilities";
+import { canAccessPurchaseRequestsModule, canCreatePurchaseRequests, canManagePurchaseRequests } from "@/lib/capabilities";
 import { listPurchaseRequestsForProfile, listPurchaseRequestReadableObjectsForProfile } from "@/lib/purchase-requests/queries";
 import { listStockItemOptionsForProfile } from "@/lib/warehouse/queries";
 import { PageHeader } from "@/components/ui/page-header";
@@ -18,13 +18,20 @@ export default async function PurchaseRequestsPage({
     return <div className="empty-state">Доступ к закупкам запрещён.</div>;
   }
 
-  const objects = await listPurchaseRequestReadableObjectsForProfile(supabase, profile);
   const requestedObjectId = typeof search.objectId === "string" ? search.objectId : "";
-  const selectedObjectId = objects.some((item) => item.id === requestedObjectId) ? requestedObjectId : "";
-  const [requests, stockItems] = await Promise.all([
-    listPurchaseRequestsForProfile(supabase, profile, selectedObjectId ? { objectId: selectedObjectId } : {}),
-    listStockItemOptionsForProfile(supabase, profile, selectedObjectId ? { objectId: selectedObjectId, includeInactive: true } : { includeInactive: true }),
-  ]);
+  const canCreate = canCreatePurchaseRequests(profile.role);
+  const canManage = canManagePurchaseRequests(profile.role);
+  const readableObjects = await listPurchaseRequestReadableObjectsForProfile(supabase, profile);
+  const selectedObjectId = readableObjects.some((item) => item.id === requestedObjectId) ? requestedObjectId : "";
+  const requests = await listPurchaseRequestsForProfile(supabase, profile, selectedObjectId ? { objectId: selectedObjectId } : {});
+  const objects = readableObjects;
+  const stockItems = canCreate
+    ? await listStockItemOptionsForProfile(
+        supabase,
+        profile,
+        selectedObjectId ? { objectId: selectedObjectId, includeInactive: true } : { includeInactive: true }
+      )
+    : [];
 
   return (
     <section className="grid">
@@ -37,7 +44,10 @@ export default async function PurchaseRequestsPage({
         requests={requests}
         objects={objects.map((item) => ({ id: item.id, name: item.name }))}
         stockItems={stockItems.map((item) => ({ id: item.id, object_id: item.object_id, name: item.name, unit: item.unit, is_active: item.is_active }))}
-        canManage={canManagePurchaseRequests(profile.role)}
+        actorRole={profile.role}
+        actorId={profile.id}
+        canCreate={canCreate}
+        canManage={canManage}
         initialFilterObjectId={selectedObjectId}
       />
     </section>

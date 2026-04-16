@@ -13,7 +13,6 @@ import {
   stockLocationFormSchema,
   stockMovementFormSchema,
 } from "@/lib/warehouse/validators";
-import { sendPushToUser } from "@/lib/push";
 import { writeAudit } from "@/lib/audit";
 
 function canUseAllObjects(role: string) {
@@ -108,17 +107,37 @@ async function getLocationObjectId(
   return data.object_id as string;
 }
 
+async function getSystemObjectId(
+  supabase: Awaited<ReturnType<typeof requireProfile>>["supabase"],
+  systemId: string
+) {
+  const { data, error } = await supabase.from("ppr_systems").select("object_id").eq("id", systemId).single();
+  if (error) throw error;
+  return data.object_id as string;
+}
+
+async function getRoomObjectId(
+  supabase: Awaited<ReturnType<typeof requireProfile>>["supabase"],
+  roomId: string
+) {
+  const { data, error } = await supabase.from("object_rooms").select("object_id").eq("id", roomId).single();
+  if (error) throw error;
+  return data.object_id as string;
+}
+
 export async function createStockItemAction(formData: FormData) {
   const { profile, supabase, managedObjectIds } = await requireWarehouseManager();
   const initialQtyRaw = formData.get("initial_qty");
   const payload = stockItemFormSchema.parse({
     objectId: String(formData.get("object_id") ?? ""),
     name: String(formData.get("name") ?? ""),
-    kind: String(formData.get("kind") ?? "material"),
+    kind: String(formData.get("kind") ?? "zip"),
+    isSparePart: formData.get("is_spare_part") === "on",
+    procurementMethod: String(formData.get("procurement_method") ?? "engineer"),
     unit: String(formData.get("unit") ?? "шт"),
     sku: String(formData.get("sku") ?? "") || null,
     minQty: String(formData.get("min_qty") ?? "0"),
-    storageLocationId: String(formData.get("storage_location_id") ?? ""),
+    storageLocationId: String(formData.get("storage_location_id") ?? "") || null,
     systemGroupIds: formData
       .getAll("system_group_ids")
       .map((value) => String(value))
@@ -129,9 +148,15 @@ export async function createStockItemAction(formData: FormData) {
   });
 
   assertObjectAllowed(profile.role, managedObjectIds, payload.objectId, "Объект недоступен для управления ТМЦ");
-  const locationObjectId = await getLocationObjectId(supabase, payload.storageLocationId);
-  if (locationObjectId !== payload.objectId) {
-    throw new Error("Место хранения должно принадлежать выбранному объекту");
+  if (payload.storageLocationId) {
+    const locationObjectId = await getLocationObjectId(supabase, payload.storageLocationId);
+    if (locationObjectId !== payload.objectId) {
+      throw new Error("Место хранения должно принадлежать выбранному объекту");
+    }
+  }
+
+  if (!payload.storageLocationId && payload.initialQty && payload.initialQty > 0) {
+    throw new Error("Стартовый остаток можно задать только для ТМЦ с местом хранения");
   }
 
   const { data, error } = await supabase
@@ -140,10 +165,12 @@ export async function createStockItemAction(formData: FormData) {
       object_id: payload.objectId,
       name: payload.name.trim(),
       kind: payload.kind,
+      is_spare_part: payload.isSparePart,
+      procurement_method: payload.procurementMethod,
       unit: payload.unit.trim(),
       sku: payload.sku?.trim() || null,
       min_qty: payload.minQty,
-      storage_location_id: payload.storageLocationId,
+      storage_location_id: payload.storageLocationId ?? null,
       comment: payload.comment?.trim() || null,
       is_active: payload.isActive,
     })
@@ -194,16 +221,18 @@ export async function createStockItemAction(formData: FormData) {
     meta: {
       object_id: payload.objectId,
       kind: payload.kind,
+        is_spare_part: payload.isSparePart,
+        procurement_method: payload.procurementMethod,
       unit: payload.unit.trim(),
       min_qty: payload.minQty,
-      storage_location_id: payload.storageLocationId,
+        storage_location_id: payload.storageLocationId ?? null,
       system_group_ids: payload.systemGroupIds,
       initial_qty: payload.initialQty,
     },
     supabase,
   });
 
-  revalidateWarehousePaths(payload.storageLocationId);
+  revalidateWarehousePaths(payload.storageLocationId ?? undefined);
   return { id: data.id };
 }
 
@@ -213,11 +242,13 @@ export async function updateStockItemAction(formData: FormData) {
   const payload = stockItemFormSchema.parse({
     objectId: String(formData.get("object_id") ?? ""),
     name: String(formData.get("name") ?? ""),
-    kind: String(formData.get("kind") ?? "material"),
+    kind: String(formData.get("kind") ?? "zip"),
+    isSparePart: formData.get("is_spare_part") === "on",
+    procurementMethod: String(formData.get("procurement_method") ?? "engineer"),
     unit: String(formData.get("unit") ?? "шт"),
     sku: String(formData.get("sku") ?? "") || null,
     minQty: String(formData.get("min_qty") ?? "0"),
-    storageLocationId: String(formData.get("storage_location_id") ?? ""),
+    storageLocationId: String(formData.get("storage_location_id") ?? "") || null,
     systemGroupIds: formData
       .getAll("system_group_ids")
       .map((value) => String(value))
@@ -228,9 +259,11 @@ export async function updateStockItemAction(formData: FormData) {
   });
 
   assertObjectAllowed(profile.role, managedObjectIds, payload.objectId, "Объект недоступен для управления ТМЦ");
-  const locationObjectId = await getLocationObjectId(supabase, payload.storageLocationId);
-  if (locationObjectId !== payload.objectId) {
-    throw new Error("Место хранения должно принадлежать выбранному объекту");
+  if (payload.storageLocationId) {
+    const locationObjectId = await getLocationObjectId(supabase, payload.storageLocationId);
+    if (locationObjectId !== payload.objectId) {
+      throw new Error("Место хранения должно принадлежать выбранному объекту");
+    }
   }
 
   const { error } = await supabase
@@ -239,10 +272,12 @@ export async function updateStockItemAction(formData: FormData) {
       object_id: payload.objectId,
       name: payload.name.trim(),
       kind: payload.kind,
+      is_spare_part: payload.isSparePart,
+      procurement_method: payload.procurementMethod,
       unit: payload.unit.trim(),
       sku: payload.sku?.trim() || null,
       min_qty: payload.minQty,
-      storage_location_id: payload.storageLocationId,
+      storage_location_id: payload.storageLocationId ?? null,
       comment: payload.comment?.trim() || null,
       is_active: payload.isActive,
     })
@@ -259,16 +294,18 @@ export async function updateStockItemAction(formData: FormData) {
     meta: {
       object_id: payload.objectId,
       kind: payload.kind,
+        is_spare_part: payload.isSparePart,
+        procurement_method: payload.procurementMethod,
       unit: payload.unit.trim(),
       min_qty: payload.minQty,
-      storage_location_id: payload.storageLocationId,
+        storage_location_id: payload.storageLocationId ?? null,
       system_group_ids: payload.systemGroupIds,
       is_active: payload.isActive,
     },
     supabase,
   });
 
-  revalidateWarehousePaths(payload.storageLocationId);
+  revalidateWarehousePaths(payload.storageLocationId ?? undefined);
   return { id: itemId };
 }
 
@@ -276,17 +313,28 @@ export async function createStockLocationAction(formData: FormData) {
   const { profile, supabase, managedObjectIds } = await requireWarehouseManager();
   const payload = stockLocationFormSchema.parse({
     objectId: String(formData.get("object_id") ?? ""),
+    systemId: String(formData.get("system_id") ?? ""),
+    roomId: String(formData.get("room_id") ?? ""),
     name: String(formData.get("name") ?? ""),
     description: String(formData.get("description") ?? "") || null,
     isActive: formData.get("is_active") === "on",
   });
 
   assertObjectAllowed(profile.role, managedObjectIds, payload.objectId, "Объект недоступен для управления местами хранения");
+  const [systemObjectId, roomObjectId] = await Promise.all([
+    getSystemObjectId(supabase, payload.systemId),
+    getRoomObjectId(supabase, payload.roomId),
+  ]);
+  if (systemObjectId !== payload.objectId || roomObjectId !== payload.objectId) {
+    throw new Error("Система и помещение должны принадлежать выбранному объекту");
+  }
 
   const { data, error } = await supabase
     .from("stock_locations")
     .insert({
       object_id: payload.objectId,
+      system_id: payload.systemId,
+      room_id: payload.roomId,
       name: payload.name.trim(),
       description: payload.description?.trim() || null,
       is_active: payload.isActive,
@@ -302,6 +350,8 @@ export async function createStockLocationAction(formData: FormData) {
     entityId: data.id,
     meta: {
       object_id: payload.objectId,
+      system_id: payload.systemId,
+      room_id: payload.roomId,
       is_active: payload.isActive,
     },
     supabase,
@@ -315,17 +365,28 @@ export async function updateStockLocationAction(formData: FormData) {
   const locationId = String(formData.get("location_id") ?? "");
   const payload = stockLocationFormSchema.parse({
     objectId: String(formData.get("object_id") ?? ""),
+    systemId: String(formData.get("system_id") ?? ""),
+    roomId: String(formData.get("room_id") ?? ""),
     name: String(formData.get("name") ?? ""),
     description: String(formData.get("description") ?? "") || null,
     isActive: formData.get("is_active") === "on",
   });
 
   assertObjectAllowed(profile.role, managedObjectIds, payload.objectId, "Объект недоступен для управления местами хранения");
+  const [systemObjectId, roomObjectId] = await Promise.all([
+    getSystemObjectId(supabase, payload.systemId),
+    getRoomObjectId(supabase, payload.roomId),
+  ]);
+  if (systemObjectId !== payload.objectId || roomObjectId !== payload.objectId) {
+    throw new Error("Система и помещение должны принадлежать выбранному объекту");
+  }
 
   const { error } = await supabase
     .from("stock_locations")
     .update({
       object_id: payload.objectId,
+      system_id: payload.systemId,
+      room_id: payload.roomId,
       name: payload.name.trim(),
       description: payload.description?.trim() || null,
       is_active: payload.isActive,
@@ -340,6 +401,8 @@ export async function updateStockLocationAction(formData: FormData) {
     entityId: locationId,
     meta: {
       object_id: payload.objectId,
+      system_id: payload.systemId,
+      room_id: payload.roomId,
       is_active: payload.isActive,
     },
     supabase,
@@ -381,21 +444,6 @@ export async function recordStockMovementAction(formData: FormData) {
     .select("id")
     .single();
   if (error) throw error;
-
-  const { data: lowStockData, error: lowStockError } = await supabase.rpc("stock_check_low_stock", {
-    _item_id: payload.itemId,
-    _actor_id: profile.id,
-  });
-  if (lowStockError) throw lowStockError;
-
-  const lowStockRow = Array.isArray(lowStockData) ? lowStockData[0] ?? null : lowStockData ?? null;
-  if (lowStockRow?.assigned_to) {
-    await sendPushToUser(String(lowStockRow.assigned_to), {
-      title: "Критический остаток на складе",
-      body: `${String(lowStockRow.item_name)} требует закупки`,
-      url: `/purchase-requests?objectId=${encodeURIComponent(String(lowStockRow.object_id))}`,
-    });
-  }
 
   await writeAudit({
     actorId: profile.id,

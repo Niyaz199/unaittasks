@@ -4,7 +4,14 @@ import Link from "next/link";
 import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import type { Role } from "@/lib/types";
-import { canAccessDirectories, canManageUsers, canAccessDailyChecklists, canReadDailyChecklistControl, canManageDailyChecklistTemplates } from "@/lib/capabilities";
+import {
+  canAccessDirectories,
+  canManageUsers,
+  canAccessDailyChecklists,
+  canReadDailyChecklistControl,
+  canManageDailyChecklistTemplates,
+  canAccessPurchaseRequestsModule,
+} from "@/lib/capabilities";
 import { canAccessPprModule } from "@/lib/ppr/permissions";
 import { canAccessRoundsModule } from "@/lib/rounds/permissions";
 
@@ -23,12 +30,15 @@ function isTasksModuleActive(pathname: string) {
 
 export function MobileTabs({ role }: { role: Role }) {
   const pathname = usePathname();
+  const isProcurementManager = role === "procurement_manager";
   const directoryHref: Route = canManageUsers(role) ? "/users" : "/directories/floors";
   const canOpenDirectories = canAccessDirectories(role);
+  const canOpenPurchaseRequests = canAccessPurchaseRequestsModule(role);
   const pprHref: Route = role === "tech" ? "/ppr/my" : "/ppr";
   const roundsHref: Route = role === "tech" ? "/rounds/scan" : "/rounds";
   const moduleLinks: Array<{ href: Route; label: string; isActive: (pathname: string) => boolean }> = [
-    { href: "/my", label: "Задачи", isActive: isTasksModuleActive },
+    ...(!isProcurementManager ? [{ href: "/my" as Route, label: "Задачи", isActive: isTasksModuleActive }] : []),
+    ...(canOpenPurchaseRequests ? [{ href: "/purchase-requests" as Route, label: "Закупки", isActive: (value: string) => value === "/purchase-requests" || value.startsWith("/purchase-requests/") }] : []),
     ...(canAccessDailyChecklists(role) ? [{ href: "/checklists" as Route, label: "Чек-лист", isActive: (value: string) => value === "/checklists" || value.startsWith("/checklists/") }] : []),
     ...(canAccessPprModule(role) ? [{ href: pprHref, label: "ППР", isActive: (value: string) => value === "/ppr" || value.startsWith("/ppr/") }] : []),
     ...(canAccessRoundsModule(role) ? [{ href: roundsHref, label: "Обходы", isActive: (value: string) => value === "/rounds" || value.startsWith("/rounds/") }] : []),
@@ -153,35 +163,50 @@ export function MobileTabs({ role }: { role: Role }) {
       },
       serviceTab,
     ];
-  } else {
+  } else if (pathname === "/purchase-requests" || pathname.startsWith("/purchase-requests/")) {
     tabs = [
       {
-        href: "/my",
-        label: "Мои",
+        href: "/purchase-requests" as Route,
+        label: "Заявки",
         icon: (
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            <path d="M9 12h6"/><path d="M9 16h6"/><path d="M9 8h6"/><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H20v16H6.5A2.5 2.5 0 0 1 4 17.5v-11z"/>
           </svg>
         ),
       },
-      {
-        href: "/new",
-        label: "Новые",
-        icon: (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
-          </svg>
-        ),
-      },
-      {
-        href: "/archive",
-        label: "Архив",
-        icon: (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>
-          </svg>
-        ),
-      },
+      serviceTab,
+    ];
+  } else {
+    tabs = [
+      ...(!isProcurementManager ? [
+        {
+          href: "/my" as Route,
+          label: "Мои",
+          icon: (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            </svg>
+          ),
+        },
+        {
+          href: "/new" as Route,
+          label: "Новые",
+          icon: (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+            </svg>
+          ),
+        },
+        {
+          href: "/archive" as Route,
+          label: "Архив",
+          icon: (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>
+            </svg>
+          ),
+        },
+      ] : []),
       serviceTab,
     ];
   }

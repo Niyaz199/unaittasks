@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
-import { getSessionUser } from "@/lib/auth";
+import { requireProfile } from "@/lib/auth";
 
 export default async function HomePage() {
-  const user = await getSessionUser();
-  if (!user) redirect("/login");
+  const { profile } = await requireProfile();
+  if (profile.role === "procurement_manager") {
+    redirect("/purchase-requests");
+  }
   redirect("/my");
 }

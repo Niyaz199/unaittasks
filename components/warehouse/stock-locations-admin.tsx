@@ -18,14 +18,20 @@ const StockLocationForm = dynamic(
 type StockLocationRow = {
   id: string;
   object_id: string;
+  system_id: string | null;
+  room_id: string | null;
   name: string;
   description: string | null;
   is_active: boolean;
   created_at: string;
   object: { name: string } | Array<{ name: string }> | null;
+  system: { id: string; name: string } | Array<{ id: string; name: string }> | null;
+  room: { id: string; name: string } | Array<{ id: string; name: string }> | null;
 };
 
 type ObjectOption = { id: string; name: string };
+type SystemOption = { id: string; object_id: string; name: string; is_active?: boolean };
+type RoomOption = { id: string; object_id: string; name: string; is_active?: boolean };
 
 function resolveName(raw: { name: string } | Array<{ name: string }> | null | undefined) {
   if (Array.isArray(raw)) return raw[0]?.name ?? "—";
@@ -35,10 +41,14 @@ function resolveName(raw: { name: string } | Array<{ name: string }> | null | un
 export function StockLocationsAdmin({
   locations,
   objects,
+  systems,
+  rooms,
   initialFilterObjectId = "",
 }: {
   locations: StockLocationRow[];
   objects: ObjectOption[];
+  systems: SystemOption[];
+  rooms: RoomOption[];
   initialFilterObjectId?: string;
 }) {
   const router = useRouter();
@@ -215,6 +225,8 @@ export function StockLocationsAdmin({
         <StockLocationForm
           action={createStockLocationAction}
           objects={objects}
+          systems={systems}
+          rooms={rooms}
           onSubmitted={() => { setIsCreateOpen(false); setIsDirty(false); }}
           onChange={() => setIsDirty(true)}
           submitLabel="Создать"
@@ -227,11 +239,15 @@ export function StockLocationsAdmin({
             action={updateStockLocationAction}
             locationId={editingLocation.id}
             objects={objects}
+            systems={systems}
+            rooms={rooms}
             onSubmitted={() => { setEditingId(null); setIsDirty(false); }}
             onChange={() => setIsDirty(true)}
             submitLabel="Сохранить"
             initialValues={{
               object_id: editingLocation.object_id,
+              system_id: editingLocation.system_id ?? "",
+              room_id: editingLocation.room_id ?? "",
               name: editingLocation.name,
               description: editingLocation.description ?? "",
               is_active: editingLocation.is_active,

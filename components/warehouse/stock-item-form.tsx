@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PprFormGroup, PprFormSection } from "@/components/ppr/ui/ppr-modal";
 import { useToast } from "@/components/ui/toast";
-import { stockItemKindMeta } from "@/lib/warehouse/presentation";
+import { procurementMethodMeta, stockItemKindMeta } from "@/lib/warehouse/presentation";
 import { MultiSelectCombobox } from "@/components/ui/multi-select-combobox";
 
 type ObjectOption = { id: string; name: string };
@@ -13,7 +13,9 @@ type SystemGroupOption = { id: string; name: string; code: string; is_active?: b
 type StockItemFormValues = {
   object_id: string;
   name: string;
-  kind: "material" | "spare_part" | "consumable" | "component";
+  kind: "zip" | "component";
+  is_spare_part: boolean;
+  procurement_method: "engineer" | "procurement";
   unit: string;
   sku: string;
   min_qty: string;
@@ -41,7 +43,9 @@ type Props = {
 const defaultValues: StockItemFormValues = {
   object_id: "",
   name: "",
-  kind: "material",
+  kind: "zip",
+  is_spare_part: false,
+  procurement_method: "engineer",
   unit: "шт",
   sku: "",
   min_qty: "0",
@@ -69,9 +73,11 @@ export function StockItemForm({
   const initialObjectId = fixedObjectId ?? values.object_id;
   const [selectedObjectId, setSelectedObjectId] = useState(initialObjectId);
   const [selectedLocationId, setSelectedLocationId] = useState(values.storage_location_id);
-  const [selectedSystemGroupIds, setSelectedSystemGroupIds] = useState(values.system_group_ids);
+  const [selectedKind, setSelectedKind] = useState<StockItemFormValues["kind"]>(values.kind);
+  const [isSparePart, setIsSparePart] = useState(values.is_spare_part);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { addToast } = useToast();
+  const needsStorage = selectedKind === "zip" || (selectedKind === "component" && isSparePart);
 
   const filteredLocations = useMemo(
     () => locations.filter((item) => item.object_id === selectedObjectId),
@@ -86,8 +92,20 @@ export function StockItemForm({
 
   useEffect(() => {
     if (filteredLocations.some((item) => item.id === selectedLocationId)) return;
-    setSelectedLocationId(filteredLocations[0]?.id ?? "");
-  }, [filteredLocations, selectedLocationId]);
+    setSelectedLocationId(needsStorage ? (filteredLocations[0]?.id ?? "") : "");
+  }, [filteredLocations, needsStorage, selectedLocationId]);
+
+  useEffect(() => {
+    if (needsStorage) {
+      if (!selectedLocationId && filteredLocations[0]?.id) {
+        setSelectedLocationId(filteredLocations[0].id);
+      }
+      return;
+    }
+    if (selectedLocationId) {
+      setSelectedLocationId("");
+    }
+  }, [filteredLocations, needsStorage, selectedLocationId]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -143,7 +161,12 @@ export function StockItemForm({
 
           <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
             <PprFormGroup label="Тип">
-              <select className="select" name="kind" defaultValue={values.kind}>
+              <select
+                className="select"
+                name="kind"
+                value={selectedKind}
+                onChange={(event) => setSelectedKind(event.target.value as StockItemFormValues["kind"])}
+              >
                 {Object.entries(stockItemKindMeta).map(([key, meta]) => (
                   <option key={key} value={key}>
                     {meta.label}
@@ -156,46 +179,67 @@ export function StockItemForm({
               <input className="input" name="sku" defaultValue={values.sku} placeholder="Необязательно" />
             </PprFormGroup>
           </div>
-        </PprFormSection>
 
-        <PprFormSection title="Учет и хранение" desc="Где находится ТМЦ и как учитывается">
-          <PprFormGroup label="Где хранится ТМЦ">
-            <select
-              className="select"
-              name="storage_location_id"
-              required
-              value={selectedLocationId}
-              onChange={(event) => setSelectedLocationId(event.target.value)}
-              disabled={!filteredLocations.length}
-            >
-              <option value="" disabled>
-                {selectedObjectId ? "Выберите место хранения" : "Сначала выберите объект"}
-              </option>
-              {filteredLocations.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                  {item.is_active === false ? " (неактивно)" : ""}
+          {selectedKind === "component" ? (
+            <label className="row" style={{ gap: "0.8rem", alignItems: "center" }}>
+              <input type="checkbox" name="is_spare_part" checked={isSparePart} onChange={(event) => setIsSparePart(event.target.checked)} />
+              <span>Этот компонент также относится к ЗИП</span>
+            </label>
+          ) : null}
+
+          <PprFormGroup label="Метод закупки">
+            <select className="select" name="procurement_method" defaultValue={values.procurement_method}>
+              {Object.entries(procurementMethodMeta).map(([key, meta]) => (
+                <option key={key} value={key}>
+                  {meta.label}
                 </option>
               ))}
             </select>
           </PprFormGroup>
 
-          <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-            <PprFormGroup label="Ед. изм.">
-              <input className="input" name="unit" defaultValue={values.unit} placeholder="шт / м / упак." required />
-            </PprFormGroup>
-
-            <PprFormGroup label="Мин. остаток">
-              <input className="input" name="min_qty" type="number" min="0" step="0.001" defaultValue={values.min_qty} required />
-            </PprFormGroup>
-          </div>
-
-          {!itemId ? (
-            <PprFormGroup label="Стартовый остаток" description="необязательно">
-              <input className="input" name="initial_qty" type="number" min="0" step="0.001" defaultValue={values.initial_qty} placeholder="Если известно количество на складе" />
-            </PprFormGroup>
-          ) : null}
+          <PprFormGroup label="Ед. изм.">
+            <input className="input" name="unit" defaultValue={values.unit} placeholder="шт / м / упак." required />
+          </PprFormGroup>
         </PprFormSection>
+
+        {needsStorage ? (
+          <PprFormSection title="Учет и хранение" desc="Где находится ТМЦ и как учитывается">
+            <PprFormGroup label="Где хранится ТМЦ">
+              <select
+                className="select"
+                name="storage_location_id"
+                required
+                value={selectedLocationId}
+                onChange={(event) => setSelectedLocationId(event.target.value)}
+                disabled={!filteredLocations.length}
+              >
+                <option value="" disabled>
+                  {selectedObjectId ? "Выберите место хранения" : "Сначала выберите объект"}
+                </option>
+                {filteredLocations.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                    {item.is_active === false ? " (неактивно)" : ""}
+                  </option>
+                ))}
+              </select>
+            </PprFormGroup>
+
+            <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+              <PprFormGroup label="Мин. остаток">
+                <input className="input" name="min_qty" type="number" min="0" step="0.001" defaultValue={values.min_qty} required />
+              </PprFormGroup>
+            </div>
+
+            {!itemId ? (
+              <PprFormGroup label="Стартовый остаток" description="необязательно">
+                <input className="input" name="initial_qty" type="number" min="0" step="0.001" defaultValue={values.initial_qty} placeholder="Если известно количество на складе" />
+              </PprFormGroup>
+            ) : null}
+          </PprFormSection>
+        ) : (
+          <input type="hidden" name="min_qty" value="0" />
+        )}
 
         <PprFormSection title="Дополнительно" desc="Связи с системами и настройки">
           <PprFormGroup label="Привязка к группе систем" description="необязательно">
@@ -227,7 +271,7 @@ export function StockItemForm({
       </div>
 
       <div className="ppr-modal-footer">
-        <button className="btn btn-accent" type="submit" disabled={isSubmitting || !selectedObjectId || !selectedLocationId}>
+        <button className="btn btn-accent" type="submit" disabled={isSubmitting || !selectedObjectId || (needsStorage && !selectedLocationId)}>
           {isSubmitting ? "Сохранение..." : submitLabel}
         </button>
       </div>

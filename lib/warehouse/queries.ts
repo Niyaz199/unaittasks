@@ -6,6 +6,8 @@ import type { Profile } from "@/lib/types";
 
 type NamedRelation = { name: string } | Array<{ name: string }> | null;
 type StockLocationRelation = { id: string; name: string } | Array<{ id: string; name: string }> | null;
+type SystemRelation = { id: string; name: string } | Array<{ id: string; name: string }> | null;
+type RoomRelation = { id: string; name: string } | Array<{ id: string; name: string }> | null;
 type SystemGroupRelation = { id: string; name: string; code: string } | Array<{ id: string; name: string; code: string }> | null;
 
 export type StockItemSystemGroupLinkRow = {
@@ -21,7 +23,9 @@ export type StockItemRow = {
   id: string;
   object_id: string;
   name: string;
-  kind: "material" | "spare_part" | "consumable" | "component";
+  kind: "zip" | "component";
+  is_spare_part: boolean;
+  procurement_method: "engineer" | "procurement";
   unit: string;
   sku: string | null;
   min_qty: number;
@@ -38,11 +42,15 @@ export type StockItemRow = {
 export type StockLocationRow = {
   id: string;
   object_id: string;
+  system_id: string | null;
+  room_id: string | null;
   name: string;
   description: string | null;
   is_active: boolean;
   created_at: string;
   object: NamedRelation;
+  system: SystemRelation;
+  room: RoomRelation;
 };
 
 export type StockLocationQrCode = {
@@ -189,7 +197,7 @@ export async function listWarehouseObjectSummariesForProfile(
     const current = itemStats.get(row.object_id) ?? { item_count: 0, active_item_count: 0, low_stock_count: 0 };
     current.item_count += 1;
     if (row.is_active) current.active_item_count += 1;
-    if (row.current_qty <= row.min_qty) current.low_stock_count += 1;
+    if (row.current_qty < row.min_qty) current.low_stock_count += 1;
     itemStats.set(row.object_id, current);
   }
 
@@ -228,7 +236,7 @@ export async function listStockItemsForProfile(
   let query = supabase
     .from("stock_items")
     .select(
-      "id,object_id,name,kind,unit,sku,min_qty,current_qty,storage_location_id,comment,is_active,created_at,object:objects(name),storage_location:stock_locations(id,name),system_group_links:stock_item_system_groups(id,object_id,stock_item_id,system_group_id,created_at,system_group:ppr_system_groups(id,name,code))"
+      "id,object_id,name,kind,is_spare_part,procurement_method,unit,sku,min_qty,current_qty,storage_location_id,comment,is_active,created_at,object:objects(name),storage_location:stock_locations(id,name),system_group_links:stock_item_system_groups(id,object_id,stock_item_id,system_group_id,created_at,system_group:ppr_system_groups(id,name,code))"
     )
     .order("name", { ascending: true });
 
@@ -267,7 +275,7 @@ export async function listStockLocationsForProfile(
 
   let query = supabase
     .from("stock_locations")
-    .select("id,object_id,name,description,is_active,created_at,object:objects(name)")
+    .select("id,object_id,system_id,room_id,name,description,is_active,created_at,object:objects(name),system:ppr_systems(id,name),room:object_rooms(id,name)")
     .order("name", { ascending: true });
 
   if (options.objectId) {
@@ -291,7 +299,7 @@ export async function getStockLocationByIdForProfile(
 
   const { data: location, error } = await supabase
     .from("stock_locations")
-    .select("id,object_id,name,description,is_active,created_at,object:objects(name)")
+    .select("id,object_id,system_id,room_id,name,description,is_active,created_at,object:objects(name),system:ppr_systems(id,name),room:object_rooms(id,name)")
     .eq("id", locationId)
     .maybeSingle();
   if (error) throw error;

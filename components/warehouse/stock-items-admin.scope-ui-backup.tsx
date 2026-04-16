@@ -21,7 +21,9 @@ type StockItemRow = {
   id: string;
   object_id: string;
   name: string;
-  kind: "material" | "spare_part" | "consumable" | "component";
+  kind: "zip" | "component";
+  is_spare_part: boolean;
+  procurement_method: "engineer" | "procurement";
   unit: string;
   sku: string | null;
   min_qty: number;
@@ -726,6 +728,8 @@ export function StockItemsAdmin({
               object_id: editingItem.object_id,
               name: editingItem.name,
               kind: editingItem.kind,
+              is_spare_part: editingItem.is_spare_part,
+              procurement_method: editingItem.procurement_method,
               unit: editingItem.unit,
               sku: editingItem.sku ?? "",
               min_qty: String(editingItem.min_qty),

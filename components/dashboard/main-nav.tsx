@@ -109,6 +109,7 @@ const Icons = {
 
 export function MainNav({ role, currentPath, checklistPendingCount }: Props) {
   const router = useRouter();
+  const isProcurementManager = role === "procurement_manager";
   const canOpenDirectories = canAccessDirectories(role);
   const canOpenPpr = canAccessPprModule(role);
   const canOpenPprStructure = canAccessPprStructureScreens(role);
@@ -134,7 +135,7 @@ export function MainNav({ role, currentPath, checklistPendingCount }: Props) {
       id: "tasks",
       title: "Задачи",
       icon: Icons.Tasks,
-      show: true,
+      show: !isProcurementManager,
       items: [
         { href: "/my", label: "Мои задачи", show: true },
         {
@@ -154,7 +155,7 @@ export function MainNav({ role, currentPath, checklistPendingCount }: Props) {
       title: "Склад",
       icon: Icons.Warehouse,
       show: canOpenWarehouse || canOpenPurchaseRequests,
-      href: "/warehouse/items",
+      href: canOpenWarehouse ? "/warehouse/items" : "/purchase-requests",
       items: [
         { href: "/warehouse/items", label: "ТМЦ", show: canOpenWarehouse },
         { href: "/warehouse/locations", label: "Места хранения", show: canOpenWarehouse },

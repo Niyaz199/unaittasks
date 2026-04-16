@@ -41,7 +41,7 @@ export default async function CreateUserPage({ searchParams }: { searchParams: P
       ) : null}
 
       <CreateUserForm
-        availableRoles={availableRoles as Array<"admin" | "chief" | "lead" | "engineer" | "object_engineer" | "tech">}
+        availableRoles={availableRoles as Array<"admin" | "chief" | "lead" | "engineer" | "object_engineer" | "tech" | "procurement_manager">}
         objects={(objects ?? []).map((objectItem) => ({ id: objectItem.id, name: objectItem.name }))}
       />
     </section>

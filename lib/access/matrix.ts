@@ -30,7 +30,17 @@ const DAILY_CHECKLIST_TEMPLATE_MANAGEMENT_ROLES: Role[] = ["admin", "chief"];
 const DAILY_CHECKLIST_CONTROL_ROLES: Role[] = ["admin", "chief", "lead"];
 const WAREHOUSE_MODULE_ROLES: Role[] = ["admin", "chief", "lead", "engineer", "object_engineer", "tech"];
 const WAREHOUSE_MANAGE_ROLES: Role[] = ["admin", "chief", "lead", "engineer", "object_engineer"];
-const PURCHASE_REQUEST_MANAGE_ROLES: Role[] = ["admin", "chief", "lead", "object_engineer"];
+const PURCHASE_REQUEST_MODULE_ROLES: Role[] = [
+  "admin",
+  "chief",
+  "lead",
+  "engineer",
+  "object_engineer",
+  "tech",
+  "procurement_manager",
+];
+const PURCHASE_REQUEST_CREATE_ROLES: Role[] = ["admin", "chief", "lead", "engineer", "object_engineer", "tech"];
+const PURCHASE_REQUEST_MANAGE_ROLES: Role[] = ["admin", "chief", "lead", "object_engineer", "procurement_manager"];
 const GLOBAL_OBJECT_SCOPE_ROLES: Role[] = ["admin", "chief", "lead"];
 
 function includesRole(roles: readonly Role[], role: Role) {
@@ -105,7 +115,7 @@ export function canAssignTaskToRole(actorRole: Role, targetRole: Role) {
 
 export function listManageableUserRoles(actorRole: Role): Role[] {
   if (actorRole === "admin" || actorRole === "chief" || actorRole === "lead") {
-    return ["admin", "chief", "lead", "engineer", "object_engineer", "tech"];
+    return ["admin", "chief", "lead", "engineer", "object_engineer", "tech", "procurement_manager"];
   }
   if (actorRole === "engineer") {
     return ["tech"];
@@ -161,11 +171,15 @@ export function canManageWarehouseCatalog(role: Role) {
 }
 
 export function canCreatePurchaseRequests(role: Role) {
-  return canAccessWarehouseModule(role);
+  return includesRole(PURCHASE_REQUEST_CREATE_ROLES, role);
 }
 
 export function canManagePurchaseRequests(role: Role) {
   return includesRole(PURCHASE_REQUEST_MANAGE_ROLES, role);
+}
+
+export function canAccessPurchaseRequests(role: Role) {
+  return includesRole(PURCHASE_REQUEST_MODULE_ROLES, role);
 }
 
 export function canManageDailyChecklistTemplates(role: Role) {

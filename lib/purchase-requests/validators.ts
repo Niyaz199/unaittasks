@@ -3,6 +3,7 @@ import { z } from "zod";
 const uuidSchema = z.string().uuid();
 
 export const purchaseRequestStatusSchema = z.enum(["new", "in_progress", "fulfilled", "cancelled"]);
+export const purchaseRequestExecutorRoleSchema = z.enum(["engineer", "procurement_manager"]);
 
 export const purchaseRequestFormSchema = z.object({
   objectId: uuidSchema,
@@ -17,4 +18,18 @@ export const purchaseRequestFormSchema = z.object({
 export const purchaseRequestStatusFormSchema = z.object({
   requestId: uuidSchema,
   status: purchaseRequestStatusSchema,
+});
+
+export const purchaseRequestFinalizeDraftSchema = z.object({
+  requestId: uuidSchema,
+});
+
+export const purchaseRequestReassignItemSchema = z.object({
+  itemId: uuidSchema,
+  targetRole: purchaseRequestExecutorRoleSchema,
+});
+
+export const purchaseRequestCartToggleSchema = z.object({
+  itemId: uuidSchema,
+  inCart: z.boolean(),
 });

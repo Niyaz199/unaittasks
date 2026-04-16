@@ -45,7 +45,7 @@ export async function signInAction(
     };
   }
 
-  redirect("/my");
+  redirect("/");
 }
 
 export async function signOutAction() {

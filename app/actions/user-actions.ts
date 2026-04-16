@@ -13,7 +13,7 @@ const schema = z.object({
   email: z.string().trim().email(),
   password: z.string().min(8),
   fullName: z.string().trim().min(1),
-  role: z.enum(["admin", "chief", "lead", "engineer", "object_engineer", "tech"]),
+  role: z.enum(["admin", "chief", "lead", "engineer", "object_engineer", "tech", "procurement_manager"]),
   objectIds: z.array(z.string().uuid()).optional()
 });
 
@@ -21,7 +21,7 @@ const updateSchema = z.object({
   userId: z.string().uuid(),
   fullName: z.string().trim().min(1, "Введите ФИО."),
   email: z.string().trim().email("Укажите корректный email."),
-  role: z.enum(["admin", "chief", "lead", "engineer", "object_engineer", "tech"]),
+  role: z.enum(["admin", "chief", "lead", "engineer", "object_engineer", "tech", "procurement_manager"]),
   password: z
     .string()
     .transform((value) => value.trim())

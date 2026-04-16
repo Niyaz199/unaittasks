@@ -11,6 +11,8 @@ type NamedRelation = { name: string } | Array<{ name: string }> | null | undefin
 type LocationDetails = {
   id: string;
   object_id: string;
+  system?: { name: string } | Array<{ name: string }> | null;
+  room?: { name: string } | Array<{ name: string }> | null;
   name: string;
   description: string | null;
   is_active: boolean;
@@ -31,7 +33,7 @@ type BalanceRow = {
     | {
         id: string;
         name: string;
-        kind: "material" | "spare_part" | "consumable" | "component";
+        kind: "zip" | "component";
         unit: string;
         min_qty: number;
         current_qty: number;
@@ -40,7 +42,7 @@ type BalanceRow = {
     | Array<{
         id: string;
         name: string;
-        kind: "material" | "spare_part" | "consumable" | "component";
+        kind: "zip" | "component";
         unit: string;
         min_qty: number;
         current_qty: number;
@@ -115,7 +117,7 @@ export function StockLocationDetails({
     const lowStockCount = balances.reduce((sum, balance) => {
       const item = Array.isArray(balance.item) ? balance.item[0] ?? null : balance.item;
       if (!item) return sum;
-      return item.current_qty <= item.min_qty ? sum + 1 : sum;
+      return item.current_qty < item.min_qty ? sum + 1 : sum;
     }, 0);
     return {
       positions: balances.length,
@@ -138,6 +140,9 @@ export function StockLocationDetails({
           <div className="warehouse-location-hero-copy">
             <div className="warehouse-location-eyebrow">Объект</div>
             <div className="warehouse-location-context">{objectName}</div>
+            <div className="text-soft warehouse-location-description">
+              {resolveName(location.system)} • {resolveName(location.room)}
+            </div>
             {hasDescription ? (
               <div className="text-soft warehouse-location-description">{location.description?.trim()}</div>
             ) : null}
@@ -220,7 +225,7 @@ export function StockLocationDetails({
                       {balances.map((balance) => {
                         const item = Array.isArray(balance.item) ? balance.item[0] ?? null : balance.item;
                         if (!item) return null;
-                        const isLowStock = item.current_qty <= item.min_qty;
+                        const isLowStock = item.current_qty < item.min_qty;
                         return (
                           <tr key={balance.id} className={isLowStock ? "warehouse-row-alert" : undefined}>
                             <td>

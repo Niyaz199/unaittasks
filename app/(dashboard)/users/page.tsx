@@ -63,14 +63,14 @@ export default async function UsersPage() {
           ((users ?? []) as Array<{
             id: string;
             full_name: string;
-            role: "admin" | "chief" | "lead" | "engineer" | "object_engineer" | "tech";
+            role: "admin" | "chief" | "lead" | "engineer" | "object_engineer" | "tech" | "procurement_manager";
           }>).map((userRow) => ({
             ...userRow,
             email: emailById.get(userRow.id) ?? null
           }))
         }
         actorRole={profile.role}
-        availableRoles={availableRoles as Array<"admin" | "chief" | "lead" | "engineer" | "object_engineer" | "tech">}
+        availableRoles={availableRoles as Array<"admin" | "chief" | "lead" | "engineer" | "object_engineer" | "tech" | "procurement_manager">}
         objects={manageableObjects as Array<{ id: string; name: string }>}
         links={links}
         currentUserId={user.id}

@@ -10,6 +10,7 @@ const roleLabelMap: Record<Role, string> = {
   engineer: "Инженер",
   object_engineer: "Объектовый инженер",
   tech: "Техник",
+  procurement_manager: "Менеджер по закупкам",
 };
 
 type NavCard = {

@@ -15,6 +15,6 @@ export default async function LoginPage({
       : null;
 
   const user = await getSessionUser();
-  if (user) redirect("/my");
+  if (user) redirect("/");
   return <LoginForm initialError={initialError} />;
 }

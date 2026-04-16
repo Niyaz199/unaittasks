@@ -12,7 +12,7 @@ import { createStockItemAction, removeEquipmentComponentAction, upsertEquipmentC
 type ComponentItem = {
   id: string;
   name: string;
-  kind: "material" | "spare_part" | "consumable" | "component";
+  kind: "zip" | "component";
   unit: string;
   min_qty: number;
   current_qty: number;
@@ -123,7 +123,7 @@ export function PprEquipmentComponentsManager({
           components.map((component) => {
             const item = resolveItem(component.stock_item);
             if (!item) return null;
-            const isLowStock = item.current_qty <= item.min_qty;
+            const isLowStock = item.current_qty < item.min_qty;
             return (
               <div key={component.id} className="section-card" style={{ padding: "1rem", background: "color-mix(in srgb, var(--panel-soft) 20%, transparent)" }}>
                 <div className="row" style={{ justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
@@ -222,6 +222,7 @@ export function PprEquipmentComponentsManager({
             objects={[]}
             locations={storageLocations}
             systemGroups={systemGroups}
+            initialValues={{ kind: "component" }}
             fixedObjectId={objectId}
             fixedObjectName={objectName}
             onSubmitted={handleStockItemCreated}
