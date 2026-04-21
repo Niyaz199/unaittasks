@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
+import { AssigneeCombobox, type AssigneeOption } from "@/components/ui/assignee-combobox";
 import { useToast } from "@/components/ui/toast";
 import { stockMovementTypeMeta } from "@/lib/warehouse/presentation";
 
@@ -33,49 +34,59 @@ function getMovementDelta(type: keyof typeof stockMovementTypeMeta, value: numbe
   return -value;
 }
 
-function getMovementSubmitLabel(type: keyof typeof stockMovementTypeMeta) {
-  if (type === "receipt") return "Оприходовать";
-  if (type === "issue") return "Списать";
-  return "Применить";
+const movementTypeOptions = ["receipt", "issue"] as const;
+type MovementType = (typeof movementTypeOptions)[number];
+
+function getMovementSubmitLabel(type: MovementType) {
+  return type === "receipt" ? "Сохранить приход" : "Сохранить выдачу";
 }
 
-function getMovementHint(type: keyof typeof stockMovementTypeMeta) {
-  if (type === "receipt") return "Поставка или найденный остаток.";
-  if (type === "issue") return "Выдача или списание.";
-  if (type === "adjustment_in") return "Увеличение без прихода.";
-  return "Уменьшение без отдельной выдачи.";
+function getMovementHint(type: MovementType) {
+  return type === "receipt"
+    ? "Зафиксируйте, что положили в это место хранения."
+    : "Зафиксируйте, что забрали из этого места хранения.";
 }
 
 export function StockMovementForm({ objectId, locationId, items, action }: Props) {
   const router = useRouter();
-  const [itemId, setItemId] = useState(items[0]?.id ?? "");
-  const [itemQuery, setItemQuery] = useState("");
-  const [movementType, setMovementType] = useState<keyof typeof stockMovementTypeMeta>("issue");
+  const [itemId, setItemId] = useState("");
+  const [movementType, setMovementType] = useState<MovementType>("issue");
   const [quantity, setQuantity] = useState("1");
   const [note, setNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { addToast } = useToast();
 
-  const filteredItems = useMemo(() => {
-    const query = itemQuery.trim().toLowerCase();
-    if (!query) return items;
-    return items.filter((item) => item.name.toLowerCase().includes(query) || item.kindLabel.toLowerCase().includes(query));
-  }, [itemQuery, items]);
-  const selectableItems = useMemo(() => {
-    const selected = items.find((item) => item.id === itemId);
-    if (!selected || filteredItems.some((item) => item.id === itemId)) return filteredItems;
-    return [selected, ...filteredItems];
-  }, [filteredItems, itemId, items]);
+  const availableItems = useMemo(() => {
+    const scopedItems =
+      movementType === "issue"
+        ? items.filter((item) => item.locationQty > 0)
+        : items.filter((item) => item.isActive || item.locationQty > 0 || item.totalQty > 0);
+    return [...scopedItems].sort((left, right) => left.name.localeCompare(right.name, "ru"));
+  }, [items, movementType]);
+  const itemOptions = useMemo<AssigneeOption[]>(
+    () =>
+      availableItems.map((item) => ({
+        id: item.id,
+        label: item.name,
+        subtitle:
+          movementType === "issue"
+            ? `${item.kindLabel} • в месте ${formatQty(item.locationQty, item.unit)}`
+            : `${item.kindLabel} • всего ${formatQty(item.totalQty, item.unit)}`,
+      })),
+    [availableItems, movementType]
+  );
   const selectedItem = useMemo(() => items.find((item) => item.id === itemId) ?? null, [itemId, items]);
   const quantityValue = Number(quantity || 0);
   const delta = getMovementDelta(movementType, quantityValue);
   const nextLocationQty = selectedItem ? selectedItem.locationQty + delta : 0;
-  const nextTotalQty = selectedItem ? selectedItem.totalQty + delta : 0;
-  const isNegativeResult = selectedItem ? nextLocationQty < 0 : false;
-  const isBelowMinimum = selectedItem ? nextTotalQty <= selectedItem.minQty : false;
+  const isNegativeResult = movementType === "issue" && selectedItem ? nextLocationQty < 0 : false;
   const isQuantityInvalid = !quantityValue || quantityValue <= 0;
   const submitLabel = getMovementSubmitLabel(movementType);
   const movementHint = getMovementHint(movementType);
+  const emptyStateMessage =
+    movementType === "issue"
+      ? "В этом месте хранения сейчас нет ТМЦ, которые можно выдать."
+      : "Нет доступных карточек ТМЦ для прихода.";
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -102,14 +113,15 @@ export function StockMovementForm({ objectId, locationId, items, action }: Props
       <div className="warehouse-movement-shell">
         <div className="warehouse-movement-head">
           <div className="warehouse-movement-segmented" role="tablist" aria-label="Тип движения">
-            {Object.entries(stockMovementTypeMeta).map(([key, meta]) => {
+            {movementTypeOptions.map((key) => {
+              const meta = stockMovementTypeMeta[key];
               const isActive = movementType === key;
               return (
                 <button
                   key={key}
                   type="button"
                   className={`warehouse-movement-segment ${isActive ? "is-active" : ""} tone-${meta.tone}`}
-                  onClick={() => setMovementType(key as keyof typeof stockMovementTypeMeta)}
+                  onClick={() => setMovementType(key)}
                 >
                   {meta.label}
                 </button>
@@ -120,34 +132,18 @@ export function StockMovementForm({ objectId, locationId, items, action }: Props
         </div>
 
         <label className="grid" style={{ gap: "0.35rem" }}>
-          <span className="text-soft">Поиск</span>
-          <input
-            className="input"
-            type="search"
-            value={itemQuery}
-            onChange={(event) => setItemQuery(event.target.value)}
-            placeholder="Название или тип"
+          <span className="text-soft">ТМЦ</span>
+          <AssigneeCombobox
+            name="item_id"
+            options={itemOptions}
+            placeholder={movementType === "issue" ? "Что забрали из этого места?" : "Что положили в это место?"}
+            required
+            defaultValue={itemId}
+            onSelectedIdChange={setItemId}
           />
         </label>
 
-        <label className="grid" style={{ gap: "0.35rem" }}>
-          <span className="text-soft">ТМЦ</span>
-          <select className="select" name="item_id" required value={itemId} onChange={(event) => setItemId(event.target.value)}>
-            <option value="" disabled>
-              Выберите ТМЦ
-            </option>
-            {selectableItems.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name} • {item.kindLabel}
-              </option>
-            ))}
-          </select>
-        </label>
-        {itemQuery.trim() && filteredItems.length === 0 ? (
-          <div className="text-soft" style={{ fontSize: "0.84rem" }}>
-            По текущему запросу ТМЦ не найдены. Уточните запрос или очистите поиск.
-          </div>
-        ) : null}
+        {!availableItems.length ? <div className="text-soft">{emptyStateMessage}</div> : null}
 
         {selectedItem ? (
           <div className="warehouse-movement-context">
@@ -163,27 +159,25 @@ export function StockMovementForm({ objectId, locationId, items, action }: Props
 
             <div className="warehouse-movement-forecast">
               <div className="warehouse-movement-stat">
-                <span className="warehouse-movement-stat-label">Сейчас на месте</span>
+                <span className="warehouse-movement-stat-label">Сейчас в месте</span>
                 <strong className="tabular-nums">{formatQty(selectedItem.locationQty, selectedItem.unit)}</strong>
               </div>
               <div className="warehouse-movement-stat">
-                <span className="warehouse-movement-stat-label">После операции</span>
+                <span className="warehouse-movement-stat-label">Станет после операции</span>
                 <strong
-                  className={`tabular-nums ${isNegativeResult || isBelowMinimum ? "warehouse-danger-text" : ""}`}
+                  className={`tabular-nums ${isNegativeResult ? "warehouse-danger-text" : ""}`}
                 >
                   {formatQty(nextLocationQty, selectedItem.unit)}
                 </strong>
               </div>
               <div className="warehouse-movement-stat">
-                <span className="warehouse-movement-stat-label">Минимум</span>
-                <strong className="tabular-nums">{formatQty(selectedItem.minQty, selectedItem.unit)}</strong>
+                <span className="warehouse-movement-stat-label">Всего по объекту</span>
+                <strong className="tabular-nums">{formatQty(selectedItem.totalQty, selectedItem.unit)}</strong>
               </div>
             </div>
 
             <div className="warehouse-movement-summary row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
               <Badge tone={stockMovementTypeMeta[movementType].tone}>{stockMovementTypeMeta[movementType].label}</Badge>
-              <span className="text-soft">Общий остаток: {formatQty(selectedItem.totalQty, selectedItem.unit)}</span>
-              {isBelowMinimum ? <Badge tone="danger">После операции общий остаток будет ниже минимума</Badge> : null}
               {isNegativeResult ? <Badge tone="danger">Недостаточно ТМЦ на этом месте хранения</Badge> : null}
             </div>
           </div>
@@ -213,7 +207,11 @@ export function StockMovementForm({ objectId, locationId, items, action }: Props
               rows={3}
               value={note}
               onChange={(event) => setNote(event.target.value)}
-              placeholder="Например: списали для замены блока питания"
+              placeholder={
+                movementType === "issue"
+                  ? "Необязательно. Например: забрал для замены блока питания"
+                  : "Необязательно. Например: положили после закупки"
+              }
             />
           </label>
         </div>

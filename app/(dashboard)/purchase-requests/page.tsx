@@ -1,6 +1,12 @@
 import { requireProfile } from "@/lib/auth";
-import { canAccessPurchaseRequestsModule, canCreatePurchaseRequests, canManagePurchaseRequests } from "@/lib/capabilities";
-import { listPurchaseRequestsForProfile, listPurchaseRequestReadableObjectsForProfile } from "@/lib/purchase-requests/queries";
+import { canAccessPurchaseRequestsModule, canCreatePurchaseRequests } from "@/lib/capabilities";
+import {
+  listPurchaseRequestsForProfile,
+  listPurchaseRequestCreatableObjectsForProfile,
+  listPurchaseRequestReadableObjectsForProfile,
+  type PurchaseRequestArchiveMode,
+  type PurchaseRequestFlow,
+} from "@/lib/purchase-requests/queries";
 import { listStockItemOptionsForProfile } from "@/lib/warehouse/queries";
 import { PageHeader } from "@/components/ui/page-header";
 import { BackButton } from "@/components/ui/back-button";
@@ -19,12 +25,40 @@ export default async function PurchaseRequestsPage({
   }
 
   const requestedObjectId = typeof search.objectId === "string" ? search.objectId : "";
+  const requestedFlow = typeof search.flow === "string" ? search.flow : "";
+  const requestedDate = typeof search.date === "string" ? search.date : "";
+  const archiveMode: PurchaseRequestArchiveMode = search.archive === "1" ? "archived" : "active";
   const canCreate = canCreatePurchaseRequests(profile.role);
-  const canManage = canManagePurchaseRequests(profile.role);
   const readableObjects = await listPurchaseRequestReadableObjectsForProfile(supabase, profile);
   const selectedObjectId = readableObjects.some((item) => item.id === requestedObjectId) ? requestedObjectId : "";
-  const requests = await listPurchaseRequestsForProfile(supabase, profile, selectedObjectId ? { objectId: selectedObjectId } : {});
-  const objects = readableObjects;
+  const requests = await listPurchaseRequestsForProfile(supabase, profile, {
+    archiveMode,
+    ...(selectedObjectId ? { objectId: selectedObjectId } : {}),
+  });
+  const flowCounts = requests.reduce(
+    (acc, request) => {
+      if (request.source === "warehouse_daily") {
+        acc.warehouse_daily += 1;
+      } else {
+        acc.engineer_requests += 1;
+      }
+      return acc;
+    },
+    {
+      engineer_requests: 0,
+      warehouse_daily: 0,
+      ppr: 0,
+    } satisfies Record<PurchaseRequestFlow, number>
+  );
+  const initialFlow: PurchaseRequestFlow =
+    requestedFlow === "warehouse_daily" || requestedFlow === "ppr"
+      ? requestedFlow
+      : flowCounts.engineer_requests > 0
+        ? "engineer_requests"
+        : flowCounts.warehouse_daily > 0
+          ? "warehouse_daily"
+          : "engineer_requests";
+  const creatableObjects = canCreate ? await listPurchaseRequestCreatableObjectsForProfile(supabase, profile) : [];
   const stockItems = canCreate
     ? await listStockItemOptionsForProfile(
         supabase,
@@ -42,13 +76,15 @@ export default async function PurchaseRequestsPage({
       />
       <PurchaseRequestsAdmin
         requests={requests}
-        objects={objects.map((item) => ({ id: item.id, name: item.name }))}
+        filterObjects={readableObjects.map((item) => ({ id: item.id, name: item.name }))}
+        createObjects={creatableObjects.map((item) => ({ id: item.id, name: item.name }))}
         stockItems={stockItems.map((item) => ({ id: item.id, object_id: item.object_id, name: item.name, unit: item.unit, is_active: item.is_active }))}
         actorRole={profile.role}
-        actorId={profile.id}
         canCreate={canCreate}
-        canManage={canManage}
         initialFilterObjectId={selectedObjectId}
+        initialFlow={initialFlow}
+        initialArchiveMode={archiveMode}
+        initialFilterDate={requestedDate}
       />
     </section>
   );

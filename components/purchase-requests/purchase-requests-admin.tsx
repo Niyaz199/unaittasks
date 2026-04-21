@@ -1,72 +1,31 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import type { Route } from "next";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
+import { ChevronRight } from "lucide-react";
 import { PprModal } from "@/components/ppr/ui/ppr-modal";
 import { PprPageShell } from "@/components/ppr/ui/ppr-page-shell";
-import { useToast } from "@/components/ui/toast";
+import { Badge } from "@/components/ui/badge";
+import { createPurchaseRequestAction } from "@/app/actions/purchase-request-actions";
+import {
+  type PurchaseRequestArchiveMode,
+  type PurchaseRequestFlow,
+  type PurchaseRequestSummaryRow,
+} from "@/lib/purchase-requests/queries";
 import {
   purchaseRequestExecutorMeta,
   purchaseRequestKindMeta,
   purchaseRequestStatusMeta,
 } from "@/lib/purchase-requests/presentation";
-import {
-  createPurchaseRequestAction,
-  finalizePurchaseDraftAction,
-  reassignPurchaseRequestItemAction,
-  togglePurchaseRequestItemCartAction,
-  updatePurchaseRequestStatusAction,
-} from "@/app/actions/purchase-request-actions";
+import type { Role } from "@/lib/types";
 
 const PurchaseRequestForm = dynamic(
   () => import("@/components/purchase-requests/purchase-request-form").then((module) => module.PurchaseRequestForm),
   { loading: () => <div className="section-card text-soft">Загрузка...</div> }
 );
-
-type PurchaseRequestItemRow = {
-  id: string;
-  stock_item_id: string | null;
-  title: string;
-  unit: string;
-  quantity_requested: number;
-  note: string | null;
-  is_auto_generated: boolean;
-  assigned_role: "engineer" | "procurement_manager" | null;
-  current_qty_snapshot: number | null;
-  min_qty_snapshot: number | null;
-  location_name_snapshot: string | null;
-  characteristics: string | null;
-  in_cart: boolean;
-  cart_marked_at: string | null;
-  stock_item:
-    | { name: string; unit: string; sku?: string | null; kind?: string; procurement_method?: string | null }
-    | Array<{ name: string; unit: string; sku?: string | null; kind?: string; procurement_method?: string | null }>
-    | null;
-};
-
-type PurchaseRequestRow = {
-  id: string;
-  object_id: string;
-  status: "new" | "in_progress" | "fulfilled" | "cancelled";
-  source: "manual" | "warehouse_daily";
-  request_kind: "draft" | "final";
-  executor_role: "engineer" | "procurement_manager" | null;
-  description: string | null;
-  requested_by: string | null;
-  assigned_to: string | null;
-  draft_date: string | null;
-  processed_at: string | null;
-  origin_request_id: string | null;
-  created_at: string;
-  updated_at: string;
-  object: { name: string } | Array<{ name: string }> | null;
-  requester: { full_name: string } | Array<{ full_name: string }> | null;
-  assignee: { full_name: string } | Array<{ full_name: string }> | null;
-  items: PurchaseRequestItemRow[] | null;
-};
 
 type ObjectOption = { id: string; name: string };
 type StockItemOption = { id: string; object_id: string; name: string; unit: string; is_active: boolean };
@@ -81,154 +40,284 @@ function resolveUser(raw: { full_name: string } | Array<{ full_name: string }> |
   return raw?.full_name ?? "—";
 }
 
-function resolveStockItem(
-  raw:
-    | { name: string; unit: string; sku?: string | null; kind?: string; procurement_method?: string | null }
-    | Array<{ name: string; unit: string; sku?: string | null; kind?: string; procurement_method?: string | null }>
-    | null
-    | undefined
-) {
-  if (Array.isArray(raw)) return raw[0] ?? null;
-  return raw ?? null;
+function getRequestFlow(request: Pick<PurchaseRequestSummaryRow, "source">): Exclude<PurchaseRequestFlow, "ppr"> {
+  return request.source === "warehouse_daily" ? "warehouse_daily" : "engineer_requests";
 }
 
-function formatQty(value: number, unit: string) {
-  return `${Number(value).toLocaleString("ru-RU", { maximumFractionDigits: 3 })} ${unit}`;
+function formatRequestDate(value: string | null | undefined) {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString("ru-RU");
+}
+
+function formatRequestDateTime(value: string) {
+  return new Date(value).toLocaleString("ru-RU");
+}
+
+function getCardAccentClass(request: Pick<PurchaseRequestSummaryRow, "request_kind" | "status">): string {
+  if (request.request_kind === "draft") return "is-draft";
+  if (request.status === "in_progress") return "is-in-progress";
+  if (request.status === "new") return "is-new";
+  return "";
+}
+
+function toDateInputValue(value: string | null | undefined) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const year = parsed.getFullYear();
+  const month = `${parsed.getMonth() + 1}`.padStart(2, "0");
+  const day = `${parsed.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getRequestDateKey(request: Pick<PurchaseRequestSummaryRow, "draft_date" | "created_at">) {
+  return request.draft_date ? toDateInputValue(request.draft_date) : toDateInputValue(request.created_at);
+}
+
+function flowLabel(flow: PurchaseRequestFlow) {
+  switch (flow) {
+    case "engineer_requests":
+      return "Заявки инженеров";
+    case "warehouse_daily":
+      return "Ежедневные заявки по остатку на складе";
+    case "ppr":
+      return "Заявки ППР";
+  }
+}
+
+function buildListHref(params: {
+  objectId: string;
+  flow: PurchaseRequestFlow;
+  archiveMode: PurchaseRequestArchiveMode;
+  showFlowSwitch: boolean;
+  requestDate: string;
+}) {
+  const search = new URLSearchParams();
+  if (params.objectId) search.set("objectId", params.objectId);
+  if (params.showFlowSwitch && params.flow !== "engineer_requests") search.set("flow", params.flow);
+  if (params.archiveMode === "archived") search.set("archive", "1");
+  if (params.requestDate) search.set("date", params.requestDate);
+  return `/purchase-requests${search.toString() ? `?${search.toString()}` : ""}`;
+}
+
+function groupVisibleRequests(
+  requests: PurchaseRequestSummaryRow[],
+  flow: PurchaseRequestFlow,
+  archiveMode: PurchaseRequestArchiveMode
+) {
+  if (archiveMode === "archived") {
+    return [{ id: "archive", title: "Архив", hint: "Закупленные и отменённые заявки.", requests }];
+  }
+
+  if (flow === "warehouse_daily") {
+    return [
+      {
+        id: "drafts",
+        title: "Черновики на согласование",
+        hint: "Общая ежедневная подборка дефицита до разнесения по исполнителям.",
+        requests: requests.filter((request) => request.request_kind === "draft"),
+      },
+      {
+        id: "finals",
+        title: "Активные итоговые заявки",
+        hint: "Сформированные ежедневные заявки по остаткам на складе.",
+        requests: requests.filter((request) => request.request_kind === "final"),
+      },
+    ].filter((group) => group.requests.length > 0);
+  }
+
+  return [
+    {
+      id: "main",
+      title: flow === "engineer_requests" ? "Активные заявки инженеров" : "Список заявок",
+      hint:
+        flow === "engineer_requests"
+          ? "Ручные заявки и потребности, созданные сотрудниками."
+          : "Текущий реестр заявок.",
+      requests,
+    },
+  ];
+}
+
+function getArchiveRequestSummary(request: Pick<PurchaseRequestSummaryRow, "status" | "fulfilled_at" | "cancelled_at" | "updated_at">) {
+  if (request.status === "fulfilled") {
+    return `Закуплено ${formatRequestDateTime(request.fulfilled_at ?? request.updated_at)}`;
+  }
+  if (request.status === "cancelled") {
+    return `Отменено ${formatRequestDateTime(request.cancelled_at ?? request.updated_at)}`;
+  }
+  return `Обновлено ${formatRequestDateTime(request.updated_at)}`;
 }
 
 export function PurchaseRequestsAdmin({
   requests,
-  objects,
+  filterObjects,
+  createObjects,
   stockItems,
   actorRole,
-  actorId,
   canCreate,
-  canManage,
   initialFilterObjectId = "",
+  initialFlow = "engineer_requests",
+  initialArchiveMode = "active",
+  initialFilterDate = "",
 }: {
-  requests: PurchaseRequestRow[];
-  objects: ObjectOption[];
+  requests: PurchaseRequestSummaryRow[];
+  filterObjects: ObjectOption[];
+  createObjects: ObjectOption[];
   stockItems: StockItemOption[];
-  actorRole: "admin" | "chief" | "lead" | "engineer" | "object_engineer" | "tech" | "procurement_manager";
-  actorId: string;
+  actorRole: Role;
   canCreate: boolean;
-  canManage: boolean;
   initialFilterObjectId?: string;
+  initialFlow?: PurchaseRequestFlow;
+  initialArchiveMode?: PurchaseRequestArchiveMode;
+  initialFilterDate?: string;
 }) {
   const router = useRouter();
-  const { addToast } = useToast();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterObjectId, setFilterObjectId] = useState(initialFilterObjectId);
-  const [filterStatus, setFilterStatus] = useState<PurchaseRequestRow["status"] | "all">("all");
-  const [pending, startTransition] = useTransition();
+  const [archiveMode, setArchiveMode] = useState<PurchaseRequestArchiveMode>(initialArchiveMode);
+  const [selectedFlow, setSelectedFlow] = useState<PurchaseRequestFlow>(initialFlow);
+  const [filterDate, setFilterDate] = useState(initialFilterDate);
+
+  const showFlowSwitch = actorRole !== "engineer" && actorRole !== "tech";
 
   useEffect(() => {
     setFilterObjectId(initialFilterObjectId);
   }, [initialFilterObjectId]);
 
-  const filteredRequests = useMemo(() => {
-    return requests.filter((request) => {
-      const matchesObject = filterObjectId === "" || request.object_id === filterObjectId;
-      const matchesStatus = request.request_kind === "draft" ? true : filterStatus === "all" || request.status === filterStatus;
-      const search = searchTerm.trim().toLowerCase();
-      const summary = (request.items ?? []).map((item) => item.title).join(" ").toLowerCase();
-      const matchesSearch =
-        search === "" ||
-        resolveName(request.object).toLowerCase().includes(search) ||
-        resolveUser(request.requester).toLowerCase().includes(search) ||
-        summary.includes(search);
-      return matchesObject && matchesStatus && matchesSearch;
-    });
-  }, [filterObjectId, filterStatus, requests, searchTerm]);
+  useEffect(() => {
+    setArchiveMode(initialArchiveMode);
+  }, [initialArchiveMode]);
 
-  function updateSearchParams(nextObjectId: string) {
-    const params = new URLSearchParams();
-    if (nextObjectId) params.set("objectId", nextObjectId);
-    router.replace((`/purchase-requests${params.toString() ? `?${params.toString()}` : ""}`) as Route);
-  }
+  useEffect(() => {
+    setSelectedFlow(initialFlow);
+  }, [initialFlow]);
 
-  async function changeStatus(requestId: string, status: PurchaseRequestRow["status"]) {
-    startTransition(async () => {
-      const formData = new FormData();
-      formData.set("request_id", requestId);
-      formData.set("status", status);
-      try {
-        await updatePurchaseRequestStatusAction(formData);
-        addToast("Статус заявки обновлен", "success");
-      } catch (error) {
-        addToast(error instanceof Error ? error.message : "Не удалось обновить статус", "error");
+  useEffect(() => {
+    setFilterDate(initialFilterDate);
+  }, [initialFilterDate]);
+
+  const dateFilteredRequests = useMemo(() => {
+    if (!filterDate) return requests;
+    return requests.filter((request) => getRequestDateKey(request) === filterDate);
+  }, [filterDate, requests]);
+
+  const counts = useMemo(() => {
+    return dateFilteredRequests.reduce(
+      (acc, request) => {
+        const flow = getRequestFlow(request);
+        acc[flow] += 1;
+        return acc;
+      },
+      {
+        engineer_requests: 0,
+        warehouse_daily: 0,
+        ppr: 0,
+      } satisfies Record<PurchaseRequestFlow, number>
+    );
+  }, [dateFilteredRequests]);
+
+  const visibleRequests = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    return dateFilteredRequests.filter((request) => {
+      if (showFlowSwitch && selectedFlow !== "ppr" && getRequestFlow(request) !== selectedFlow) {
+        return false;
       }
-    });
-  }
-
-  async function finalizeDraft(requestId: string) {
-    startTransition(async () => {
-      const formData = new FormData();
-      formData.set("request_id", requestId);
-      try {
-        await finalizePurchaseDraftAction(formData);
-        addToast("Итоговые заявки сформированы", "success");
-      } catch (error) {
-        addToast(error instanceof Error ? error.message : "Не удалось обработать черновик", "error");
+      if (showFlowSwitch && selectedFlow === "ppr") {
+        return false;
       }
+      if (!normalizedSearch) return true;
+      const searchableText = [
+        resolveName(request.object),
+        resolveUser(request.requester),
+        resolveUser(request.assignee),
+        request.description ?? "",
+        ...(request.preview_items ?? []),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return searchableText.includes(normalizedSearch);
     });
-  }
+  }, [dateFilteredRequests, searchTerm, selectedFlow, showFlowSwitch]);
 
-  async function reassignItem(itemId: string, targetRole: "engineer" | "procurement_manager") {
-    startTransition(async () => {
-      const formData = new FormData();
-      formData.set("item_id", itemId);
-      formData.set("target_role", targetRole);
-      try {
-        await reassignPurchaseRequestItemAction(formData);
-        addToast("Позиция перераспределена", "success");
-      } catch (error) {
-        addToast(error instanceof Error ? error.message : "Не удалось перераспределить позицию", "error");
-      }
-    });
-  }
-
-  async function toggleCart(itemId: string, nextValue: boolean) {
-    startTransition(async () => {
-      const formData = new FormData();
-      formData.set("item_id", itemId);
-      formData.set("in_cart", String(nextValue));
-      try {
-        await togglePurchaseRequestItemCartAction(formData);
-        addToast(nextValue ? "Позиция отмечена в корзине" : "Позиция снята из корзины", "success");
-      } catch (error) {
-        addToast(error instanceof Error ? error.message : "Не удалось обновить позицию", "error");
-      }
-    });
-  }
+  const sections = useMemo(
+    () => groupVisibleRequests(visibleRequests, selectedFlow, archiveMode),
+    [archiveMode, selectedFlow, visibleRequests]
+  );
 
   const metrics = useMemo(() => {
-    const total = requests.length;
-    const drafts = requests.filter((item) => item.request_kind === "draft" && !item.processed_at).length;
-    const open = requests.filter((item) => item.request_kind === "final" && (item.status === "new" || item.status === "in_progress")).length;
-    const completed = requests.filter((item) => item.request_kind === "final" && item.status === "fulfilled").length;
+    const drafts = dateFilteredRequests.filter((item) => item.request_kind === "draft").length;
+    const finals = dateFilteredRequests.filter((item) => item.request_kind === "final").length;
     return [
-      { label: "Всего заявок", value: total, tone: "neutral" as const },
-      { label: "Черновики", value: drafts, tone: "warning" as const },
-      { label: "Открытые итоговые", value: open, tone: "danger" as const },
-      { label: "Закуплено", value: completed, tone: "success" as const },
+      { label: archiveMode === "archived" ? "В архиве" : "В работе", value: dateFilteredRequests.length, tone: "neutral" as const },
+      { label: "Ручные", value: counts.engineer_requests, tone: "info" as const },
+      { label: "Ежедневные", value: counts.warehouse_daily, tone: "warning" as const },
+      { label: archiveMode === "archived" ? "Итоговые" : "Черновики", value: archiveMode === "archived" ? finals : drafts, tone: "success" as const },
     ];
-  }, [requests]);
+  }, [archiveMode, counts.engineer_requests, counts.warehouse_daily, dateFilteredRequests]);
+
+  function updateSearchParams(next: Partial<{ objectId: string; archiveMode: PurchaseRequestArchiveMode; flow: PurchaseRequestFlow; requestDate: string }>) {
+    const href = buildListHref({
+      objectId: next.objectId ?? filterObjectId,
+      archiveMode: next.archiveMode ?? archiveMode,
+      flow: next.flow ?? selectedFlow,
+      showFlowSwitch,
+      requestDate: next.requestDate ?? filterDate,
+    });
+    router.replace(href as Route);
+  }
+
+  const currentListHref = buildListHref({
+    objectId: filterObjectId,
+    archiveMode,
+    flow: selectedFlow,
+    showFlowSwitch,
+    requestDate: filterDate,
+  });
+
+  const emptyState =
+    archiveMode === "archived"
+      ? {
+          message: "Архив заявок пока пуст",
+          hint: "Здесь появятся закупленные и отменённые заявки по выбранному потоку.",
+        }
+      : {
+          message: "Активных заявок на закупку сейчас нет",
+          hint:
+            selectedFlow === "warehouse_daily"
+              ? "Здесь будут ежедневные черновики и итоговые заявки по остаткам склада."
+              : "Здесь будут ручные заявки сотрудников и инженеров.",
+        };
+  const filteredEmptyState =
+    selectedFlow === "ppr"
+      ? {
+          message: archiveMode === "archived" ? "Архив ППР-заявок пока пуст" : "Заявок ППР пока нет",
+          hint: "Этот раздел зарезервирован под будущий поток закупок из ППР.",
+        }
+      : archiveMode === "archived"
+        ? {
+            message: "В этом архивном разделе пока нет заявок",
+            hint: "Переключитесь на другой поток или объект, чтобы посмотреть другие архивные заявки.",
+          }
+        : {
+            message: "В этом разделе пока нет активных заявок",
+            hint: "Переключитесь на другой поток или объект, чтобы посмотреть другие заявки.",
+          };
 
   return (
     <>
       <PprPageShell
         metrics={metrics}
         onSearch={setSearchTerm}
-        searchPlaceholder="Поиск по объекту, заявителю или позиции..."
-        isEmpty={requests.length === 0}
-        emptyState={{
-          message: "Заявок на закупку пока нет",
-          hint: "Здесь появятся ежедневные черновики и итоговые заявки на закупку.",
-        }}
-        isFilteredEmpty={filteredRequests.length === 0}
+        searchPlaceholder="Поиск по объекту, инициатору или позиции..."
+        isEmpty={dateFilteredRequests.length === 0}
+        emptyState={emptyState}
+        isFilteredEmpty={visibleRequests.length === 0}
+        keepChildrenWhenEmpty
+        keepChildrenWhenFilteredEmpty
+        filteredEmptyState={filteredEmptyState}
         filters={
           <>
             <select
@@ -237,26 +326,62 @@ export function PurchaseRequestsAdmin({
               onChange={(event) => {
                 const nextObjectId = event.target.value;
                 setFilterObjectId(nextObjectId);
-                updateSearchParams(nextObjectId);
+                updateSearchParams({ objectId: nextObjectId });
               }}
-              style={{ maxWidth: "220px" }}
+              style={{ maxWidth: "240px" }}
             >
               <option value="">Все объекты</option>
-              {objects.map((item) => (
+              {filterObjects.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name}
                 </option>
               ))}
             </select>
 
-            <select className="select" value={filterStatus} onChange={(event) => setFilterStatus(event.target.value as PurchaseRequestRow["status"] | "all")}>
-              <option value="all">Все статусы</option>
-              {Object.entries(purchaseRequestStatusMeta).map(([key, meta]) => (
-                <option key={key} value={key}>
-                  {meta.label}
-                </option>
+            <input
+              className="input"
+              type="date"
+              value={filterDate}
+              onChange={(event) => {
+                const nextDate = event.target.value;
+                setFilterDate(nextDate);
+                updateSearchParams({ requestDate: nextDate });
+              }}
+              style={{ maxWidth: "190px" }}
+              aria-label="Фильтр по дате заявки"
+            />
+
+            {filterDate ? (
+              <button
+                className="btn btn-ghost"
+                type="button"
+                onClick={() => {
+                  setFilterDate("");
+                  updateSearchParams({ requestDate: "" });
+                }}
+              >
+                Все даты
+              </button>
+            ) : null}
+
+            <div className="warehouse-view-switch" role="tablist" aria-label="Режим списка заявок">
+              {([
+                { id: "active", label: "Активные" },
+                { id: "archived", label: "Архив" },
+              ] as const).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={`warehouse-view-tab ${archiveMode === tab.id ? "is-active" : ""}`}
+                  onClick={() => {
+                    setArchiveMode(tab.id);
+                    updateSearchParams({ archiveMode: tab.id });
+                  }}
+                >
+                  {tab.label}
+                </button>
               ))}
-            </select>
+            </div>
 
             {canCreate ? (
               <button className="btn btn-accent" type="button" onClick={() => setIsCreateOpen(true)}>
@@ -266,164 +391,137 @@ export function PurchaseRequestsAdmin({
           </>
         }
       >
-        <div className="grid" style={{ gap: "1rem" }}>
-          {filteredRequests.map((request) => {
-            const statusMeta = purchaseRequestStatusMeta[request.status];
-            const kindMeta = purchaseRequestKindMeta[request.request_kind];
-            const executorMeta = request.executor_role ? purchaseRequestExecutorMeta[request.executor_role] : null;
+        {showFlowSwitch ? (
+          <div className="warehouse-view-switch" role="tablist" aria-label="Потоки заявок на закупку">
+            {([
+              { id: "engineer_requests", label: "Заявки инженеров", count: counts.engineer_requests },
+              { id: "warehouse_daily", label: "Ежедневные заявки по остатку на складе", count: counts.warehouse_daily },
+              { id: "ppr", label: "Заявки ППР", count: counts.ppr },
+            ] as const).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={`warehouse-view-tab ${selectedFlow === tab.id ? "is-active" : ""}`}
+                onClick={() => {
+                  setSelectedFlow(tab.id);
+                  updateSearchParams({ flow: tab.id });
+                }}
+              >
+                <span>{tab.label}</span>
+                <span className="warehouse-view-tab-count">{tab.count}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
 
-            return (
-              <div key={request.id} className="section-card" style={{ display: "grid", gap: "0.9rem" }}>
-                <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", flexWrap: "wrap" }}>
-                  <div className="grid" style={{ gap: "0.35rem" }}>
-                    <div style={{ fontWeight: 600 }}>
-                      {resolveName(request.object)}
-                      {request.request_kind === "draft" && request.draft_date
-                        ? ` • Черновик на ${new Date(request.draft_date).toLocaleDateString("ru-RU")}`
-                        : ""}
-                    </div>
-                    <div className="text-soft">
-                      {request.description?.trim() || "Без описания"} • {new Date(request.created_at).toLocaleString("ru-RU")}
-                    </div>
-                    <div className="text-soft">
-                      Инициатор: {resolveUser(request.requester)}
-                      {request.assignee ? ` • Исполнитель: ${resolveUser(request.assignee)}` : ""}
-                    </div>
-                  </div>
-                  <div className="row" style={{ gap: "0.35rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                    <Badge tone={request.request_kind === "draft" ? "warning" : "info"}>{kindMeta.label}</Badge>
-                    {request.request_kind === "final" ? <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge> : null}
-                    {request.source === "warehouse_daily" ? <Badge tone="danger">Из ежедневного дефицита</Badge> : <Badge tone="info">Ручная</Badge>}
-                    {executorMeta ? <Badge tone="neutral">{executorMeta.label}</Badge> : null}
-                  </div>
-                </div>
+        <div className="grid" style={{ gap: "1.25rem" }}>
+          {sections.map((section) => (
+            <div key={section.id} className="grid" style={{ gap: "0.65rem" }}>
+              <div className="purchase-request-section-title">{section.title}</div>
 
-                <div className="grid" style={{ gap: "0.7rem" }}>
-                  {(request.items ?? []).map((item) => {
-                    const stockItem = resolveStockItem(item.stock_item);
-                    const effectiveRole = item.assigned_role ?? request.executor_role ?? "engineer";
-                    const canRouteDraft =
-                      canManage &&
-                      actorRole !== "procurement_manager" &&
-                      request.source === "warehouse_daily";
-                    const canWorkFinalRequest =
-                      canManage &&
-                      request.request_kind === "final" &&
-                      (actorRole !== "procurement_manager" ||
-                        (request.executor_role === "procurement_manager" && request.assigned_to === actorId));
-                    const canReassign = canRouteDraft;
-                    const canMarkCart = canWorkFinalRequest;
+              <div className="grid purchase-request-list-grid">
+                {section.requests.map((request) => {
+                  const statusMeta = purchaseRequestStatusMeta[request.status];
+                  const executorMeta = request.executor_role ? purchaseRequestExecutorMeta[request.executor_role] : null;
+                  const detailsHref = `${`/purchase-requests/${request.id}`}${`?from=${encodeURIComponent(currentListHref)}`}` as Route;
+                  const isArchiveCard = archiveMode === "archived";
+                  const archiveSummary = getArchiveRequestSummary(request);
+                  const accentClass = isArchiveCard ? "" : getCardAccentClass(request);
+                  const itemWord = request.item_count === 1 ? "позиция" : request.item_count >= 2 && request.item_count <= 4 ? "позиции" : "позиций";
 
-                    return (
-                      <div
-                        key={item.id}
-                        style={{
-                          border: "1px solid color-mix(in srgb, var(--line) 55%, transparent)",
-                          borderRadius: "16px",
-                          padding: "0.9rem",
-                          display: "grid",
-                          gap: "0.55rem",
-                        }}
-                      >
-                        <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: "0.75rem", flexWrap: "wrap" }}>
-                          <div className="grid" style={{ gap: "0.22rem" }}>
-                            <div style={{ fontWeight: 600 }}>{item.title}</div>
-                            <div className="text-soft">
-                              Нужно докупить: {formatQty(item.quantity_requested, item.unit)}
-                              {item.location_name_snapshot ? ` • Хранение: ${item.location_name_snapshot}` : ""}
+                  return (
+                    <Link
+                      key={request.id}
+                      href={detailsHref}
+                      className={`section-card purchase-request-card-link ${isArchiveCard ? "is-archived" : "is-live"} ${accentClass}`}
+                    >
+                      <div className="purchase-request-card">
+                        <div className="purchase-request-card-head">
+                          <div className="grid" style={{ gap: "0.3rem" }}>
+                            <div className="purchase-request-card-title">
+                              {resolveName(request.object)}
+                              {request.request_kind === "draft" && request.draft_date
+                                ? ` • черновик на ${formatRequestDate(request.draft_date)}`
+                                : ""}
                             </div>
-                            {(item.current_qty_snapshot !== null || item.min_qty_snapshot !== null) ? (
-                              <div className="text-soft">
-                                Остаток: {item.current_qty_snapshot ?? 0} • Минимум: {item.min_qty_snapshot ?? 0}
+                            <div className="text-soft" style={{ fontSize: "0.88rem" }}>
+                              {request.description?.trim() || (request.source === "warehouse_daily" ? "Из ежедневного дефицита склада" : "Ручная заявка")}
+                              {" · "}{formatRequestDate(request.created_at)}
+                            </div>
+                            {request.assignee ? (
+                              <div className="text-soft" style={{ fontSize: "0.85rem" }}>
+                                Исполнитель: {resolveUser(request.assignee)}
                               </div>
                             ) : null}
-                            {item.characteristics?.trim() ? <div className="text-soft">Характеристики: {item.characteristics}</div> : null}
-                            {stockItem?.sku ? <div className="text-soft">SKU: {stockItem.sku}</div> : null}
-                            {item.note?.trim() ? <div className="text-soft">{item.note}</div> : null}
                           </div>
 
-                          <div className="row" style={{ gap: "0.35rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                            <Badge tone={effectiveRole === "engineer" ? "success" : "info"}>
-                              {purchaseRequestExecutorMeta[effectiveRole].label}
-                            </Badge>
-                            {request.request_kind === "final" ? (
-                              <label className="row" style={{ gap: "0.35rem", alignItems: "center" }}>
-                                <input
-                                  type="checkbox"
-                                  checked={item.in_cart}
-                                  disabled={!canMarkCart || pending}
-                                  onChange={(event) => toggleCart(item.id, event.target.checked)}
-                                />
-                                <span className="text-soft">В корзине</span>
-                              </label>
-                            ) : null}
+                          <div className="purchase-request-card-badges">
+                            {request.request_kind === "draft" ? (
+                              <Badge tone="warning">Черновик</Badge>
+                            ) : (
+                              <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>
+                            )}
+                            {executorMeta ? <Badge tone="neutral">{executorMeta.label}</Badge> : null}
                           </div>
                         </div>
 
-                        {canReassign ? (
-                          <div className="row" style={{ gap: "0.35rem", flexWrap: "wrap" }}>
-                            <button
-                              className={`btn ${effectiveRole === "engineer" ? "btn-accent" : "btn-ghost"} ppr-action-btn`}
-                              type="button"
-                              onClick={() => reassignItem(item.id, "engineer")}
-                              disabled={pending}
-                            >
-                              Инженер объекта
-                            </button>
-                            <button
-                              className={`btn ${effectiveRole === "procurement_manager" ? "btn-accent" : "btn-ghost"} ppr-action-btn`}
-                              type="button"
-                              onClick={() => reassignItem(item.id, "procurement_manager")}
-                              disabled={pending}
-                            >
-                              Менеджер по закупкам
-                            </button>
+                        {request.preview_items.length ? (
+                          <div className="purchase-request-card-preview">
+                            <div className="purchase-request-card-preview-list">
+                              {request.preview_items.map((item) => (
+                                <span key={`${request.id}-${item}`} className="purchase-request-pill">
+                                  {item}
+                                </span>
+                              ))}
+                              {request.item_count > request.preview_items.length ? (
+                                <span className="purchase-request-pill text-soft">
+                                  +{request.item_count - request.preview_items.length} ещё
+                                </span>
+                              ) : null}
+                            </div>
                           </div>
                         ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
 
-                <div className="row" style={{ gap: "0.35rem", flexWrap: "wrap" }}>
-                  {request.request_kind === "draft" && !request.processed_at && canManage && actorRole !== "procurement_manager" ? (
-                    <button className="btn btn-accent ppr-action-btn" type="button" onClick={() => finalizeDraft(request.id)} disabled={pending}>
-                      Сформировать итоговые заявки
-                    </button>
-                  ) : null}
-                  {request.request_kind === "final" && ((actorRole !== "procurement_manager" && canManage) || (actorRole === "procurement_manager" && request.executor_role === "procurement_manager" && request.assigned_to === actorId)) ? (
-                    <>
-                      {request.status === "new" ? (
-                        <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => changeStatus(request.id, "in_progress")} disabled={pending}>
-                          В работу
-                        </button>
-                      ) : null}
-                      {(request.status === "new" || request.status === "in_progress") ? (
-                        <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => changeStatus(request.id, "fulfilled")} disabled={pending}>
-                          Закуплено
-                        </button>
-                      ) : null}
-                      {request.status !== "cancelled" && request.status !== "fulfilled" ? (
-                        <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => changeStatus(request.id, "cancelled")} disabled={pending}>
-                          Отменить
-                        </button>
-                      ) : null}
-                    </>
-                  ) : null}
-                </div>
+                        <div className="purchase-request-card-foot">
+                          {isArchiveCard ? (
+                            <div className="text-soft" style={{ fontSize: "0.85rem" }}>{archiveSummary}</div>
+                          ) : (
+                            <div className="text-soft" style={{ fontSize: "0.85rem" }}>
+                              {request.item_count} {itemWord}
+                            </div>
+                          )}
+                          <div className="purchase-request-card-foot-cta">
+                            Открыть <ChevronRight size={14} aria-hidden="true" />
+                          </div>
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                })}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       </PprPageShell>
 
       {canCreate ? (
-        <PprModal open={isCreateOpen} onClose={() => { setIsCreateOpen(false); setIsDirty(false); }} title="Новая заявка на закупку" isDirty={isDirty}>
+        <PprModal
+          open={isCreateOpen}
+          onClose={() => {
+            setIsCreateOpen(false);
+            setIsDirty(false);
+          }}
+          title="Новая заявка на закупку"
+          isDirty={isDirty}
+        >
           <PurchaseRequestForm
             action={createPurchaseRequestAction}
-            objects={objects}
+            objects={createObjects}
             stockItems={stockItems}
-            onSubmitted={() => { setIsCreateOpen(false); setIsDirty(false); }}
+            onSubmitted={() => {
+              setIsCreateOpen(false);
+              setIsDirty(false);
+            }}
             onChange={() => setIsDirty(true)}
             submitLabel="Создать"
           />
