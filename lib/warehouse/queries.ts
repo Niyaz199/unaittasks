@@ -19,6 +19,16 @@ export type StockItemSystemGroupLinkRow = {
   system_group: SystemGroupRelation;
 };
 
+export type StockItemPprTemplateLinkRow = {
+  id: string;
+  object_id: string;
+  stock_item_id: string;
+  template_id: string;
+  required_qty: number;
+  created_at: string;
+  template: { id: string; name: string; system_id: string } | Array<{ id: string; name: string; system_id: string }> | null;
+};
+
 export type StockItemRow = {
   id: string;
   object_id: string;
@@ -37,6 +47,7 @@ export type StockItemRow = {
   object: NamedRelation;
   storage_location: StockLocationRelation;
   system_group_links: StockItemSystemGroupLinkRow[] | null;
+  ppr_template_links: StockItemPprTemplateLinkRow[] | null;
 };
 
 export type StockLocationRow = {
@@ -236,7 +247,7 @@ export async function listStockItemsForProfile(
   let query = supabase
     .from("stock_items")
     .select(
-      "id,object_id,name,kind,is_spare_part,procurement_method,unit,sku,min_qty,current_qty,storage_location_id,comment,is_active,created_at,object:objects(name),storage_location:stock_locations(id,name),system_group_links:stock_item_system_groups(id,object_id,stock_item_id,system_group_id,created_at,system_group:ppr_system_groups(id,name,code))"
+      "id,object_id,name,kind,is_spare_part,procurement_method,unit,sku,min_qty,current_qty,storage_location_id,comment,is_active,created_at,object:objects(name),storage_location:stock_locations(id,name),system_group_links:stock_item_system_groups(id,object_id,stock_item_id,system_group_id,created_at,system_group:ppr_system_groups(id,name,code)),ppr_template_links:stock_item_ppr_templates(id,object_id,stock_item_id,template_id,required_qty,created_at,template:ppr_work_templates(id,name,system_id))"
     )
     .order("name", { ascending: true });
 

@@ -372,3 +372,53 @@ export async function getPprWorkTemplateByIdForProfile(
   };
 }
 
+export type PprWorkTemplateForWarehouse = {
+  id: string;
+  name: string;
+  object_id: string;
+  system_id: string;
+  system_group_id: string;
+  execution_mode: "in_house" | "contractor";
+  is_active: boolean;
+};
+
+export async function listPprWorkTemplatesForWarehouse(
+  supabase: SupabaseClient,
+  options: { objectId?: string } = {}
+): Promise<PprWorkTemplateForWarehouse[]> {
+  let query = supabase
+    .from("ppr_work_templates")
+    .select("id,name,object_id,system_id,execution_mode,is_active,system:ppr_systems!inner(system_group_id)")
+    .eq("is_active", true)
+    .neq("execution_mode", "contractor")
+    .order("name", { ascending: true });
+
+  if (options.objectId) {
+    query = query.eq("object_id", options.objectId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  return ((data ?? []) as Array<{
+    id: string;
+    name: string;
+    object_id: string;
+    system_id: string;
+    execution_mode: "in_house" | "contractor";
+    is_active: boolean;
+    system: { system_group_id: string } | Array<{ system_group_id: string }> | null;
+  }>).map((row) => {
+    const system = Array.isArray(row.system) ? row.system[0] ?? null : row.system;
+    return {
+      id: row.id,
+      name: row.name,
+      object_id: row.object_id,
+      system_id: row.system_id,
+      system_group_id: system?.system_group_id ?? "",
+      execution_mode: row.execution_mode,
+      is_active: row.is_active,
+    };
+  });
+}
+

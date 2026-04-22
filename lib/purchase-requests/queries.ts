@@ -14,7 +14,7 @@ type PurchaseRequestBaseRow = {
   id: string;
   object_id: string;
   status: PurchaseRequestStatus;
-  source: "manual" | "warehouse_daily";
+  source: "manual" | "warehouse_daily" | "ppr";
   request_kind: "draft" | "final";
   executor_role: "engineer" | "procurement_manager" | null;
   description: string | null;
@@ -24,6 +24,7 @@ type PurchaseRequestBaseRow = {
   origin_request_id: string | null;
   processed_at: string | null;
   approved_by: string | null;
+  ppr_plan_month: string | null;
   created_at: string;
   updated_at: string;
   fulfilled_at: string | null;
@@ -55,8 +56,10 @@ export type PurchaseRequestItemRow = {
   characteristics: string | null;
   in_cart: boolean;
   cart_marked_at: string | null;
+  ppr_system_id: string | null;
   created_at: string;
   stock_item: { name: string; unit: string; sku?: string | null; kind?: string; procurement_method?: string | null } | Array<{ name: string; unit: string; sku?: string | null; kind?: string; procurement_method?: string | null }> | null;
+  ppr_system: { name: string } | Array<{ name: string }> | null;
 };
 
 export type PurchaseRequestSummaryRow = PurchaseRequestBaseRow & {
@@ -72,10 +75,10 @@ export type PurchaseRequestArchiveMode = "active" | "archived";
 export type PurchaseRequestFlow = "engineer_requests" | "warehouse_daily" | "ppr";
 
 const purchaseRequestSummarySelect =
-  "id,object_id,status,source,request_kind,executor_role,description,requested_by,assigned_to,draft_date,origin_request_id,processed_at,approved_by,created_at,updated_at,fulfilled_at,cancelled_at,object:objects(name),requester:profiles!purchase_requests_requested_by_fkey(full_name),assignee:profiles!purchase_requests_assigned_to_fkey(full_name)";
+  "id,object_id,status,source,request_kind,executor_role,description,requested_by,assigned_to,draft_date,origin_request_id,processed_at,approved_by,ppr_plan_month,created_at,updated_at,fulfilled_at,cancelled_at,object:objects(name),requester:profiles!purchase_requests_requested_by_fkey(full_name),assignee:profiles!purchase_requests_assigned_to_fkey(full_name)";
 
 const purchaseRequestDetailSelect =
-  "id,object_id,status,source,request_kind,executor_role,description,requested_by,assigned_to,draft_date,origin_request_id,processed_at,approved_by,created_at,updated_at,fulfilled_at,cancelled_at,object:objects(name),requester:profiles!purchase_requests_requested_by_fkey(full_name),assignee:profiles!purchase_requests_assigned_to_fkey(full_name),items:purchase_request_items(id,request_id,object_id,stock_item_id,title,unit,quantity_requested,note,is_auto_generated,assigned_role,current_qty_snapshot,min_qty_snapshot,storage_location_id,location_name_snapshot,characteristics,in_cart,cart_marked_at,created_at,stock_item:stock_items(name,unit,sku,kind,procurement_method))";
+  "id,object_id,status,source,request_kind,executor_role,description,requested_by,assigned_to,draft_date,origin_request_id,processed_at,approved_by,ppr_plan_month,created_at,updated_at,fulfilled_at,cancelled_at,object:objects(name),requester:profiles!purchase_requests_requested_by_fkey(full_name),assignee:profiles!purchase_requests_assigned_to_fkey(full_name),items:purchase_request_items(id,request_id,object_id,stock_item_id,title,unit,quantity_requested,note,is_auto_generated,assigned_role,current_qty_snapshot,min_qty_snapshot,storage_location_id,location_name_snapshot,characteristics,in_cart,cart_marked_at,ppr_system_id,created_at,stock_item:stock_items(name,unit,sku,kind,procurement_method),ppr_system:ppr_systems(name))";
 
 function usesOwnPurchaseRequestScope(role: Profile["role"]) {
   return role === "engineer" || role === "tech";
@@ -235,7 +238,7 @@ export async function listPurchaseRequestsForProfile(
     if (error) throw error;
     rows = (data ?? []) as PurchaseRequestBaseRow[];
   } else {
-    const [manualFinalsResult, dailyDraftsResult, dailyFinalsResult] = await Promise.all([
+    const [manualFinalsResult, dailyDraftsResult, dailyFinalsResult, pprFinalsResult] = await Promise.all([
       applyCommonFilters(buildPurchaseRequestSummaryQuery(supabase))
         .eq("source", "manual")
         .in("status", ["new", "in_progress"]),
@@ -247,16 +250,21 @@ export async function listPurchaseRequestsForProfile(
         .eq("source", "warehouse_daily")
         .eq("request_kind", "final")
         .in("status", ["new", "in_progress"]),
+      applyCommonFilters(buildPurchaseRequestSummaryQuery(supabase))
+        .eq("source", "ppr")
+        .in("status", ["new", "in_progress"]),
     ]);
 
     if (manualFinalsResult.error) throw manualFinalsResult.error;
     if (dailyDraftsResult.error) throw dailyDraftsResult.error;
     if (dailyFinalsResult.error) throw dailyFinalsResult.error;
+    if (pprFinalsResult.error) throw pprFinalsResult.error;
 
     rows = [
       ...((manualFinalsResult.data ?? []) as PurchaseRequestBaseRow[]),
       ...((dailyDraftsResult.data ?? []) as PurchaseRequestBaseRow[]),
       ...((dailyFinalsResult.data ?? []) as PurchaseRequestBaseRow[]),
+      ...((pprFinalsResult.data ?? []) as PurchaseRequestBaseRow[]),
     ].sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime());
   }
 

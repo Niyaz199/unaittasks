@@ -29,6 +29,13 @@ function resolveUser(raw: { full_name: string } | Array<{ full_name: string }> |
   return raw?.full_name ?? "—";
 }
 
+function resolveSystemName(
+  raw: { name: string } | Array<{ name: string }> | null | undefined
+): string {
+  if (Array.isArray(raw)) return raw[0]?.name ?? "";
+  return raw?.name ?? "";
+}
+
 function resolveStockItem(
   raw:
     | { name: string; unit: string; sku?: string | null; kind?: string; procurement_method?: string | null }
@@ -194,7 +201,15 @@ export function PurchaseRequestDetails({
           <div className="row" style={{ gap: "0.35rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
             <Badge tone={request.request_kind === "draft" ? "warning" : "info"}>{kindMeta.label}</Badge>
             {request.request_kind === "final" ? <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge> : null}
-            {request.source === "warehouse_daily" ? <Badge tone="danger">Из ежедневного дефицита</Badge> : <Badge tone="info">Ручная заявка</Badge>}
+            {request.source === "warehouse_daily" ? (
+              <Badge tone="danger">Из ежедневного дефицита</Badge>
+            ) : request.source === "ppr" ? (
+              <Badge tone="info">
+                Из плана ППР{request.ppr_plan_month ? ` · ${String(request.ppr_plan_month).slice(0, 7)}` : ""}
+              </Badge>
+            ) : (
+              <Badge tone="info">Ручная заявка</Badge>
+            )}
             {executorMeta ? <Badge tone="neutral">{executorMeta.label}</Badge> : null}
           </div>
         </div>
@@ -279,12 +294,55 @@ export function PurchaseRequestDetails({
         </div>
 
         <div className="grid" style={{ gap: "0.85rem" }}>
-          {(request.items ?? []).map((item) => {
-            const stockItem = resolveStockItem(item.stock_item);
-            const effectiveRole = item.assigned_role ?? request.executor_role ?? "engineer";
-            const cartCopy = getCartActionCopy(effectiveRole);
+          {request.source === "ppr"
+            ? (() => {
+                const groups = new Map<string, { name: string; items: NonNullable<typeof request.items> }>();
+                for (const it of request.items ?? []) {
+                  const key = it.ppr_system_id ?? "__no_system__";
+                  const name = resolveSystemName(it.ppr_system) || "Без системы";
+                  const group = groups.get(key) ?? { name, items: [] };
+                  group.items.push(it);
+                  groups.set(key, group);
+                }
+                return [...groups.entries()].map(([key, group]) => (
+                  <div key={key} className="grid" style={{ gap: "0.5rem" }}>
+                    <div className="purchase-request-section-title" style={{ fontSize: "0.92rem", opacity: 0.85 }}>
+                      Система: {group.name}
+                    </div>
+                    {group.items.map((item) => renderRequestItem(item))}
+                  </div>
+                ));
+              })()
+            : (request.items ?? []).map((item) => renderRequestItem(item))}
 
-            return (
+          {!request.items?.length ? <div className="text-soft">В этой заявке пока нет позиций.</div> : null}
+
+          {request.request_kind === "draft" && canManage && actorRole !== "procurement_manager" && !request.processed_at && totalItems > 0 ? (
+            <div className="purchase-request-finalize-cta">
+              <div className="purchase-request-finalize-hint">
+                Распределите позиции выше, затем зафиксируйте заявки
+              </div>
+              <button
+                className="btn btn-accent purchase-request-finalize-btn"
+                type="button"
+                onClick={finalizeDraft}
+                disabled={pending}
+              >
+                {pending ? "Формируем..." : "✓ Сформировать итоговые заявки"}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+
+  function renderRequestItem(item: NonNullable<PurchaseRequestDetailRow["items"]>[number]) {
+    const stockItem = resolveStockItem(item.stock_item);
+    const effectiveRole = item.assigned_role ?? request.executor_role ?? "engineer";
+    const cartCopy = getCartActionCopy(effectiveRole);
+
+    return (
               <div key={item.id} className={`purchase-request-detail-item ${isArchivedRequest ? "is-archived" : ""}`}>
 
                 {/* Primary row: name + qty chip */}
@@ -369,29 +427,6 @@ export function PurchaseRequestDetails({
                   </div>
                 ) : null}
               </div>
-            );
-          })}
-
-          {!request.items?.length ? <div className="text-soft">В этой заявке пока нет позиций.</div> : null}
-
-          {/* Finalize CTA — visible and prominent at bottom of items section */}
-          {request.request_kind === "draft" && canManage && actorRole !== "procurement_manager" && !request.processed_at && totalItems > 0 ? (
-            <div className="purchase-request-finalize-cta">
-              <div className="purchase-request-finalize-hint">
-                Распределите позиции выше, затем зафиксируйте заявки
-              </div>
-              <button
-                className="btn btn-accent purchase-request-finalize-btn"
-                type="button"
-                onClick={finalizeDraft}
-                disabled={pending}
-              >
-                {pending ? "Формируем..." : "✓ Сформировать итоговые заявки"}
-              </button>
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </section>
-  );
+    );
+  }
 }

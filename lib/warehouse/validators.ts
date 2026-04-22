@@ -6,6 +6,11 @@ export const stockItemKindSchema = z.enum(["zip", "component"]);
 export const stockMovementTypeSchema = z.enum(["receipt", "issue", "adjustment_in", "adjustment_out"]);
 export const procurementMethodSchema = z.enum(["engineer", "procurement"]);
 
+export const pprTemplateLinkSchema = z.object({
+  templateId: uuidSchema,
+  requiredQty: z.coerce.number().positive(),
+});
+
 export const stockItemFormSchema = z.object({
   objectId: uuidSchema,
   name: z.string().trim().min(2),
@@ -17,6 +22,7 @@ export const stockItemFormSchema = z.object({
   minQty: z.coerce.number().min(0),
   storageLocationId: z.string().uuid().optional().nullable(),
   systemGroupIds: z.array(uuidSchema).default([]),
+  pprTemplateLinks: z.array(pprTemplateLinkSchema).default([]),
   initialQty: z.coerce.number().min(0).optional().nullable(),
   comment: z.string().trim().max(4000).optional().nullable(),
   isActive: z.boolean().default(true),

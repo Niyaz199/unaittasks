@@ -12,7 +12,9 @@ import {
   stockItemFormSchema,
   stockLocationFormSchema,
   stockMovementFormSchema,
+  pprTemplateLinkSchema,
 } from "@/lib/warehouse/validators";
+import { z } from "zod";
 import { writeAudit } from "@/lib/audit";
 
 function canUseAllObjects(role: string) {
@@ -55,6 +57,33 @@ function assertObjectAllowed(role: string, objectIds: string[], objectId: string
   if (!objectIds.includes(objectId)) {
     throw new Error(errorMessage);
   }
+}
+
+async function replaceStockItemPprTemplates(
+  supabase: Awaited<ReturnType<typeof requireProfile>>["supabase"],
+  itemId: string,
+  objectId: string,
+  links: Array<{ templateId: string; requiredQty: number }>
+) {
+  const { error: deleteError } = await supabase.from("stock_item_ppr_templates").delete().eq("stock_item_id", itemId);
+  if (deleteError) throw deleteError;
+
+  if (!links.length) return;
+
+  const deduped = new Map<string, number>();
+  for (const link of links) {
+    deduped.set(link.templateId, link.requiredQty);
+  }
+
+  const { error: insertError } = await supabase.from("stock_item_ppr_templates").insert(
+    [...deduped.entries()].map(([templateId, requiredQty]) => ({
+      object_id: objectId,
+      stock_item_id: itemId,
+      template_id: templateId,
+      required_qty: requiredQty,
+    }))
+  );
+  if (insertError) throw insertError;
 }
 
 async function replaceStockItemSystemGroups(
@@ -125,6 +154,18 @@ async function getRoomObjectId(
   return data.object_id as string;
 }
 
+function parsePprTemplateLinks(formData: FormData): Array<{ templateId: string; requiredQty: number }> {
+  const templateIds = formData.getAll("ppr_link_template_id").map(String).filter(Boolean);
+  const requiredQtys = formData.getAll("ppr_link_required_qty").map(String);
+  return templateIds
+    .map((templateId, index) => {
+      const raw = { templateId, requiredQty: requiredQtys[index] ?? "1" };
+      const parsed = pprTemplateLinkSchema.safeParse(raw);
+      return parsed.success ? parsed.data : null;
+    })
+    .filter((item): item is { templateId: string; requiredQty: number } => item !== null);
+}
+
 export async function createStockItemAction(formData: FormData) {
   const { profile, supabase, managedObjectIds } = await requireWarehouseManager();
   const initialQtyRaw = formData.get("initial_qty");
@@ -142,6 +183,7 @@ export async function createStockItemAction(formData: FormData) {
       .getAll("system_group_ids")
       .map((value) => String(value))
       .filter(Boolean),
+    pprTemplateLinks: parsePprTemplateLinks(formData),
     initialQty: initialQtyRaw === null || String(initialQtyRaw).trim() === "" ? null : String(initialQtyRaw),
     comment: String(formData.get("comment") ?? "") || null,
     isActive: formData.get("is_active") === "on",
@@ -179,6 +221,7 @@ export async function createStockItemAction(formData: FormData) {
   if (error) throw error;
 
   await replaceStockItemSystemGroups(supabase, data.id, payload.objectId, payload.systemGroupIds);
+  await replaceStockItemPprTemplates(supabase, data.id, payload.objectId, payload.pprTemplateLinks);
 
   if (payload.initialQty && payload.initialQty > 0) {
     const { data: movement, error: movementError } = await supabase
@@ -253,6 +296,7 @@ export async function updateStockItemAction(formData: FormData) {
       .getAll("system_group_ids")
       .map((value) => String(value))
       .filter(Boolean),
+    pprTemplateLinks: parsePprTemplateLinks(formData),
     initialQty: null,
     comment: String(formData.get("comment") ?? "") || null,
     isActive: formData.get("is_active") === "on",
@@ -285,6 +329,7 @@ export async function updateStockItemAction(formData: FormData) {
   if (error) throw error;
 
   await replaceStockItemSystemGroups(supabase, itemId, payload.objectId, payload.systemGroupIds);
+  await replaceStockItemPprTemplates(supabase, itemId, payload.objectId, payload.pprTemplateLinks);
 
   await writeAudit({
     actorId: profile.id,

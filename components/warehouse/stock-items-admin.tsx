@@ -40,11 +40,20 @@ type StockItemRow = {
         system_group: { id: string; name: string; code: string } | Array<{ id: string; name: string; code: string }> | null;
       }>
     | null;
+  ppr_template_links:
+    | Array<{
+        id: string;
+        template_id: string;
+        required_qty: number;
+        template: { id: string; name: string; system_id: string } | Array<{ id: string; name: string; system_id: string }> | null;
+      }>
+    | null;
 };
 
 type ObjectOption = { id: string; name: string };
 type LocationOption = { id: string; object_id: string; name: string; is_active?: boolean };
 type SystemGroupOption = { id: string; name: string; code: string; is_active?: boolean };
+type PprTemplateOption = { id: string; name: string; object_id: string; system_id: string; system_group_id: string };
 
 function resolveName(raw: { name: string } | Array<{ name: string }> | null | undefined) {
   if (Array.isArray(raw)) return raw[0]?.name ?? "—";
@@ -77,6 +86,7 @@ export function StockItemsAdmin({
   objects,
   locations,
   systemGroups,
+  pprTemplates = [],
   canManage,
   initialFilterObjectId = "",
   currentObject = null,
@@ -86,6 +96,7 @@ export function StockItemsAdmin({
   objects: ObjectOption[];
   locations: LocationOption[];
   systemGroups: SystemGroupOption[];
+  pprTemplates?: PprTemplateOption[];
   canManage: boolean;
   initialFilterObjectId?: string;
   currentObject?: ObjectOption | null;
@@ -722,6 +733,7 @@ export function StockItemsAdmin({
           objects={objects}
           locations={locations}
           systemGroups={systemGroups}
+          pprTemplates={pprTemplates}
           fixedObjectId={isObjectScoped ? currentObject?.id : undefined}
           fixedObjectName={isObjectScoped ? currentObject?.name : undefined}
           onSubmitted={() => { setIsCreateOpen(false); setIsDirty(false); }}
@@ -738,6 +750,7 @@ export function StockItemsAdmin({
             objects={objects}
             locations={locations}
             systemGroups={systemGroups}
+            pprTemplates={pprTemplates}
             onSubmitted={() => { setEditingId(null); setIsDirty(false); }}
             onChange={() => setIsDirty(true)}
             submitLabel="Сохранить"
@@ -752,6 +765,10 @@ export function StockItemsAdmin({
               min_qty: String(editingItem.min_qty),
               storage_location_id: editingItem.storage_location_id ?? "",
               system_group_ids: (editingItem.system_group_links ?? []).map((link) => link.system_group_id),
+              ppr_template_links: (editingItem.ppr_template_links ?? []).map((link) => ({
+                template_id: link.template_id,
+                required_qty: String(link.required_qty),
+              })),
               comment: editingItem.comment ?? "",
               is_active: editingItem.is_active,
             }}

@@ -40,8 +40,10 @@ function resolveUser(raw: { full_name: string } | Array<{ full_name: string }> |
   return raw?.full_name ?? "—";
 }
 
-function getRequestFlow(request: Pick<PurchaseRequestSummaryRow, "source">): Exclude<PurchaseRequestFlow, "ppr"> {
-  return request.source === "warehouse_daily" ? "warehouse_daily" : "engineer_requests";
+function getRequestFlow(request: Pick<PurchaseRequestSummaryRow, "source">): PurchaseRequestFlow {
+  if (request.source === "warehouse_daily") return "warehouse_daily";
+  if (request.source === "ppr") return "ppr";
+  return "engineer_requests";
 }
 
 function formatRequestDate(value: string | null | undefined) {
@@ -222,10 +224,7 @@ export function PurchaseRequestsAdmin({
   const visibleRequests = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     return dateFilteredRequests.filter((request) => {
-      if (showFlowSwitch && selectedFlow !== "ppr" && getRequestFlow(request) !== selectedFlow) {
-        return false;
-      }
-      if (showFlowSwitch && selectedFlow === "ppr") {
+      if (showFlowSwitch && getRequestFlow(request) !== selectedFlow) {
         return false;
       }
       if (!normalizedSearch) return true;
@@ -254,9 +253,10 @@ export function PurchaseRequestsAdmin({
       { label: archiveMode === "archived" ? "В архиве" : "В работе", value: dateFilteredRequests.length, tone: "neutral" as const },
       { label: "Ручные", value: counts.engineer_requests, tone: "info" as const },
       { label: "Ежедневные", value: counts.warehouse_daily, tone: "warning" as const },
+      { label: "ППР", value: counts.ppr, tone: "info" as const },
       { label: archiveMode === "archived" ? "Итоговые" : "Черновики", value: archiveMode === "archived" ? finals : drafts, tone: "success" as const },
     ];
-  }, [archiveMode, counts.engineer_requests, counts.warehouse_daily, dateFilteredRequests]);
+  }, [archiveMode, counts.engineer_requests, counts.warehouse_daily, counts.ppr, dateFilteredRequests]);
 
   function updateSearchParams(next: Partial<{ objectId: string; archiveMode: PurchaseRequestArchiveMode; flow: PurchaseRequestFlow; requestDate: string }>) {
     const href = buildListHref({
@@ -294,7 +294,7 @@ export function PurchaseRequestsAdmin({
     selectedFlow === "ppr"
       ? {
           message: archiveMode === "archived" ? "Архив ППР-заявок пока пуст" : "Заявок ППР пока нет",
-          hint: "Этот раздел зарезервирован под будущий поток закупок из ППР.",
+          hint: "Заявки формируются автоматически после генерации месячного плана ППР.",
         }
       : archiveMode === "archived"
         ? {
@@ -445,7 +445,7 @@ export function PurchaseRequestsAdmin({
                                 : ""}
                             </div>
                             <div className="text-soft" style={{ fontSize: "0.88rem" }}>
-                              {request.description?.trim() || (request.source === "warehouse_daily" ? "Из ежедневного дефицита склада" : "Ручная заявка")}
+                              {request.description?.trim() || (request.source === "warehouse_daily" ? "Из ежедневного дефицита склада" : request.source === "ppr" ? "Из плана ППР" : "Ручная заявка")}
                               {" · "}{formatRequestDate(request.created_at)}
                             </div>
                             {request.assignee ? (

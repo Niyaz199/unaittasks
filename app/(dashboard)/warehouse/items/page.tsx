@@ -1,6 +1,6 @@
 ﻿import { requireProfile } from "@/lib/auth";
 import { canAccessWarehouseModule, canManageWarehouseCatalog } from "@/lib/capabilities";
-import { listPprSystemGroups } from "@/lib/ppr/structure-queries";
+import { listPprSystemGroups, listPprWorkTemplatesForWarehouse } from "@/lib/ppr/structure-queries";
 import {
   listStockItemsForProfile,
   listStockLocationsForProfile,
@@ -32,12 +32,15 @@ export default async function WarehouseItemsPage({
   const isAllObjectsMode = !selectedObject && showAllObjects;
   const shouldShowCatalog = Boolean(selectedObject) || isAllObjectsMode;
   const canManage = canManageWarehouseCatalog(profile.role);
-  const [items, locations, systemGroups, summaries] = await Promise.all([
+  const [items, locations, systemGroups, pprTemplates, summaries] = await Promise.all([
     shouldShowCatalog ? listStockItemsForProfile(supabase, profile, selectedObjectId ? { objectId: selectedObjectId } : {}) : Promise.resolve([]),
     shouldShowCatalog
       ? listStockLocationsForProfile(supabase, profile, selectedObjectId ? { objectId: selectedObjectId } : {})
       : Promise.resolve([]),
     shouldShowCatalog && canManage ? listPprSystemGroups(supabase, profile) : Promise.resolve([]),
+    shouldShowCatalog && canManage
+      ? listPprWorkTemplatesForWarehouse(supabase, selectedObjectId ? { objectId: selectedObjectId } : {})
+      : Promise.resolve([]),
     shouldShowCatalog ? Promise.resolve([]) : listWarehouseObjectSummariesForProfile(supabase, profile),
   ]);
 
@@ -60,6 +63,7 @@ export default async function WarehouseItemsPage({
           objects={objects.map((item) => ({ id: item.id, name: item.name }))}
           locations={locations.map((item) => ({ id: item.id, object_id: item.object_id, name: item.name, is_active: item.is_active }))}
           systemGroups={systemGroups}
+          pprTemplates={pprTemplates}
           canManage={canManage}
           initialFilterObjectId={selectedObjectId}
           currentObject={selectedObject ? { id: selectedObject.id, name: selectedObject.name } : null}
