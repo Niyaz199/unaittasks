@@ -91,6 +91,17 @@ function formatQty(value: number, unit: string) {
   return `${Number(value).toLocaleString("ru-RU", { maximumFractionDigits: 3 })} ${unit}`;
 }
 
+// Maps movement tone to a CSS color variable
+const toneColor: Record<string, string> = {
+  success: "var(--success)",
+  warning: "var(--warning)",
+  danger: "var(--danger)",
+  info: "var(--info)",
+  neutral: "var(--text-soft)",
+};
+
+const HISTORY_PAGE_SIZE = 10;
+
 export function StockLocationDetails({
   location,
   qrCode,
@@ -112,8 +123,10 @@ export function StockLocationDetails({
 }) {
   const objectName = resolveName(location.object);
   const [activeView, setActiveView] = useState<"state" | "movement" | "history" | "qr">("state");
+  const [visibleHistoryCount, setVisibleHistoryCount] = useState(HISTORY_PAGE_SIZE);
+
   const totals = useMemo(() => {
-    const locationQty = balances.reduce((sum, balance) => sum + balance.qty, 0);
+    const positionsWithStock = balances.filter((b) => b.qty > 0).length;
     const lowStockCount = balances.reduce((sum, balance) => {
       const item = Array.isArray(balance.item) ? balance.item[0] ?? null : balance.item;
       if (!item) return sum;
@@ -121,10 +134,16 @@ export function StockLocationDetails({
     }, 0);
     return {
       positions: balances.length,
-      locationQty,
+      positionsWithStock,
       lowStockCount,
     };
   }, [balances]);
+
+  const visibleMovements = useMemo(
+    () => movements.slice(0, visibleHistoryCount),
+    [movements, visibleHistoryCount]
+  );
+
   const historyCaption =
     movements.length === 20
       ? "Показаны последние 20 операций по этому месту хранения."
@@ -152,12 +171,12 @@ export function StockLocationDetails({
 
         <div className="warehouse-location-metrics">
           <div className="warehouse-location-metric">
-            <span className="warehouse-location-metric-label">Позиции</span>
+            <span className="warehouse-location-metric-label">Позиций</span>
             <strong>{totals.positions}</strong>
           </div>
           <div className="warehouse-location-metric">
-            <span className="warehouse-location-metric-label">На месте</span>
-            <strong className="tabular-nums">{Number(totals.locationQty).toLocaleString("ru-RU", { maximumFractionDigits: 3 })}</strong>
+            <span className="warehouse-location-metric-label" title="Позиции, у которых есть остаток на этом месте">С остатком</span>
+            <strong>{totals.positionsWithStock}</strong>
           </div>
           <div className="warehouse-location-metric">
             <span className="warehouse-location-metric-label">Ниже минимума</span>
@@ -174,7 +193,17 @@ export function StockLocationDetails({
             onClick={() => setActiveView("state")}
           >
             Состояние
+            {totals.lowStockCount > 0 ? (
+              <span
+                className="warehouse-view-tab-count"
+                title={`${totals.lowStockCount} позиций ниже минимума`}
+                style={{ background: "var(--danger)", color: "#fff" }}
+              >
+                {totals.lowStockCount}
+              </span>
+            ) : null}
           </button>
+
           <button
             type="button"
             className={`warehouse-view-tab ${activeView === "movement" ? "is-active" : ""}`}
@@ -182,6 +211,7 @@ export function StockLocationDetails({
           >
             Движение
           </button>
+
           <button
             type="button"
             className={`warehouse-view-tab ${activeView === "history" ? "is-active" : ""}`}
@@ -190,6 +220,7 @@ export function StockLocationDetails({
             История
             <span className="warehouse-view-tab-count">{movements.length}</span>
           </button>
+
           <button
             type="button"
             className={`warehouse-view-tab ${activeView === "qr" ? "is-active" : ""}`}
@@ -216,7 +247,7 @@ export function StockLocationDetails({
                       <tr>
                         <th>ТМЦ</th>
                         <th className="text-right">На месте</th>
-                        <th className="text-right">Общий</th>
+                        <th className="text-right" title="Суммарный остаток по всем местам хранения этого объекта">Общий ▾</th>
                         <th className="text-right">Минимум</th>
                         <th>Статус</th>
                       </tr>
@@ -290,27 +321,47 @@ export function StockLocationDetails({
               </div>
 
               {movements.length ? (
-                <div className="warehouse-history-list">
-                  {movements.map((movement) => {
-                    const item = resolveItem(movement.item);
-                    return (
-                      <div key={movement.id} className="warehouse-history-row">
-                        <div className="warehouse-history-main">
-                          <div className="warehouse-history-title">
-                            {item?.name ?? "ТМЦ"} • {formatQty(movement.quantity, item?.unit ?? "шт")}
+                <>
+                  <div className="warehouse-history-list">
+                    {visibleMovements.map((movement) => {
+                      const item = resolveItem(movement.item);
+                      const tone = stockMovementTypeMeta[movement.movement_type].tone;
+                      const accentColor = toneColor[tone] ?? "var(--text-soft)";
+                      return (
+                        <div
+                          key={movement.id}
+                          className="warehouse-history-row"
+                          style={{ borderLeft: `3px solid ${accentColor}`, paddingLeft: "calc(0.95rem - 3px)" }}
+                        >
+                          <div className="warehouse-history-main">
+                            <div className="warehouse-history-title">
+                              {item?.name ?? "ТМЦ"} • {formatQty(movement.quantity, item?.unit ?? "шт")}
+                            </div>
+                            <div className="text-soft warehouse-history-meta">
+                              {resolveActor(movement.actor)} • {new Date(movement.created_at).toLocaleString("ru-RU")}
+                            </div>
+                            {movement.note?.trim() ? <div className="text-soft warehouse-history-note">{movement.note}</div> : null}
                           </div>
-                          <div className="text-soft warehouse-history-meta">
-                            {resolveActor(movement.actor)} • {new Date(movement.created_at).toLocaleString("ru-RU")}
-                          </div>
-                          {movement.note?.trim() ? <div className="text-soft warehouse-history-note">{movement.note}</div> : null}
+                          <Badge tone={tone}>
+                            {stockMovementTypeMeta[movement.movement_type].label}
+                          </Badge>
                         </div>
-                        <Badge tone={stockMovementTypeMeta[movement.movement_type].tone}>
-                          {stockMovementTypeMeta[movement.movement_type].label}
-                        </Badge>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+
+                  {visibleHistoryCount < movements.length ? (
+                    <div style={{ display: "flex", justifyContent: "center", marginTop: "0.5rem" }}>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => setVisibleHistoryCount((n) => n + HISTORY_PAGE_SIZE)}
+                      >
+                        Показать ещё ({movements.length - visibleHistoryCount} осталось)
+                      </button>
+                    </div>
+                  ) : null}
+                </>
               ) : (
                 <div className="text-soft">Движений по этому месту хранения пока не было.</div>
               )}

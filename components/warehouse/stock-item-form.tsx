@@ -63,6 +63,16 @@ const defaultValues: StockItemFormValues = {
   is_active: true,
 };
 
+const kindDescriptions: Record<string, string> = {
+  zip: "Расходники и запчасти — то, что заменяется при ремонте или заканчивается",
+  component: "Оборудование и детали — то, что используется длительное время",
+};
+
+const procurementHints: Record<string, string> = {
+  engineer: "Инженер сам закупает и привозит на объект",
+  procurement: "Заявка уходит в отдел закупок — они организуют доставку",
+};
+
 export function StockItemForm({
   action,
   objects,
@@ -83,6 +93,8 @@ export function StockItemForm({
   const [selectedLocationId, setSelectedLocationId] = useState(values.storage_location_id);
   const [selectedKind, setSelectedKind] = useState<StockItemFormValues["kind"]>(values.kind);
   const [isSparePart, setIsSparePart] = useState(values.is_spare_part);
+  const [selectedProcurement, setSelectedProcurement] = useState<StockItemFormValues["procurement_method"]>(values.procurement_method);
+  const [isActive, setIsActive] = useState(values.is_active);
   const [selectedSystemGroupIds, setSelectedSystemGroupIds] = useState<string[]>(values.system_group_ids);
   const [isPprItem, setIsPprItem] = useState(values.ppr_template_links.length > 0);
   const [pprLinks, setPprLinks] = useState<PprLinkRow[]>(
@@ -97,7 +109,6 @@ export function StockItemForm({
     [locations, selectedObjectId]
   );
 
-  // PPR templates filtered by selected object and system groups
   const availablePprTemplates = useMemo(() => {
     return pprTemplates.filter((t) => {
       if (selectedObjectId && t.object_id !== selectedObjectId) return false;
@@ -129,7 +140,6 @@ export function StockItemForm({
     }
   }, [filteredLocations, needsStorage, selectedLocationId]);
 
-  // When system groups or object changes, clear PPR links that reference now-unavailable templates
   useEffect(() => {
     if (!isPprItem) return;
     const availableIds = new Set(availablePprTemplates.map((t) => t.id));
@@ -162,8 +172,6 @@ export function StockItemForm({
     setIsSubmitting(true);
     try {
       const formData = new FormData(event.currentTarget);
-
-      // Inject PPR links into FormData (parallel arrays, handled by the action)
       if (isPprItem) {
         for (const link of pprLinks) {
           if (link.template_id && link.required_qty) {
@@ -172,7 +180,6 @@ export function StockItemForm({
           }
         }
       }
-
       const result = await action(formData);
       addToast(itemId ? "ТМЦ обновлена" : "ТМЦ создана", "success");
       onSubmitted?.(result && typeof result === "object" ? result : undefined);
@@ -190,8 +197,11 @@ export function StockItemForm({
       <div className="ppr-modal-body grid">
         {itemId ? <input type="hidden" name="item_id" value={itemId} /> : null}
 
-        <PprFormSection title="Основная информация" desc="Базовые данные о карточке ТМЦ">
-          <PprFormGroup label="Объект">
+        {/* ─── 1. Основная информация ─── */}
+        <PprFormSection title="Основная информация" desc="Как называется этот товар и что он из себя представляет">
+
+          {/* Объект */}
+          <PprFormGroup label="Объект" hint="К какому объекту относится эта позиция">
             {fixedObjectId ? (
               <>
                 <input type="hidden" name="object_id" value={fixedObjectId} />
@@ -207,68 +217,146 @@ export function StockItemForm({
                 value={selectedObjectId}
                 onChange={(event) => setSelectedObjectId(event.target.value)}
               >
-                <option value="" disabled>
-                  Выберите объект
-                </option>
+                <option value="" disabled>Выберите объект</option>
                 {objects.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
+                  <option key={item.id} value={item.id}>{item.name}</option>
                 ))}
               </select>
             )}
           </PprFormGroup>
 
-          <PprFormGroup label="Название">
-            <input className="input" name="name" defaultValue={values.name} placeholder="Например: Блок питания ATX 500W" required />
+          {/* Название */}
+          <PprFormGroup
+            label="Название"
+            hint="Конкретное наименование: производитель, модель, размер. Пример: «Фильтр воздушный Samsung DA-97» лучше, чем «Фильтр»"
+          >
+            <input
+              className="input ctf-title-input"
+              name="name"
+              defaultValue={values.name}
+              placeholder="Например: Блок питания ATX 500W"
+              required
+            />
           </PprFormGroup>
 
-          <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-            <PprFormGroup label="Тип">
-              <select
-                className="select"
-                name="kind"
-                value={selectedKind}
-                onChange={(event) => setSelectedKind(event.target.value as StockItemFormValues["kind"])}
-              >
-                {Object.entries(stockItemKindMeta).map(([key, meta]) => (
-                  <option key={key} value={key}>
-                    {meta.label}
-                  </option>
-                ))}
-              </select>
+          {/* Тип — визуальные карточки вместо выпадающего списка */}
+          <div className="ctf-field">
+            <span className="ctf-label">Тип товара</span>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem" }}>
+              {(Object.entries(stockItemKindMeta) as [StockItemFormValues["kind"], { label: string }][]).map(([key, meta]) => {
+                const active = selectedKind === key;
+                return (
+                  <label
+                    key={key}
+                    style={{
+                      cursor: "pointer",
+                      display: "grid",
+                      gap: "0.3rem",
+                      padding: "0.75rem 1rem",
+                      borderRadius: "var(--radius)",
+                      background: active
+                        ? "color-mix(in srgb, var(--accent) 10%, transparent)"
+                        : "color-mix(in srgb, var(--panel-soft) 40%, transparent)",
+                      boxShadow: active
+                        ? "inset 0 0 0 2px var(--accent)"
+                        : "inset 0 0 0 1px color-mix(in srgb, #8ea8d0 18%, transparent)",
+                      transition: "box-shadow 0.15s, background 0.15s",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="kind"
+                      value={key}
+                      checked={active}
+                      onChange={() => setSelectedKind(key)}
+                      style={{ display: "none" }}
+                    />
+                    <span style={{ fontWeight: 600, fontSize: "0.9rem", color: active ? "var(--accent)" : "var(--text)" }}>
+                      {meta.label}
+                    </span>
+                    <span style={{ fontSize: "0.72rem", color: "var(--text-soft)", lineHeight: 1.4 }}>
+                      {kindDescriptions[key]}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Компонент также является ЗИП */}
+          {selectedKind === "component" && (
+            <label
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "0.65rem",
+                cursor: "pointer",
+                padding: "0.65rem 0.9rem",
+                borderRadius: "var(--radius)",
+                background: isSparePart
+                  ? "color-mix(in srgb, var(--accent) 8%, transparent)"
+                  : "color-mix(in srgb, var(--panel-soft) 30%, transparent)",
+                boxShadow: isSparePart
+                  ? "inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 50%, transparent)"
+                  : "inset 0 0 0 1px color-mix(in srgb, #8ea8d0 14%, transparent)",
+                transition: "background 0.15s, box-shadow 0.15s",
+              }}
+            >
+              <input
+                type="checkbox"
+                name="is_spare_part"
+                checked={isSparePart}
+                onChange={(e) => setIsSparePart(e.target.checked)}
+                style={{ marginTop: "0.1rem", flexShrink: 0 }}
+              />
+              <span style={{ display: "grid", gap: "0.15rem" }}>
+                <span style={{ fontWeight: 500, fontSize: "0.875rem" }}>Этот компонент также относится к ЗИП</span>
+                <span style={{ fontSize: "0.72rem", color: "var(--text-soft)", lineHeight: 1.4 }}>
+                  Отметьте, если эта деталь заменяется как расходная часть
+                </span>
+              </span>
+            </label>
+          )}
+
+          {/* Артикул и Ед. изм. в 2 колонки */}
+          <div className="ctf-assign-grid">
+            <PprFormGroup label="Артикул / SKU" description="необязательно" hint="Код из каталога поставщика или внутренний номер">
+              <input className="input" name="sku" defaultValue={values.sku} placeholder="Напр.: ATX-500W-BE" />
             </PprFormGroup>
 
-            <PprFormGroup label="Артикул / SKU">
-              <input className="input" name="sku" defaultValue={values.sku} placeholder="Необязательно" />
+            <PprFormGroup label="Ед. изм." hint="В чём измеряется: шт, м, кг, л, упак.">
+              <input className="input" name="unit" defaultValue={values.unit} placeholder="шт / м / упак." required />
             </PprFormGroup>
           </div>
 
-          {selectedKind === "component" ? (
-            <label className="row" style={{ gap: "0.8rem", alignItems: "center" }}>
-              <input type="checkbox" name="is_spare_part" checked={isSparePart} onChange={(event) => setIsSparePart(event.target.checked)} />
-              <span>Этот компонент также относится к ЗИП</span>
-            </label>
-          ) : null}
-
-          <PprFormGroup label="Метод закупки">
-            <select className="select" name="procurement_method" defaultValue={values.procurement_method}>
-              {Object.entries(procurementMethodMeta).map(([key, meta]) => (
-                <option key={key} value={key}>
-                  {meta.label}
-                </option>
+          {/* Метод закупки */}
+          <PprFormGroup label="Метод закупки" hint={procurementHints[selectedProcurement]}>
+            <select
+              className="select"
+              name="procurement_method"
+              value={selectedProcurement}
+              onChange={(e) => setSelectedProcurement(e.target.value as StockItemFormValues["procurement_method"])}
+            >
+              {(Object.entries(procurementMethodMeta) as [string, { label: string }][]).map(([key, meta]) => (
+                <option key={key} value={key}>{meta.label}</option>
               ))}
             </select>
           </PprFormGroup>
-
-          <PprFormGroup label="Ед. изм.">
-            <input className="input" name="unit" defaultValue={values.unit} placeholder="шт / м / упак." required />
-          </PprFormGroup>
         </PprFormSection>
 
+        {/* ─── 2. Учёт и хранение ─── */}
         {needsStorage ? (
-          <PprFormSection title="Учет и хранение" desc="Где находится ТМЦ и как учитывается">
-            <PprFormGroup label="Где хранится ТМЦ">
+          <PprFormSection title="Учёт и хранение" desc="Где находится товар и в каком количестве">
+            <PprFormGroup
+              label="Место хранения"
+              hint={
+                !selectedObjectId
+                  ? "Сначала выберите объект выше"
+                  : filteredLocations.length === 0
+                  ? "Для этого объекта ещё нет складских мест"
+                  : "Выберите полку, шкаф или зону, где хранится товар"
+              }
+            >
               <select
                 className="select"
                 name="storage_location_id"
@@ -282,31 +370,35 @@ export function StockItemForm({
                 </option>
                 {filteredLocations.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.name}
-                    {item.is_active === false ? " (неактивно)" : ""}
+                    {item.name}{item.is_active === false ? " (неактивно)" : ""}
                   </option>
                 ))}
               </select>
             </PprFormGroup>
 
-            <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-              <PprFormGroup label="Мин. остаток">
+            <div className="ctf-assign-grid">
+              <PprFormGroup label="Мин. остаток" hint="При снижении ниже этого значения появится предупреждение">
                 <input className="input" name="min_qty" type="number" min="0" step="0.001" defaultValue={values.min_qty} required />
               </PprFormGroup>
-            </div>
 
-            {!itemId ? (
-              <PprFormGroup label="Стартовый остаток" description="необязательно">
-                <input className="input" name="initial_qty" type="number" min="0" step="0.001" defaultValue={values.initial_qty} placeholder="Если известно количество на складе" />
-              </PprFormGroup>
-            ) : null}
+              {!itemId && (
+                <PprFormGroup label="Стартовый остаток" description="необязательно" hint="Введите, сколько уже есть на складе прямо сейчас">
+                  <input className="input" name="initial_qty" type="number" min="0" step="0.001" defaultValue={values.initial_qty} placeholder="0" />
+                </PprFormGroup>
+              )}
+            </div>
           </PprFormSection>
         ) : (
           <input type="hidden" name="min_qty" value="0" />
         )}
 
-        <PprFormSection title="Дополнительно" desc="Связи с системами и настройки">
-          <PprFormGroup label="Привязка к группе систем" description="необязательно">
+        {/* ─── 3. Дополнительно ─── */}
+        <PprFormSection title="Дополнительно" desc="Необязательные связи и настройки">
+          <PprFormGroup
+            label="Группа инженерных систем"
+            description="необязательно"
+            hint="К какой системе объекта относится товар: вентиляция, электрика, сантехника и т.д."
+          >
             <MultiSelectCombobox
               name="system_group_ids"
               options={systemGroups.map((g) => ({
@@ -322,7 +414,23 @@ export function StockItemForm({
           </PprFormGroup>
 
           {/* ── Участвует в ППР ── */}
-          <label className="row" style={{ gap: "0.8rem", alignItems: "center", marginTop: "0.25rem" }}>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "0.65rem",
+              cursor: "pointer",
+              padding: "0.65rem 0.9rem",
+              borderRadius: "var(--radius)",
+              background: isPprItem
+                ? "color-mix(in srgb, var(--accent) 8%, transparent)"
+                : "color-mix(in srgb, var(--panel-soft) 30%, transparent)",
+              boxShadow: isPprItem
+                ? "inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent)"
+                : "inset 0 0 0 1px color-mix(in srgb, #8ea8d0 14%, transparent)",
+              transition: "background 0.15s, box-shadow 0.15s",
+            }}
+          >
             <input
               type="checkbox"
               checked={isPprItem}
@@ -333,20 +441,26 @@ export function StockItemForm({
                 }
                 onChange?.();
               }}
+              style={{ marginTop: "0.1rem", flexShrink: 0 }}
             />
-            <span>Участвует в ППР</span>
+            <span style={{ display: "grid", gap: "0.15rem" }}>
+              <span style={{ fontWeight: 500, fontSize: "0.875rem" }}>Участвует в ППР</span>
+              <span style={{ fontSize: "0.72rem", color: "var(--text-soft)", lineHeight: 1.4 }}>
+                Отметьте, если этот товар нужен для планово-предупредительного ремонта
+              </span>
+            </span>
           </label>
 
-          {isPprItem ? (
-            <div className="grid" style={{ gap: "0.75rem", marginTop: "0.5rem" }}>
-              <div className="text-soft" style={{ fontSize: "0.85rem" }}>
-                Укажите шаблоны ППР, для выполнения которых нужна эта ТМЦ, и количество на одно выполнение.
+          {isPprItem && (
+            <div className="grid" style={{ gap: "0.75rem" }}>
+              <p className="text-soft" style={{ fontSize: "0.85rem", margin: 0 }}>
+                Укажите шаблоны ППР и количество на одно выполнение.
                 {selectedSystemGroupIds.length === 0 && availablePprTemplates.length === 0 && pprTemplates.length > 0 && (
                   <span style={{ color: "var(--warning)", marginLeft: "0.4rem" }}>
                     Выберите группу систем выше, чтобы видеть подходящие шаблоны.
                   </span>
                 )}
-              </div>
+              </p>
 
               {pprLinks.map((link, index) => {
                 const optionsForRow = availablePprTemplates.filter(
@@ -365,9 +479,7 @@ export function StockItemForm({
                           {availablePprTemplates.length > 0 ? "Выберите шаблон ППР" : "Нет доступных шаблонов"}
                         </option>
                         {optionsForRow.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name}
-                          </option>
+                          <option key={t.id} value={t.id}>{t.name}</option>
                         ))}
                       </select>
                     </div>
@@ -408,24 +520,66 @@ export function StockItemForm({
                 Добавить шаблон
               </button>
             </div>
-          ) : null}
+          )}
 
-          <PprFormGroup label="Комментарий">
-            <textarea className="input" name="comment" rows={3} defaultValue={values.comment} placeholder="Примечание по хранению или применению" />
+          <PprFormGroup
+            label="Комментарий"
+            description="необязательно"
+            hint="Особенности хранения, применения или закупки"
+          >
+            <textarea
+              className="input"
+              name="comment"
+              rows={3}
+              defaultValue={values.comment}
+              placeholder="Например: хранить в сухом месте, закупать только у проверенного поставщика"
+            />
           </PprFormGroup>
 
-          <label className="row" style={{ gap: "0.8rem", alignItems: "center", marginTop: "0.5rem" }}>
-            <label className="toggle-switch">
-              <input type="checkbox" name="is_active" defaultChecked={values.is_active} />
-              <span className="toggle-slider"></span>
-            </label>
-            <span style={{ fontWeight: 500 }}>Активная карточка</span>
+          {/* Активная карточка */}
+          <label
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "0.65rem",
+              cursor: "pointer",
+              padding: "0.65rem 0.9rem",
+              borderRadius: "var(--radius)",
+              background: isActive
+                ? "color-mix(in srgb, var(--accent) 8%, transparent)"
+                : "color-mix(in srgb, var(--panel-soft) 30%, transparent)",
+              boxShadow: isActive
+                ? "inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent)"
+                : "inset 0 0 0 1px color-mix(in srgb, #8ea8d0 14%, transparent)",
+              transition: "background 0.15s, box-shadow 0.15s",
+            }}
+          >
+            <input
+              type="checkbox"
+              name="is_active"
+              checked={isActive}
+              onChange={(e) => setIsActive(e.target.checked)}
+              style={{ marginTop: "0.1rem", flexShrink: 0 }}
+            />
+            <span style={{ display: "grid", gap: "0.15rem" }}>
+              <span style={{ fontWeight: 500, fontSize: "0.875rem" }}>Активная карточка</span>
+              <span style={{ fontSize: "0.72rem", color: "var(--text-soft)", lineHeight: 1.4 }}>
+                {isActive
+                  ? "Карточка видна в списках и доступна для движения товара"
+                  : "Карточка скрыта из списков — товар нельзя выдать или принять"}
+              </span>
+            </span>
           </label>
         </PprFormSection>
       </div>
 
       <div className="ppr-modal-footer">
-        <button className="btn btn-accent" type="submit" disabled={isSubmitting || !selectedObjectId || (needsStorage && !selectedLocationId)}>
+        <button
+          className="btn btn-accent ctf-submit-btn"
+          type="submit"
+          disabled={isSubmitting || !selectedObjectId || (needsStorage && !selectedLocationId)}
+        >
+          {isSubmitting && <span className="ctf-spinner" />}
           {isSubmitting ? "Сохранение..." : submitLabel}
         </button>
       </div>

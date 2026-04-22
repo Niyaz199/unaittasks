@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
+import { Plus } from "lucide-react";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { PprModal } from "@/components/ppr/ui/ppr-modal";
@@ -157,7 +158,8 @@ export function StockLocationsAdmin({
             </select>
 
             <button className="btn btn-accent" type="button" onClick={() => setIsCreateOpen(true)}>
-              + Место хранения
+              <Plus size={15} aria-hidden="true" />
+              Место хранения
             </button>
           </>
         }
@@ -197,8 +199,8 @@ export function StockLocationsAdmin({
           {filteredLocations.map((item) => (
             <div
               key={item.id}
-              className="section-card mobile-card"
-              style={{ cursor: "pointer", display: "grid", gap: "0.7rem" }}
+              className="section-card mobile-card warehouse-location-mobile-card"
+              style={{ cursor: "pointer", display: "grid", gap: "0.7rem", transition: "box-shadow 0.15s" }}
               onClick={() => router.push(`/warehouse/locations/${item.id}` as Route)}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.7rem" }}>

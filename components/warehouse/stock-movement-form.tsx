@@ -54,6 +54,8 @@ export function StockMovementForm({ objectId, locationId, items, action }: Props
   const [quantity, setQuantity] = useState("1");
   const [note, setNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // resetKey forces the combobox to remount (clears selection) after a successful submit
+  const [resetKey, setResetKey] = useState(0);
   const { addToast } = useToast();
 
   const availableItems = useMemo(() => {
@@ -63,6 +65,7 @@ export function StockMovementForm({ objectId, locationId, items, action }: Props
         : items.filter((item) => item.isActive || item.locationQty > 0 || item.totalQty > 0);
     return [...scopedItems].sort((left, right) => left.name.localeCompare(right.name, "ru"));
   }, [items, movementType]);
+
   const itemOptions = useMemo<AssigneeOption[]>(
     () =>
       availableItems.map((item) => ({
@@ -75,6 +78,7 @@ export function StockMovementForm({ objectId, locationId, items, action }: Props
       })),
     [availableItems, movementType]
   );
+
   const selectedItem = useMemo(() => items.find((item) => item.id === itemId) ?? null, [itemId, items]);
   const quantityValue = Number(quantity || 0);
   const delta = getMovementDelta(movementType, quantityValue);
@@ -88,14 +92,27 @@ export function StockMovementForm({ objectId, locationId, items, action }: Props
       ? "В этом месте хранения сейчас нет ТМЦ, которые можно выдать."
       : "Нет доступных карточек ТМЦ для прихода.";
 
+  // Max available for issue (prevents exceeding stock)
+  const maxQty = movementType === "issue" && selectedItem ? selectedItem.locationQty : undefined;
+  // Hint text under quantity field
+  const qtyHint =
+    movementType === "issue" && selectedItem
+      ? `Доступно на месте: ${formatQty(selectedItem.locationQty, selectedItem.unit)}`
+      : movementType === "receipt" && selectedItem
+      ? `Сейчас на месте: ${formatQty(selectedItem.locationQty, selectedItem.unit)}`
+      : null;
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
     try {
       await action(new FormData(event.currentTarget));
       addToast("Движение по складу сохранено", "success");
+      // Reset all fields including item selection
+      setItemId("");
       setQuantity("1");
       setNote("");
+      setResetKey((k) => k + 1);
       router.refresh();
     } catch (error) {
       addToast(error instanceof Error ? error.message : "Не удалось сохранить движение", "error");
@@ -134,6 +151,7 @@ export function StockMovementForm({ objectId, locationId, items, action }: Props
         <label className="grid" style={{ gap: "0.35rem" }}>
           <span className="text-soft">ТМЦ</span>
           <AssigneeCombobox
+            key={resetKey}
             name="item_id"
             options={itemOptions}
             placeholder={movementType === "issue" ? "Что забрали из этого места?" : "Что положили в это место?"}
@@ -164,9 +182,7 @@ export function StockMovementForm({ objectId, locationId, items, action }: Props
               </div>
               <div className="warehouse-movement-stat">
                 <span className="warehouse-movement-stat-label">Станет после операции</span>
-                <strong
-                  className={`tabular-nums ${isNegativeResult ? "warehouse-danger-text" : ""}`}
-                >
+                <strong className={`tabular-nums ${isNegativeResult ? "warehouse-danger-text" : ""}`}>
                   {formatQty(nextLocationQty, selectedItem.unit)}
                 </strong>
               </div>
@@ -184,20 +200,27 @@ export function StockMovementForm({ objectId, locationId, items, action }: Props
         ) : null}
 
         <div className="warehouse-movement-fields">
-          <label className="grid" style={{ gap: "0.35rem" }}>
-            <span className="text-soft">Количество</span>
+          <div className="grid" style={{ gap: "0.35rem" }}>
+            <label className="text-soft" htmlFor="movement-qty">Количество</label>
             <input
+              id="movement-qty"
               className="input"
               name="quantity"
               type="number"
               min="0.001"
+              max={maxQty !== undefined ? maxQty : undefined}
               step="0.001"
               inputMode="decimal"
               required
               value={quantity}
               onChange={(event) => setQuantity(event.target.value)}
             />
-          </label>
+            {qtyHint ? (
+              <p className="text-soft" style={{ fontSize: "0.72rem", margin: 0, lineHeight: 1.4, opacity: 0.8 }}>
+                {qtyHint}
+              </p>
+            ) : null}
+          </div>
 
           <label className="grid" style={{ gap: "0.35rem" }}>
             <span className="text-soft">Комментарий</span>
@@ -218,7 +241,12 @@ export function StockMovementForm({ objectId, locationId, items, action }: Props
       </div>
 
       <div className="row" style={{ justifyContent: "flex-end" }}>
-        <button className="btn btn-accent" type="submit" disabled={isSubmitting || !itemId || isNegativeResult || isQuantityInvalid}>
+        <button
+          className="btn btn-accent ctf-submit-btn"
+          type="submit"
+          disabled={isSubmitting || !itemId || isNegativeResult || isQuantityInvalid}
+        >
+          {isSubmitting && <span className="ctf-spinner" />}
           {isSubmitting ? "Сохраняем..." : submitLabel}
         </button>
       </div>

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "ruflo": {
+      "command": "ruflo",
+      "args": ["mcp", "start"]
+    }
+  }
+}

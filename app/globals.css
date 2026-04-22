@@ -986,6 +986,18 @@ textarea:disabled,
   gap: 0.6rem;
 }
 
+.warehouse-items-hub-card-link:hover .warehouse-items-hub-card {
+  box-shadow:
+    0 20px 44px rgba(2, 8, 18, 0.38),
+    inset 0 0 0 1.5px color-mix(in srgb, var(--line) 55%, transparent);
+}
+
+.warehouse-location-mobile-card:hover {
+  box-shadow:
+    0 18px 38px rgba(2, 8, 18, 0.35),
+    inset 0 0 0 1.5px color-mix(in srgb, var(--line) 50%, transparent);
+}
+
 .warehouse-items-scope {
   display: grid;
   gap: 0.9rem;
@@ -1205,6 +1217,77 @@ textarea:disabled,
 
 .warehouse-scoped-toolbar-body {
   padding-top: 0.85rem;
+}
+
+/* ── Compact filter pill bar (scoped TMC catalog) ── */
+.warehouse-items-scope-filterbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.warehouse-filter-pills {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.warehouse-filter-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  padding: 0.3rem 0.6rem 0.3rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel-soft) 35%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--line) 30%, transparent);
+  font-size: 0.81rem;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s, color 0.15s;
+  white-space: nowrap;
+  user-select: none;
+  color: var(--text-soft);
+}
+
+.warehouse-filter-pill:hover {
+  background: color-mix(in srgb, var(--panel-soft) 58%, transparent);
+  color: var(--text);
+}
+
+.warehouse-filter-pill.is-active {
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 52%, transparent);
+  color: var(--accent);
+}
+
+.warehouse-filter-pill-label {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.warehouse-filter-pill-select {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: inherit;
+  font-size: 1rem;
+  /* override .select defaults that conflict with pill layout */
+  padding: 0;
+  box-shadow: none;
+}
+
+@media (max-width: 720px) {
+  .warehouse-filter-pill-label {
+    max-width: 110px;
+  }
 }
 
 .warehouse-items-table th {

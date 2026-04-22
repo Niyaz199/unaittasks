@@ -49,7 +49,7 @@ export function PprModal({ open, title, onClose, children, isDirty }: Props) {
   );
 }
 
-export function PprFormGroup({ label, children, description }: { label: string; children: ReactNode; description?: ReactNode }) {
+export function PprFormGroup({ label, children, description, hint }: { label: string; children: ReactNode; description?: ReactNode; hint?: string }) {
   return (
     <div className="ctf-field">
       <span className="ctf-label">
@@ -57,6 +57,7 @@ export function PprFormGroup({ label, children, description }: { label: string; 
         {description && <span className="ctf-optional" style={{ textTransform: "none" }}> — {description}</span>}
       </span>
       {children}
+      {hint && <p className="text-soft" style={{ fontSize: "0.72rem", margin: 0, lineHeight: 1.45, opacity: 0.75 }}>{hint}</p>}
     </div>
   );
 }

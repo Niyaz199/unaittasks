@@ -163,6 +163,55 @@ export async function listPprEquipmentForProfile(
   }>;
 }
 
+export type PprEquipmentObjectSummaryRow = {
+  object_id: string;
+  object_name: string;
+  total_count: number;
+  active_count: number;
+  repair_count: number;
+  out_of_service_count: number;
+};
+
+export async function listPprEquipmentObjectSummariesForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">
+): Promise<PprEquipmentObjectSummaryRow[]> {
+  assertPprStructureQueryAccess(profile.role);
+  const objects = await listPprManageableObjectsForProfile(supabase, profile);
+  if (!objects.length) return [];
+
+  const objectIds = objects.map((item) => item.id);
+  const { data, error } = await supabase
+    .from("ppr_equipment")
+    .select("object_id,status")
+    .in("object_id", objectIds);
+  if (error) throw error;
+
+  const stats = new Map<string, { total: number; active: number; repair: number; out: number }>();
+  for (const row of data ?? []) {
+    const current = stats.get(row.object_id) ?? { total: 0, active: 0, repair: 0, out: 0 };
+    current.total += 1;
+    if (row.status === "active") current.active += 1;
+    else if (row.status === "repair") current.repair += 1;
+    else if (row.status === "out_of_service") current.out += 1;
+    stats.set(row.object_id, current);
+  }
+
+  return objects
+    .map((object) => {
+      const s = stats.get(object.id);
+      return {
+        object_id: object.id,
+        object_name: object.name,
+        total_count: s?.total ?? 0,
+        active_count: s?.active ?? 0,
+        repair_count: s?.repair ?? 0,
+        out_of_service_count: s?.out ?? 0,
+      };
+    })
+    .sort((a, b) => a.object_name.localeCompare(b.object_name, "ru"));
+}
+
 export async function getPprEquipmentByIdForProfile(
   supabase: SupabaseClient,
   profile: Pick<Profile, "id" | "role">,

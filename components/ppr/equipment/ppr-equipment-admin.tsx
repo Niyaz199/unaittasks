@@ -1,16 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import type { Route } from "next";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPprEquipmentAction, updatePprEquipmentAction } from "@/app/actions/ppr-directory-actions";
-import { DataTable } from "@/components/ui/data-table";
 import { PprModal } from "@/components/ppr/ui/ppr-modal";
 import { pprEquipmentStatusMeta } from "@/lib/ppr/presentation";
 import { PprPageShell } from "@/components/ppr/ui/ppr-page-shell";
-import { StatusBadge } from "@/components/ppr/ui/status-badge";
+import { PprEquipmentTree } from "@/components/ppr/equipment/ppr-equipment-tree";
 
 const PprEquipmentForm = dynamic(
   () => import("@/components/ppr/equipment/ppr-equipment-form").then((module) => module.PprEquipmentForm),
@@ -62,42 +60,6 @@ type RoomOption = {
   is_active: boolean;
 };
 
-function resolveName(raw: { name: string } | Array<{ name: string }> | null | undefined) {
-  if (Array.isArray(raw)) return raw[0]?.name ?? "—";
-  return raw?.name ?? "—";
-}
-
-function resolveRoomLabel(
-  raw:
-    | {
-        name: string;
-        floor: string | null;
-        floor_ref: { name: string } | Array<{ name: string }> | null;
-        room_type: { name: string } | Array<{ name: string }> | null;
-      }
-    | Array<{
-        name: string;
-        floor: string | null;
-        floor_ref: { name: string } | Array<{ name: string }> | null;
-        room_type: { name: string } | Array<{ name: string }> | null;
-      }>
-    | null
-    | undefined
-) {
-  const room = Array.isArray(raw) ? raw[0] : raw;
-  if (!room) return "—";
-  const floor = resolveName(room.floor_ref) !== "—" ? resolveName(room.floor_ref) : (room.floor ?? null);
-  const roomType = resolveName(room.room_type);
-  return [room.name, floor, roomType !== "—" ? roomType : null].filter(Boolean).join(" • ");
-}
-
-const EQUIPMENT_LABELS = {
-  active: pprEquipmentStatusMeta.active.label,
-  repair: pprEquipmentStatusMeta.repair.label,
-  out_of_service: pprEquipmentStatusMeta.out_of_service.label,
-  archived: pprEquipmentStatusMeta.archived.label,
-};
-
 export function PprEquipmentAdmin({
   equipment,
   objects,
@@ -119,7 +81,6 @@ export function PprEquipmentAdmin({
   // Filter states
   const [searchTerm, setSearchTerm] = useState("");
   const [filterObjectId, setFilterObjectId] = useState(initialFilterObjectId);
-  const [filterSystemId, setFilterSystemId] = useState("");
   const [filterRoomId, setFilterRoomId] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("");
 
@@ -129,7 +90,6 @@ export function PprEquipmentAdmin({
 
   useEffect(() => {
     setFilterObjectId(initialFilterObjectId);
-    setFilterSystemId("");
     setFilterRoomId("");
   }, [initialFilterObjectId]);
 
@@ -140,17 +100,15 @@ export function PprEquipmentAdmin({
         searchTerm === "" ||
         item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.inventory_no.toLowerCase().includes(searchTerm.toLowerCase());
-      
+
       const matchesObject = filterObjectId === "" || item.object_id === filterObjectId;
-      const matchesSystem = filterSystemId === "" || item.system_id === filterSystemId;
       const matchesRoom = filterRoomId === "" || item.room_id === filterRoomId;
       const matchesStatus = filterStatus === "" || item.status === filterStatus;
 
-      return matchesSearch && matchesObject && matchesSystem && matchesRoom && matchesStatus;
+      return matchesSearch && matchesObject && matchesRoom && matchesStatus;
     });
-  }, [equipment, searchTerm, filterObjectId, filterSystemId, filterRoomId, filterStatus]);
+  }, [equipment, searchTerm, filterObjectId, filterRoomId, filterStatus]);
 
-  // Dependent filters
   const availableSystems = useMemo(() => {
     if (!filterObjectId) return systems;
     return systems.filter((s) => s.object_id === filterObjectId);
@@ -221,7 +179,6 @@ export function PprEquipmentAdmin({
               onChange={(e) => {
                 const nextObjectId = e.target.value;
                 setFilterObjectId(nextObjectId);
-                setFilterSystemId("");
                 setFilterRoomId("");
                 updateSearchParams(nextObjectId);
               }}
@@ -237,21 +194,6 @@ export function PprEquipmentAdmin({
               {objects.map((obj) => (
                 <option key={obj.id} value={obj.id}>
                   {obj.name}
-                </option>
-              ))}
-            </select>
-
-            <select
-              className="select"
-              value={filterSystemId}
-              onChange={(e) => setFilterSystemId(e.target.value)}
-              disabled={!hasSelectedObject}
-              style={{ maxWidth: "200px" }}
-            >
-              <option value="">Все системы</option>
-              {availableSystems.map((sys) => (
-                <option key={sys.id} value={sys.id}>
-                  {sys.name}
                 </option>
               ))}
             </select>
@@ -291,73 +233,11 @@ export function PprEquipmentAdmin({
           </>
         }
       >
-        <div className="desktop-only">
-          <DataTable
-            columns={[
-              { key: "inventory", label: "Инв. номер" },
-              { key: "name", label: "Оборудование" },
-              { key: "object", label: "Объект" },
-              { key: "system", label: "Система" },
-              { key: "room", label: "Помещение" },
-              { key: "status", label: "Статус" },
-              { key: "actions", label: "Действия" },
-            ]}
-          >
-            {filteredEquipment.map((item) => (
-              <tr 
-                key={item.id} 
-                className="clickable-row"
-                onClick={() => router.push(`/ppr/equipment/${item.id}` as Route)}
-              >
-                <td style={{ fontFamily: "monospace", fontSize: "0.9em" }}>{item.inventory_no}</td>
-                <td>
-                  <div style={{ fontWeight: 600 }}>{item.name}</div>
-                  <div className="text-soft" style={{ fontSize: "0.85em" }}>{item.dispatch_name}</div>
-                </td>
-                <td>{resolveName(item.object)}</td>
-                <td>{resolveName(item.system)}</td>
-                <td>{resolveRoomLabel(item.room)}</td>
-                <td>
-                  <StatusBadge status={item.status} labels={EQUIPMENT_LABELS} />
-                </td>
-                <td onClick={(e) => e.stopPropagation()}>
-                  <div className="ppr-table-actions">
-                    <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(item.id)}>
-                      Изменить
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </DataTable>
-        </div>
-
-        <div className="mobile-cards mobile-only">
-          {filteredEquipment.map((item) => (
-            <div 
-              key={item.id} 
-              className="section-card mobile-card" 
-              style={{ cursor: "pointer" }}
-              onClick={() => router.push(`/ppr/equipment/${item.id}` as Route)}
-            >
-              <div className="grid" style={{ gap: "0.45rem" }}>
-                <div style={{ fontWeight: 600 }}>{item.name}</div>
-                <div className="text-soft">Инв. номер: {item.inventory_no}</div>
-                <div className="text-soft">Объект: {resolveName(item.object)}</div>
-                <div className="text-soft">Система: {resolveName(item.system)}</div>
-                <div className="text-soft">Помещение: {resolveRoomLabel(item.room)}</div>
-                <div>
-                  <StatusBadge status={item.status} labels={EQUIPMENT_LABELS} />
-                </div>
-                <div className="ppr-table-actions" onClick={(e) => e.stopPropagation()}>
-                  <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(item.id)}>
-                    Изменить
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <PprEquipmentTree
+          equipment={filteredEquipment}
+          systems={availableSystems}
+          onEdit={(id) => setEditingId(id)}
+        />
       </PprPageShell>
 
       <PprModal open={isCreateOpen} onClose={() => { setIsCreateOpen(false); setIsDirty(false); }} title="Новое оборудование ППР" isDirty={isDirty}>

@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { pprEquipmentStatusMeta } from "@/lib/ppr/presentation";
 import { PprEquipmentQrBlock } from "@/components/ppr/equipment/ppr-equipment-qr-block";
@@ -65,6 +68,9 @@ function resolveName(raw: { name: string } | Array<{ name: string }> | null | un
   if (Array.isArray(raw)) return raw[0]?.name ?? "—";
   return raw?.name ?? "—";
 }
+
+type TabId = "specs" | "components" | "history" | "qr";
+
 export function PprEquipmentDetails({
   equipment,
   qrCode,
@@ -82,121 +88,192 @@ export function PprEquipmentDetails({
   systemGroups: SystemGroupOption[];
   canManageComponents: boolean;
 }) {
+  const [activeTab, setActiveTab] = useState<TabId>("specs");
   const statusMeta = pprEquipmentStatusMeta[equipment.status];
 
   return (
-    <div className="td-page">
-      {/* Header and key meta */}
-      <div className="section-card" style={{ padding: "1.5rem", marginBottom: "1rem", background: "color-mix(in srgb, var(--panel-soft) 30%, transparent)" }}>
-        <div className="td-hero" style={{ gap: "1rem" }}>
-          <div className="td-hero-top" style={{ alignItems: "flex-start" }}>
-            <div>
-              <div className="text-soft" style={{ fontSize: "0.85rem", marginBottom: "0.4rem", fontFamily: "monospace", letterSpacing: "0.05em" }}>
-                ИНВ. {equipment.inventory_no} • {equipment.dispatch_name}
-              </div>
-              <h2 className="task-details-title" style={{ margin: 0, fontSize: "1.6rem" }}>{equipment.name}</h2>
+    <div className="warehouse-location-page">
+      {/* Hero */}
+      <div className="section-card warehouse-location-hero">
+        <div className="warehouse-location-hero-head">
+          <div className="warehouse-location-hero-copy">
+            <div className="warehouse-location-eyebrow">Объект</div>
+            <div className="warehouse-location-context">{resolveName(equipment.object)}</div>
+            <div className="text-soft warehouse-location-description" style={{ fontFamily: "monospace", fontSize: "0.82rem", letterSpacing: "0.04em" }}>
+              ИНВ. {equipment.inventory_no} • {equipment.dispatch_name}
             </div>
-            <div className="td-hero-badges">
-              <Badge tone={statusMeta.tone} style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }}>{statusMeta.label}</Badge>
+            <div className="text-soft warehouse-location-description">
+              {resolveName(equipment.system)} • {resolveName(equipment.room)}
             </div>
           </div>
+          <Badge tone={statusMeta.tone} style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }}>
+            {statusMeta.label}
+          </Badge>
+        </div>
 
-          <div className="td-meta-grid" style={{ marginTop: "0.5rem", borderTop: "1px solid color-mix(in srgb, var(--line) 40%, transparent)", paddingTop: "1rem" }}>
-            <div className="td-meta-item">
-              <span className="td-meta-label">Объект</span>
-              <span className="td-meta-value" style={{ fontWeight: 500 }}>{resolveName(equipment.object)}</span>
-            </div>
-            <div className="td-meta-item">
-              <span className="td-meta-label">Система</span>
-              <span className="td-meta-value">{resolveName(equipment.system)}</span>
-            </div>
-            <div className="td-meta-item">
-              <span className="td-meta-label">Помещение</span>
-              <span className="td-meta-value">{resolveName(equipment.room)}</span>
-            </div>
+        <div className="warehouse-location-metrics">
+          <div className="warehouse-location-metric">
+            <span className="warehouse-location-metric-label">Составляющие</span>
+            <strong>{components.length}</strong>
+          </div>
+          <div className="warehouse-location-metric">
+            <span className="warehouse-location-metric-label">Критичных</span>
+            <strong className={components.filter((c) => c.is_critical).length > 0 ? "warehouse-danger-text" : ""}>
+              {components.filter((c) => c.is_critical).length}
+            </strong>
+          </div>
+          <div className="warehouse-location-metric">
+            <span className="warehouse-location-metric-label">Ввод в экспл.</span>
+            <strong>{new Date(equipment.service_start_date).toLocaleDateString("ru-RU")}</strong>
           </div>
         </div>
       </div>
 
-      <div className="grid md-grid-2" style={{ gap: "1.5rem", alignItems: "start" }}>
-        {/* Left Column */}
-        <div className="flex flex-col" style={{ gap: "1.5rem" }}>
-          <div className="section-card" style={{ padding: "1.5rem" }}>
-            <h3 style={{ margin: "0 0 1.25rem 0", fontSize: "1.1rem", fontWeight: 600, color: "var(--text)" }}>Технические характеристики</h3>
-            
-            <div style={{ display: "grid", gap: "1rem" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-                <div>
-                  <div className="text-soft" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.2rem" }}>Производитель</div>
-                  <div style={{ fontSize: "0.95rem" }}>{equipment.manufacturer || "—"}</div>
-                </div>
-                <div>
-                  <div className="text-soft" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.2rem" }}>Модель</div>
-                  <div style={{ fontSize: "0.95rem" }}>{equipment.model || "—"}</div>
-                </div>
-              </div>
-              
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-                <div>
-                  <div className="text-soft" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.2rem" }}>Серийный номер</div>
-                  <div style={{ fontSize: "0.95rem", fontFamily: "monospace" }}>{equipment.serial_no || "—"}</div>
-                </div>
-                <div>
-                  <div className="text-soft" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.2rem" }}>Ввод в эксплуатацию</div>
-                  <div style={{ fontSize: "0.95rem" }}>{new Date(equipment.service_start_date).toLocaleDateString("ru-RU")}</div>
-                </div>
-              </div>
+      {/* Tabs */}
+      <div className="warehouse-location-stack">
+        <div className="warehouse-view-switch" role="tablist" aria-label="Разделы карточки оборудования">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "specs"}
+            className={`warehouse-view-tab ${activeTab === "specs" ? "is-active" : ""}`}
+            onClick={() => setActiveTab("specs")}
+          >
+            Характеристики
+          </button>
 
-              {equipment.description?.trim() && (
-                <div style={{ marginTop: "0.5rem", paddingTop: "1rem", borderTop: "1px solid color-mix(in srgb, var(--line) 40%, transparent)" }}>
-                  <div className="text-soft" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.4rem" }}>Описание</div>
-                  <div style={{ fontSize: "0.95rem", lineHeight: 1.5 }}>{equipment.description}</div>
-                </div>
-              )}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "components"}
+            className={`warehouse-view-tab ${activeTab === "components" ? "is-active" : ""}`}
+            onClick={() => setActiveTab("components")}
+          >
+            Составляющие
+            {components.length > 0 && (
+              <span className="warehouse-view-tab-count">{components.length}</span>
+            )}
+          </button>
 
-              {equipment.comment?.trim() && (
-                <div style={{ marginTop: "0.5rem", padding: "0.75rem", background: "color-mix(in srgb, var(--panel-soft) 40%, transparent)", borderRadius: "8px", border: "1px solid color-mix(in srgb, var(--line) 30%, transparent)" }}>
-                  <div className="text-soft" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.2rem" }}>Внутренний комментарий</div>
-                  <div style={{ fontSize: "0.9rem" }}>{equipment.comment}</div>
-                </div>
-              )}
-            </div>
-          </div>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "history"}
+            className={`warehouse-view-tab ${activeTab === "history" ? "is-active" : ""}`}
+            onClick={() => setActiveTab("history")}
+          >
+            История
+          </button>
 
-          <div className="section-card" style={{ padding: "1.5rem" }}>
-            <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.1rem", fontWeight: 600 }}>Составляющие</h3>
-            <div className="text-soft" style={{ marginBottom: "1rem", fontSize: "0.9rem" }}>
-              Здесь указывается, из каких ТМЦ состоит оборудование и какие элементы должны постоянно быть в резерве на складе.
-            </div>
-            <PprEquipmentComponentsManager
-              equipmentId={equipment.id}
-              objectId={equipment.object_id}
-              objectName={resolveName(equipment.object)}
-              components={components}
-              stockItems={stockItems}
-              storageLocations={storageLocations}
-              systemGroups={systemGroups}
-              canManage={canManageComponents}
-            />
-          </div>
-
-          <div className="section-card" style={{ padding: "1.5rem" }}>
-            <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.1rem", fontWeight: 600 }}>История ремонтов</h3>
-            <div className="text-soft" style={{ padding: "2rem 1rem", textAlign: "center", background: "color-mix(in srgb, var(--panel-soft) 20%, transparent)", border: "1px dashed color-mix(in srgb, var(--line-strong) 40%, transparent)", borderRadius: "8px" }}>
-              Модуль истории ремонтов находится в разработке (Batch 2).
-            </div>
-          </div>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "qr"}
+            className={`warehouse-view-tab ${activeTab === "qr" ? "is-active" : ""}`}
+            onClick={() => setActiveTab("qr")}
+          >
+            QR
+          </button>
         </div>
 
-        {/* Right Column (Sidebar) */}
-        <div className="flex flex-col">
-          <div className="section-card" style={{ padding: "1.5rem", background: "color-mix(in srgb, var(--panel-soft) 20%, transparent)" }}>
-            <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem", fontWeight: 600 }}>ППР QR</h3>
-            <div className="text-soft" style={{ fontSize: "0.85rem", lineHeight: 1.4, marginBottom: "1.25rem" }}>
-              Код содержит токен идентификации для быстрого доступа с мобильного устройства.
-            </div>
-            <PprEquipmentQrBlock qrCode={qrCode} />
-          </div>
+        <div className="section-card warehouse-location-section warehouse-location-tab-panel">
+          {/* Характеристики */}
+          {activeTab === "specs" && (
+            <>
+              <div className="warehouse-section-head">
+                <div className="grid" style={{ gap: "0.2rem" }}>
+                  <h3 className="warehouse-section-title">Технические характеристики</h3>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: "1.25rem" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                  <div>
+                    <div className="text-soft" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.2rem" }}>Производитель</div>
+                    <div style={{ fontSize: "0.95rem" }}>{equipment.manufacturer || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-soft" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.2rem" }}>Модель</div>
+                    <div style={{ fontSize: "0.95rem" }}>{equipment.model || "—"}</div>
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                  <div>
+                    <div className="text-soft" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.2rem" }}>Серийный номер</div>
+                    <div style={{ fontSize: "0.95rem", fontFamily: "monospace" }}>{equipment.serial_no || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-soft" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.2rem" }}>Ввод в эксплуатацию</div>
+                    <div style={{ fontSize: "0.95rem" }}>{new Date(equipment.service_start_date).toLocaleDateString("ru-RU")}</div>
+                  </div>
+                </div>
+
+                {equipment.description?.trim() && (
+                  <div style={{ paddingTop: "1rem", borderTop: "1px solid color-mix(in srgb, var(--line) 40%, transparent)" }}>
+                    <div className="text-soft" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.4rem" }}>Описание</div>
+                    <div style={{ fontSize: "0.95rem", lineHeight: 1.5 }}>{equipment.description}</div>
+                  </div>
+                )}
+
+                {equipment.comment?.trim() && (
+                  <div style={{ padding: "0.75rem", background: "color-mix(in srgb, var(--panel-soft) 40%, transparent)", borderRadius: "8px", border: "1px solid color-mix(in srgb, var(--line) 30%, transparent)" }}>
+                    <div className="text-soft" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.2rem" }}>Внутренний комментарий</div>
+                    <div style={{ fontSize: "0.9rem" }}>{equipment.comment}</div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Составляющие */}
+          {activeTab === "components" && (
+            <>
+              <div className="warehouse-section-head">
+                <div className="grid" style={{ gap: "0.2rem" }}>
+                  <h3 className="warehouse-section-title">Составляющие</h3>
+                  <div className="text-soft">Из каких ТМЦ состоит оборудование и какие элементы должны быть в резерве на складе.</div>
+                </div>
+              </div>
+              <PprEquipmentComponentsManager
+                equipmentId={equipment.id}
+                objectId={equipment.object_id}
+                objectName={resolveName(equipment.object)}
+                components={components}
+                stockItems={stockItems}
+                storageLocations={storageLocations}
+                systemGroups={systemGroups}
+                canManage={canManageComponents}
+              />
+            </>
+          )}
+
+          {/* История */}
+          {activeTab === "history" && (
+            <>
+              <div className="warehouse-section-head">
+                <div className="grid" style={{ gap: "0.2rem" }}>
+                  <h3 className="warehouse-section-title">История ремонтов</h3>
+                </div>
+              </div>
+              <div className="text-soft" style={{ padding: "2rem 1rem", textAlign: "center", background: "color-mix(in srgb, var(--panel-soft) 20%, transparent)", border: "1px dashed color-mix(in srgb, var(--line-strong) 40%, transparent)", borderRadius: "8px" }}>
+                Модуль истории ремонтов находится в разработке (Batch 2).
+              </div>
+            </>
+          )}
+
+          {/* QR */}
+          {activeTab === "qr" && (
+            <>
+              <div className="warehouse-section-head">
+                <div className="grid" style={{ gap: "0.2rem" }}>
+                  <h3 className="warehouse-section-title">ППР QR</h3>
+                  <div className="text-soft">Код содержит токен идентификации для быстрого доступа с мобильного устройства.</div>
+                </div>
+              </div>
+              <PprEquipmentQrBlock qrCode={qrCode} />
+            </>
+          )}
         </div>
       </div>
     </div>

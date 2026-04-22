@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Boxes, Building2, Filter, Layers3, MapPinned, PackagePlus, Search, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Boxes, Building2, ChevronDown, Filter, Layers3, MapPinned, PackagePlus, Search, TriangleAlert } from "lucide-react";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { PprModal } from "@/components/ppr/ui/ppr-modal";
@@ -460,94 +460,111 @@ export function StockItemsAdmin({
               </div>
             </div>
 
-            <div className="warehouse-items-scope-grid">
+            <div className="warehouse-items-scope-filterbar">
               {isObjectScoped ? (
                 <>
-                  <label className="warehouse-items-scope-field">
-                    <span className="warehouse-items-scope-label">Поиск ТМЦ</span>
-                    <div className="warehouse-items-scope-input">
-                      <Search size={16} aria-hidden="true" />
-                      <input
-                        className="input"
-                        type="text"
-                        value={searchTerm}
-                        onChange={(event) => setSearchTerm(event.target.value)}
-                        placeholder="По названию или SKU..."
-                      />
-                    </div>
-                  </label>
+                  {/* Full-width search */}
+                  <div className="warehouse-items-scope-input" style={{ flex: "1 1 100%" }}>
+                    <Search size={15} aria-hidden="true" />
+                    <input
+                      className="input"
+                      type="text"
+                      value={searchTerm}
+                      onChange={(event) => setSearchTerm(event.target.value)}
+                      placeholder="По названию или SKU..."
+                    />
+                  </div>
 
-                  <label className="warehouse-items-scope-field">
-                    <span className="warehouse-items-scope-label">Объект</span>
-                    <div className="warehouse-items-scope-input">
-                      <Building2 size={16} aria-hidden="true" />
+                  {/* Filter pills */}
+                  <div className="warehouse-filter-pills">
+                    {/* Object switcher */}
+                    <div className="warehouse-filter-pill">
+                      <Building2 size={15} aria-hidden="true" />
+                      <span className="warehouse-filter-pill-label">{currentObject?.name ?? "Объект"}</span>
+                      <ChevronDown size={12} aria-hidden="true" />
                       <select
-                        className="select"
+                        className="select warehouse-filter-pill-select"
                         value={currentObject?.id ?? ""}
                         onChange={(event) => updateSearchParams({ nextObjectId: event.target.value })}
                       >
                         {objects.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.name}
-                          </option>
+                          <option key={item.id} value={item.id}>{item.name}</option>
                         ))}
                       </select>
                     </div>
-                  </label>
 
-                  <label className="warehouse-items-scope-field">
-                    <span className="warehouse-items-scope-label">Место хранения</span>
-                    <div className="warehouse-items-scope-input">
-                      <MapPinned size={16} aria-hidden="true" />
+                    {/* Location pill */}
+                    <div className={`warehouse-filter-pill${filterLocationId ? " is-active" : ""}`}>
+                      <MapPinned size={15} aria-hidden="true" />
+                      <span className="warehouse-filter-pill-label">
+                        {selectedLocationName ?? "Место хранения"}
+                      </span>
+                      <ChevronDown size={12} aria-hidden="true" />
                       <select
-                        className="select"
+                        className="select warehouse-filter-pill-select"
                         value={filterLocationId}
                         onChange={(event) => setFilterLocationId(event.target.value)}
                         disabled={!filteredLocationOptions.length}
                       >
                         <option value="">Все места хранения</option>
                         {filteredLocationOptions.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.name}
-                          </option>
+                          <option key={item.id} value={item.id}>{item.name}</option>
                         ))}
                       </select>
                     </div>
-                  </label>
 
-                  <label className="warehouse-items-scope-field">
-                    <span className="warehouse-items-scope-label">Тип ТМЦ</span>
-                    <div className="warehouse-items-scope-input">
-                      <Boxes size={16} aria-hidden="true" />
-                      <select className="select" value={filterKind} onChange={(event) => setFilterKind(event.target.value as StockItemRow["kind"] | "")}>
-                        <option value="">Все типы ТМЦ</option>
-                        {Object.entries(stockItemKindMeta).map(([key, meta]) => (
-                          <option key={key} value={key}>
-                            {meta.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </label>
-
-                  <label className="warehouse-items-scope-field">
-                    <span className="warehouse-items-scope-label">Группа систем</span>
-                    <div className="warehouse-items-scope-input">
-                      <Filter size={16} aria-hidden="true" />
+                    {/* Type pill */}
+                    <div className={`warehouse-filter-pill${filterKind ? " is-active" : ""}`}>
+                      <Boxes size={15} aria-hidden="true" />
+                      <span className="warehouse-filter-pill-label">
+                        {filterKind ? stockItemKindMeta[filterKind].label : "Тип ТМЦ"}
+                      </span>
+                      <ChevronDown size={12} aria-hidden="true" />
                       <select
-                        className="select"
+                        className="select warehouse-filter-pill-select"
+                        value={filterKind}
+                        onChange={(event) => setFilterKind(event.target.value as StockItemRow["kind"] | "")}
+                      >
+                        <option value="">Все типы</option>
+                        {Object.entries(stockItemKindMeta).map(([key, meta]) => (
+                          <option key={key} value={key}>{meta.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* System group pill */}
+                    <div className={`warehouse-filter-pill${filterSystemGroupId ? " is-active" : ""}`}>
+                      <Filter size={15} aria-hidden="true" />
+                      <span className="warehouse-filter-pill-label">
+                        {selectedSystemGroupName ?? "Группы систем"}
+                      </span>
+                      <ChevronDown size={12} aria-hidden="true" />
+                      <select
+                        className="select warehouse-filter-pill-select"
                         value={filterSystemGroupId}
                         onChange={(event) => setFilterSystemGroupId(event.target.value)}
                       >
                         <option value="">Все группы систем</option>
                         {systemGroups.map((item) => (
                           <option key={item.id} value={item.id}>
-                            {item.name} {item.code ? `(${item.code})` : ""}
+                            {item.name}{item.code ? ` (${item.code})` : ""}
                           </option>
                         ))}
                       </select>
                     </div>
-                  </label>
+
+                    {/* Reset active filters */}
+                    {activeFiltersCount > 0 ? (
+                      <button
+                        type="button"
+                        className="warehouse-filter-pill"
+                        onClick={resetFilters}
+                        style={{ color: "var(--danger)", boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--danger) 35%, transparent)" }}
+                      >
+                        Сбросить
+                      </button>
+                    ) : null}
+                  </div>
                 </>
               ) : (
                 <div className="warehouse-items-scope-note text-soft">

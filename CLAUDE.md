@@ -1,3 +1,34 @@
+<!-- ruflo:start -->
+# Ruflo — Agent Orchestration
+
+This project uses **Ruflo** (via MCP) for multi-agent orchestration, task coordination, and automation. Ruflo is always available as an MCP server.
+
+## Always Do
+
+- **MUST use Ruflo tools** for spawning sub-agents, running parallel workstreams, and coordinating complex multi-step tasks.
+- When a task requires more than 3 independent steps or parallel execution, use `ruflo_agent_spawn` or `ruflo_hive_mind` instead of doing everything sequentially.
+- For long-running or background tasks, delegate to a Ruflo agent rather than blocking the main thread.
+- Use Ruflo's memory and RAG tools when persistent context across steps is needed.
+- **MUST pass GitNexus context to every spawned agent** — before spawning, run `gitnexus_context` or `gitnexus_query` on the relevant symbols and include the result in the agent's task prompt so it understands the codebase structure.
+- **MUST run `gitnexus_impact` before delegating any edit task to a Ruflo agent** — include the blast radius in the agent instructions so it knows what is safe to touch.
+
+## Never Do
+
+- NEVER attempt complex multi-agent workflows manually when Ruflo tools are available.
+- NEVER spawn more agents than needed — always check `ruflo_agent_list` before spawning new ones.
+- NEVER spawn a Ruflo agent to edit code without first supplying it with the relevant GitNexus impact and context data.
+
+## Quick Reference
+
+| Task | Ruflo command |
+|------|---------------|
+| Spawn a coding agent | `ruflo_agent_spawn({type: "coder", name: "..."})` |
+| Launch a multi-agent swarm | `ruflo_hive_mind_spawn({task: "..."})` |
+| List active agents | `ruflo_agent_list()` |
+| Start MCP server manually | `npx ruflo@latest mcp start` |
+
+<!-- ruflo:end -->
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
