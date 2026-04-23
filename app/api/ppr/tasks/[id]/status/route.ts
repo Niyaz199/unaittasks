@@ -43,9 +43,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if (!evidence) {
         return NextResponse.json({ error: "PPR task not found" }, { status: 404 });
       }
-      if (evidence.commentsCount < 1 || evidence.attachmentsCount < 1) {
+      if (evidence.commentsCount < 1) {
         return NextResponse.json(
-          { error: "Для перевода ППР-заявки в `done` нужен минимум один комментарий и одно фото." },
+          { error: "Для перевода ППР-заявки в `done` нужен минимум один комментарий." },
           { status: 400 }
         );
       }

@@ -88,11 +88,11 @@ export function canClosePprTask(actor: PprActor, task: Pick<PprTask, "object_id"
 
 export function canExecutePprTask(actor: PprActor, task: Pick<PprTask, "object_id" | "responsible_user_id" | "assignee_id">) {
   if (isChiefOrAdmin(actor.role)) return true;
-  if (actor.role === "lead" || actor.role === "object_engineer") {
-    return hasObjectAccess(actor, task.object_id) && task.assignee_id === actor.id;
-  }
-  if (actor.role === "engineer") {
-    return task.responsible_user_id === actor.id || task.assignee_id === actor.id;
+  if (actor.role === "lead" || actor.role === "engineer" || actor.role === "object_engineer") {
+    if (!hasObjectAccess(actor, task.object_id)) return false;
+    if (task.assignee_id === actor.id) return true;
+    if (task.responsible_user_id === actor.id) return true;
+    return false;
   }
   if (actor.role === "tech") {
     return task.assignee_id === actor.id;

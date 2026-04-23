@@ -103,7 +103,6 @@ export function canAssignPprTaskExecutor(actor: PprActor, task: Pick<PprTask, "o
 export function canStartPprTask(actor: PprActor, task: Pick<PprTask, "object_id" | "responsible_user_id" | "assignee_id" | "status">) {
   return (
     task.status === "new" &&
-    task.assignee_id === actor.id &&
     canExecutePprTask(actor, task) &&
     canTransitionPprTaskStatus(task.status, "in_progress")
   );
@@ -112,7 +111,6 @@ export function canStartPprTask(actor: PprActor, task: Pick<PprTask, "object_id"
 export function canCompletePprTask(actor: PprActor, task: Pick<PprTask, "object_id" | "responsible_user_id" | "assignee_id" | "status">) {
   return (
     task.status === "in_progress" &&
-    task.assignee_id === actor.id &&
     canExecutePprTask(actor, task) &&
     canTransitionPprTaskStatus(task.status, "done")
   );

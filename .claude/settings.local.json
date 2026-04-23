@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx ruflo@latest --version)",
+      "Bash(claude mcp *)",
+      "Bash(npx ruflo@latest init)",
+      "Bash(npx ruflo@latest mcp start)",
+      "Bash(where npx *)",
+      "Bash(npm list *)",
+      "Bash(where ruflo *)",
+      "Bash(where claude-flow *)",
+      "Bash(C:/Users/ssniy/AppData/Roaming/npm/ruflo.cmd mcp *)",
+      "Bash(timeout 5 \"C:/Users/ssniy/AppData/Roaming/npm/ruflo.cmd\" mcp start)",
+      "mcp__gitnexus__impact",
+      "mcp__gitnexus__detect_changes"
+    ]
+  }
+}

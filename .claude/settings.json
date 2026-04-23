@@ -1,8 +1,3 @@
 {
-  "mcpServers": {
-    "ruflo": {
-      "command": "ruflo",
-      "args": ["mcp", "start"]
-    }
-  }
+  "enableAllProjectMcpServers": true
 }

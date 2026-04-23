@@ -2,18 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { closePprTaskAction } from "@/app/actions/ppr-task-actions";
 import type { PprTaskAssigneeCandidateRow } from "@/lib/ppr/queries";
 
 type Props = {
   taskId: string;
-  currentStatus: "new" | "in_progress" | "done" | "closed" | "cancelled";
   currentAssigneeId: string | null;
   plannedFor: string;
   canAssign: boolean;
-  canStart: boolean;
-  canComplete: boolean;
-  canClose: boolean;
   canCancel: boolean;
   canReschedule: boolean;
   assigneeCandidates: PprTaskAssigneeCandidateRow[];
@@ -27,13 +22,9 @@ function roleLabel(role: PprTaskAssigneeCandidateRow["role"]) {
 
 export function PprTaskLifecycleControls({
   taskId,
-  currentStatus,
   currentAssigneeId,
   plannedFor,
   canAssign,
-  canStart,
-  canComplete,
-  canClose,
   canCancel,
   canReschedule,
   assigneeCandidates,
@@ -61,8 +52,8 @@ export function PprTaskLifecycleControls({
     router.refresh();
   }
 
-  if (!canAssign && !canStart && !canComplete && !canClose && !canCancel && !canReschedule) {
-    return <div className="text-soft">Для текущей роли действия по этой ППР-заявке недоступны.</div>;
+  if (!canAssign && !canCancel && !canReschedule) {
+    return <div className="text-soft">Служебные действия по этой ППР-заявке для текущей роли недоступны.</div>;
   }
 
   return (
@@ -97,79 +88,6 @@ export function PprTaskLifecycleControls({
             >
               Сохранить исполнителя
             </button>
-          </div>
-        </div>
-      ) : null}
-
-      {(canStart || canComplete || canClose) ? (
-        <div className="grid" style={{ gap: "0.5rem" }}>
-          <strong>Статус</strong>
-          <div className="row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
-            {canStart ? (
-              <button
-                className="btn btn-accent"
-                type="button"
-                disabled={pending || currentStatus !== "new"}
-                onClick={() =>
-                  startTransition(async () => {
-                    try {
-                      setMessage(null);
-                      await postJson(`/api/ppr/tasks/${taskId}/status`, { status: "in_progress" });
-                      setMessage("ППР-заявка переведена в работу.");
-                    } catch (error) {
-                      setMessage(error instanceof Error ? error.message : "Не удалось перевести заявку в работу");
-                    }
-                  })
-                }
-              >
-                В работу
-              </button>
-            ) : null}
-
-            {canComplete ? (
-              <button
-                className="btn btn-accent"
-                type="button"
-                disabled={pending || currentStatus !== "in_progress"}
-                onClick={() =>
-                  startTransition(async () => {
-                    try {
-                      setMessage(null);
-                      await postJson(`/api/ppr/tasks/${taskId}/status`, { status: "done" });
-                      setMessage("ППР-заявка отмечена как выполненная.");
-                    } catch (error) {
-                      setMessage(error instanceof Error ? error.message : "Не удалось завершить заявку");
-                    }
-                  })
-                }
-              >
-                Отметить выполненной
-              </button>
-            ) : null}
-
-            {canClose ? (
-              <button
-                className="btn"
-                type="button"
-                disabled={pending || currentStatus !== "done"}
-                onClick={() =>
-                  startTransition(async () => {
-                    try {
-                      setMessage(null);
-                      const formData = new FormData();
-                      formData.set("task_id", taskId);
-                      await closePprTaskAction(formData);
-                      router.refresh();
-                      setMessage("ППР-заявка закрыта.");
-                    } catch (error) {
-                      setMessage(error instanceof Error ? error.message : "Не удалось закрыть заявку");
-                    }
-                  })
-                }
-              >
-                Закрыть
-              </button>
-            ) : null}
           </div>
         </div>
       ) : null}

@@ -81,7 +81,10 @@ export async function listPprTasksForProfile(
   let query = buildPprTaskSummaryQuery(supabase);
 
   if (kind === "my") {
-    query = query.eq("assignee_id", profile.id).neq("status", "closed").neq("status", "cancelled");
+    query = query
+      .or(`assignee_id.eq.${profile.id},and(assignee_id.is.null,responsible_user_id.eq.${profile.id})`)
+      .neq("status", "closed")
+      .neq("status", "cancelled");
   } else if (kind === "archive") {
     query = query.in("status", ["closed", "cancelled"]);
   } else {

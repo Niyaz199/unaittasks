@@ -1,5 +1,8 @@
+"use client";
+
 import dynamic from "next/dynamic";
 import { Badge } from "@/components/ui/badge";
+import { PprTaskStatusStrip } from "@/components/ppr/tasks/ppr-task-status-strip";
 import type {
   PprTaskAttachmentWithUrl,
   PprTaskAssigneeCandidateRow,
@@ -81,9 +84,11 @@ export function PprTaskDetails({
   const responsible = unwrapRelation(task.responsible);
   const assignee = unwrapRelation(task.assignee);
 
+  const hasManagementActions = permissions.canAssign || permissions.canCancel || permissions.canReschedule;
+
   return (
     <section className="td-page">
-      {/* Header and key meta */}
+      {/* Hero */}
       <div className="section-card" style={{ padding: "1.5rem", marginBottom: "1rem", background: "color-mix(in srgb, var(--panel-soft) 30%, transparent)" }}>
         <div className="td-hero" style={{ gap: "1rem" }}>
           <div className="td-hero-top" style={{ alignItems: "flex-start" }}>
@@ -142,39 +147,77 @@ export function PprTaskDetails({
         </div>
       </div>
 
-      <div className="grid md-grid-2" style={{ gap: "1.5rem", alignItems: "start" }}>
-        {/* Left Column */}
-        <div className="flex flex-col" style={{ gap: "1.5rem" }}>
-          
-          <div className="section-card" style={{ padding: "1.5rem" }}>
-            <div className="grid" style={{ gap: "1.25rem" }}>
-              <div className="grid" style={{ gap: "0.35rem", borderBottom: "1px solid color-mix(in srgb, var(--line-strong) 40%, transparent)", paddingBottom: "0.75rem" }}>
-                <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600 }}>Управление заявкой</h3>
-                <p className="text-soft text-sm" style={{ margin: 0 }}>
-                  Назначение исполнителя, запуск в работу, выполнение, закрытие, перенос и отмена.
-                </p>
-              </div>
-              <PprTaskLifecycleControls
-                taskId={task.id}
-                currentStatus={task.status}
-                currentAssigneeId={task.assignee_id}
-                plannedFor={task.planned_for}
-                assigneeCandidates={assigneeCandidates}
-                canAssign={permissions.canAssign}
-                canStart={permissions.canStart}
-                canComplete={permissions.canComplete}
-                canClose={permissions.canClose}
-                canCancel={permissions.canCancel}
-                canReschedule={permissions.canReschedule}
-              />
-            </div>
-          </div>
+      {/* Status strip — следующий шаг + главный CTA */}
+      <PprTaskStatusStrip
+        taskId={task.id}
+        status={task.status}
+        assigneeName={assignee?.full_name ?? null}
+        commentsCount={comments.length}
+        closedAt={task.closed_at ?? null}
+        cancelledAt={task.cancelled_at ?? null}
+        permissions={{
+          canStart: permissions.canStart,
+          canComplete: permissions.canComplete,
+          canClose: permissions.canClose,
+        }}
+      />
 
-      <div className="section-card grid" style={{ gap: "1rem", padding: "1.5rem" }}>
+      {/* 1. Что нужно сделать */}
+      <div className="section-card grid" style={{ gap: "1rem", padding: "1.5rem", marginBottom: "1rem" }}>
         <div className="grid" style={{ gap: "0.35rem" }}>
-          <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600 }}>Комментарии и фото</h3>
+          <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600 }}>Что нужно сделать</h3>
           <p className="text-soft" style={{ margin: 0, fontSize: "0.85rem" }}>
-            Для завершения заявки необходимо добавить хотя бы один комментарий и одно фото.
+            Перечень работ и методики зафиксированы на момент создания заявки.
+          </p>
+        </div>
+
+        {workItems.length ? (
+          <div className="grid" style={{ gap: "1rem" }}>
+            {workItems.map((item) => (
+              <div key={item.id} style={{ display: "grid", gap: "0.75rem", background: "color-mix(in srgb, var(--panel-soft) 30%, transparent)", padding: "1.25rem", borderRadius: "10px", border: "1px solid color-mix(in srgb, var(--line-strong) 40%, transparent)" }}>
+                <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: "0.75rem", flexWrap: "wrap", borderBottom: "1px solid color-mix(in srgb, var(--line-strong) 40%, transparent)", paddingBottom: "0.5rem" }}>
+                  <strong style={{ fontSize: "1.05rem" }}>{item.title_snapshot}</strong>
+                  {item.norm_hours_snapshot !== null ? <Badge tone="violet">Норма: {item.norm_hours_snapshot} ч</Badge> : null}
+                </div>
+
+                {item.description_snapshot ? <p style={{ margin: 0, lineHeight: 1.5 }}>{item.description_snapshot}</p> : null}
+
+                {item.methodology_snapshot ? (
+                  <div className="grid" style={{ gap: "0.25rem", marginTop: "0.5rem" }}>
+                    <span className="text-soft text-sm" style={{ fontWeight: 600 }}>Методика</span>
+                    <p style={{ margin: 0, fontSize: "0.95rem", lineHeight: 1.5 }}>{item.methodology_snapshot}</p>
+                  </div>
+                ) : null}
+
+                <div className="grid" style={{ gap: "0.35rem", marginTop: "0.5rem" }}>
+                  <span className="text-soft text-sm" style={{ fontWeight: 600 }}>Чек-лист</span>
+                  {item.checklist_snapshot.length ? (
+                    <ol style={{ margin: 0, paddingLeft: "1.25rem", fontSize: "0.95rem", lineHeight: 1.6 }}>
+                      {item.checklist_snapshot.map((check) => (
+                        <li key={`${item.id}-${check.sort_order}`} style={{ marginBottom: "0.25rem" }}>
+                          <span style={{ fontWeight: 500 }}>{check.title}</span>
+                          {check.description ? <span className="text-soft"> — {check.description}</span> : null}
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <span className="text-soft text-sm">Чек-лист не заполнен.</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-soft" style={{ padding: "1.5rem", textAlign: "center", border: "1px dashed color-mix(in srgb, var(--line-strong) 60%, transparent)", borderRadius: "8px" }}>Перечень работ по этой заявке не задан.</div>
+        )}
+      </div>
+
+      {/* 2. Отчёт: комментарии + фото */}
+      <div className="section-card grid" style={{ gap: "1rem", padding: "1.5rem", marginBottom: "1rem" }}>
+        <div className="grid" style={{ gap: "0.35rem" }}>
+          <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600 }}>Отчёт по работам</h3>
+          <p className="text-soft" style={{ margin: 0, fontSize: "0.85rem" }}>
+            Для завершения заявки обязателен минимум один комментарий. Фото — по желанию.
           </p>
         </div>
 
@@ -205,56 +248,40 @@ export function PprTaskDetails({
         </div>
       </div>
 
-      <div className="section-card grid" style={{ gap: "1rem", padding: "1.5rem" }}>
-        <div className="grid" style={{ gap: "0.35rem" }}>
-          <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600 }}>Перечень работ</h3>
-          <p className="text-soft" style={{ margin: 0, fontSize: "0.85rem" }}>
-            Работы зафиксированы на момент создания заявки и не зависят от текущей версии шаблона.
-          </p>
-        </div>
-
-            {workItems.length ? (
-              <div className="grid" style={{ gap: "1rem" }}>
-                {workItems.map((item) => (
-                  <div key={item.id} style={{ display: "grid", gap: "0.75rem", background: "color-mix(in srgb, var(--panel-soft) 30%, transparent)", padding: "1.25rem", borderRadius: "10px", border: "1px solid color-mix(in srgb, var(--line-strong) 40%, transparent)" }}>
-                    <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: "0.75rem", flexWrap: "wrap", borderBottom: "1px solid color-mix(in srgb, var(--line-strong) 40%, transparent)", paddingBottom: "0.5rem" }}>
-                      <strong style={{ fontSize: "1.05rem" }}>{item.title_snapshot}</strong>
-                      {item.norm_hours_snapshot !== null ? <Badge tone="violet">Норма: {item.norm_hours_snapshot} ч</Badge> : null}
-                    </div>
-
-                    {item.description_snapshot ? <p style={{ margin: 0, lineHeight: 1.5 }}>{item.description_snapshot}</p> : null}
-
-                    {item.methodology_snapshot ? (
-                      <div className="grid" style={{ gap: "0.25rem", marginTop: "0.5rem" }}>
-                        <span className="text-soft text-sm" style={{ fontWeight: 600 }}>Методика</span>
-                        <p style={{ margin: 0, fontSize: "0.95rem", lineHeight: 1.5 }}>{item.methodology_snapshot}</p>
-                      </div>
-                    ) : null}
-
-                    <div className="grid" style={{ gap: "0.35rem", marginTop: "0.5rem" }}>
-                      <span className="text-soft text-sm" style={{ fontWeight: 600 }}>Чек-лист</span>
-                      {item.checklist_snapshot.length ? (
-                        <ol style={{ margin: 0, paddingLeft: "1.25rem", fontSize: "0.95rem", lineHeight: 1.5 }}>
-                          {item.checklist_snapshot.map((check) => (
-                            <li key={`${item.id}-${check.sort_order}`}>
-                              <span style={{ fontWeight: 500 }}>{check.title}</span>
-                              {check.description ? <span className="text-soft"> — {check.description}</span> : null}
-                            </li>
-                          ))}
-                        </ol>
-                      ) : (
-                        <span className="text-soft text-sm">Чек-лист не заполнен.</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-soft" style={{ padding: "1.5rem", textAlign: "center", border: "1px dashed color-mix(in srgb, var(--line-strong) 60%, transparent)", borderRadius: "8px" }}>Перечень работ по этой заявке не задан.</div>
-            )}
+      {/* 3. Служебные действия — свёрнуто по умолчанию */}
+      {hasManagementActions ? (
+        <details
+          className="section-card"
+          style={{ padding: "1rem 1.5rem", marginBottom: "1rem" }}
+        >
+          <summary
+            style={{
+              cursor: "pointer",
+              fontSize: "1rem",
+              fontWeight: 600,
+              padding: "0.25rem 0",
+              listStyle: "none",
+              userSelect: "none",
+            }}
+          >
+            Управление заявкой
+            <span className="text-soft" style={{ fontWeight: 400, fontSize: "0.85rem", marginLeft: "0.5rem" }}>
+              — назначение исполнителя, перенос, отмена
+            </span>
+          </summary>
+          <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid color-mix(in srgb, var(--line) 40%, transparent)" }}>
+            <PprTaskLifecycleControls
+              taskId={task.id}
+              currentAssigneeId={task.assignee_id}
+              plannedFor={task.planned_for}
+              assigneeCandidates={assigneeCandidates}
+              canAssign={permissions.canAssign}
+              canCancel={permissions.canCancel}
+              canReschedule={permissions.canReschedule}
+            />
           </div>
-        </div>
-      </div>
+        </details>
+      ) : null}
     </section>
   );
 }
