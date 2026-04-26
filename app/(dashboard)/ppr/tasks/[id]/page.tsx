@@ -61,20 +61,21 @@ export default async function PprTaskDetailsPage({ params }: { params: Promise<{
       : Promise.resolve([]),
   ]);
 
+  type LinkedRequestRow = {
+    id: string;
+    status: "new" | "in_progress" | "fulfilled" | "cancelled";
+    description: string | null;
+    created_at: string;
+    items: { id: string }[] | null;
+  };
   const { data: linkedRequestsRaw } = canViewPR
     ? await supabase
         .from("purchase_requests")
         .select("id,status,description,created_at,items:purchase_request_items(id)")
         .eq("source_task_id", id)
         .order("created_at", { ascending: false })
-    : { data: null as any };
-  const linkedPurchaseRequests = ((linkedRequestsRaw ?? []) as Array<{
-    id: string;
-    status: "new" | "in_progress" | "fulfilled" | "cancelled";
-    description: string | null;
-    created_at: string;
-    items: { id: string }[] | null;
-  }>).map((row) => ({
+    : { data: null as LinkedRequestRow[] | null };
+  const linkedPurchaseRequests = ((linkedRequestsRaw ?? []) as LinkedRequestRow[]).map((row) => ({
     id: row.id,
     status: row.status,
     description: row.description,

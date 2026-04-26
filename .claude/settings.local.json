@@ -26,7 +26,9 @@
       "mcp__gitnexus__list_repos",
       "Bash(npm root *)",
       "Bash(node -e \"console.log\\(require.resolve\\('docx'\\)\\)\")",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(npx supabase *)",
+      "Bash(curl -s -X POST https://yqrwadbftjrtslaaasnl.supabase.co/rest/v1/rpc/query -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxcndhZGJmdGpydHNsYWFhc25sIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjYzNzA1MywiZXhwIjoyMDg4MjEzMDUzfQ.hBHlwPLOOUyIgbxYMrQSP_RjG33kxp1C7ShUq0SbY38' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxcndhZGJmdGpydHNsYWFhc25sIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjYzNzA1MywiZXhwIjoyMDg4MjEzMDUzfQ.hBHlwPLOOUyIgbxYMrQSP_RjG33kxp1C7ShUq0SbY38' -H 'Content-Type: application/json')"
     ]
   }
 }
