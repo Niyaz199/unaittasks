@@ -22,6 +22,7 @@ export default async function WarehouseLocationsPage({
   const objects = await listWarehouseReadableObjectsForProfile(supabase, profile);
   const requestedObjectId = typeof search.objectId === "string" ? search.objectId : "";
   const selectedObjectId = objects.some((item) => item.id === requestedObjectId) ? requestedObjectId : "";
+  const initialCreateOpen = search.new === "1";
   const [locations, systems, rooms] = await Promise.all([
     listStockLocationsForProfile(supabase, profile, selectedObjectId ? { objectId: selectedObjectId } : {}),
     listPprSystemsForProfile(supabase, profile, selectedObjectId ? { objectId: selectedObjectId } : {}),
@@ -41,6 +42,7 @@ export default async function WarehouseLocationsPage({
         systems={systems.map((item) => ({ id: item.id, object_id: item.object_id, name: item.name, is_active: item.is_active }))}
         rooms={rooms.map((item) => ({ id: item.id, object_id: item.object_id, name: item.name, is_active: item.is_active }))}
         initialFilterObjectId={selectedObjectId}
+        initialCreateOpen={initialCreateOpen}
       />
     </section>
   );

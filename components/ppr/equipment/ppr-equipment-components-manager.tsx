@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { StockItemForm } from "@/components/warehouse/stock-item-form";
@@ -8,6 +8,7 @@ import { PprModal } from "@/components/ppr/ui/ppr-modal";
 import { useToast } from "@/components/ui/toast";
 import { stockItemKindMeta } from "@/lib/warehouse/presentation";
 import { createStockItemAction, removeEquipmentComponentAction, upsertEquipmentComponentAction } from "@/app/actions/warehouse-actions";
+import { EmptyStateAction } from "@/components/ui/empty-state-action";
 
 type ComponentItem = {
   id: string;
@@ -16,6 +17,12 @@ type ComponentItem = {
   unit: string;
   min_qty: number;
   current_qty: number;
+  sku?: string | null;
+  manufacturer?: string | null;
+  model?: string | null;
+  is_spare_part?: boolean;
+  is_active?: boolean;
+  storage_location_name?: string | null;
 };
 
 type ComponentRow = {
@@ -31,6 +38,13 @@ type ComponentRow = {
 type StockItemOption = ComponentItem;
 type LocationOption = { id: string; object_id: string; name: string; is_active?: boolean };
 type SystemGroupOption = { id: string; name: string; code: string; is_active?: boolean };
+type PprTemplateOption = {
+  id: string;
+  name: string;
+  object_id: string;
+  system_id: string;
+  system_group_id: string;
+};
 
 function resolveItem(raw: ComponentItem | ComponentItem[] | null) {
   if (Array.isArray(raw)) return raw[0] ?? null;
@@ -49,6 +63,7 @@ type Props = {
   stockItems: StockItemOption[];
   storageLocations: LocationOption[];
   systemGroups: SystemGroupOption[];
+  pprTemplates?: PprTemplateOption[];
   canManage: boolean;
 };
 
@@ -60,6 +75,7 @@ export function PprEquipmentComponentsManager({
   stockItems,
   storageLocations,
   systemGroups,
+  pprTemplates = [],
   canManage,
 }: Props) {
   const router = useRouter();
@@ -222,6 +238,7 @@ export function PprEquipmentComponentsManager({
             objects={[]}
             locations={storageLocations}
             systemGroups={systemGroups}
+            pprTemplates={pprTemplates}
             initialValues={{ kind: "component" }}
             fixedObjectId={objectId}
             fixedObjectName={objectName}
@@ -232,9 +249,15 @@ export function PprEquipmentComponentsManager({
         ) : (
           <div className="ppr-modal-content">
             <div className="ppr-modal-body">
-              <div className="text-soft">
-                На объекте пока нет мест хранения. Сначала создайте склад, коробку или ящик для хранения ТМЦ.
-              </div>
+              <EmptyStateAction
+                tone="warning"
+                title="На объекте пока нет мест хранения"
+                description={`Чтобы создать ТМЦ, для объекта «${objectName}» сначала нужно создать склад, шкаф или зону хранения.`}
+                primary={{
+                  label: "Создать место хранения",
+                  href: `/warehouse/locations?objectId=${objectId}&new=1`,
+                }}
+              />
             </div>
           </div>
         )}
@@ -293,33 +316,24 @@ function EquipmentComponentForm({
         {initialComponent ? <input type="hidden" name="component_id" value={initialComponent.id} /> : null}
         <input type="hidden" name="equipment_id" value={equipmentId} />
 
-        <label className="grid" style={{ gap: "0.35rem" }}>
+        <div className="grid" style={{ gap: "0.6rem" }}>
           <span className="text-soft">ТМЦ</span>
-          <div className="grid" style={{ gap: "0.6rem" }}>
-            <select className="select" name="stock_item_id" required value={stockItemId} onChange={(event) => setStockItemId(event.target.value)}>
-              <option value="" disabled>
-                Выберите ТМЦ
-              </option>
-              {items.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name} • {stockItemKindMeta[item.kind].label}
-                </option>
-              ))}
-            </select>
-            <div className="row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
-              <button className="btn btn-ghost ppr-action-btn" type="button" onClick={onCreateItemRequested} disabled={!hasStorageLocations}>
-                + Создать новую ТМЦ
-              </button>
-              {!hasStorageLocations ? <span className="text-soft">Нужно создать место хранения на объекте.</span> : null}
-            </div>
+          <input type="hidden" name="stock_item_id" value={stockItemId} required />
+          <StockItemCombobox
+            items={items}
+            value={stockItemId}
+            onChange={setStockItemId}
+            disabled={Boolean(initialComponent)}
+          />
+          <div className="row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
+            <button className="btn btn-ghost ppr-action-btn" type="button" onClick={onCreateItemRequested} disabled={!hasStorageLocations}>
+              + Создать новую ТМЦ
+            </button>
+            {!hasStorageLocations ? <span className="text-soft">Нужно создать место хранения на объекте.</span> : null}
           </div>
-        </label>
+        </div>
 
-        {selectedItem ? (
-          <div className="text-soft">
-            На складе: {formatQty(selectedItem.current_qty, selectedItem.unit)} • минимум {formatQty(selectedItem.min_qty, selectedItem.unit)}
-          </div>
-        ) : null}
+        {selectedItem ? <SelectedItemPreview item={selectedItem} /> : null}
 
         <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
           <label className="grid" style={{ gap: "0.35rem" }}>
@@ -350,5 +364,290 @@ function EquipmentComponentForm({
         </button>
       </div>
     </form>
+  );
+}
+
+type KindFilter = "all" | "zip" | "component";
+
+function normalizeSearch(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function StockItemCombobox({
+  items,
+  value,
+  onChange,
+  disabled,
+}: {
+  items: StockItemOption[];
+  value: string;
+  onChange: (id: string) => void;
+  disabled?: boolean;
+}) {
+  const [search, setSearch] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const [kindFilter, setKindFilter] = useState<KindFilter>("all");
+  const [activeIndex, setActiveIndex] = useState(0);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const selected = useMemo(() => items.find((item) => item.id === value) ?? null, [items, value]);
+
+  const filtered = useMemo(() => {
+    const query = normalizeSearch(search);
+    return items.filter((item) => {
+      if (kindFilter !== "all" && item.kind !== kindFilter) return false;
+      if (!query) return true;
+      const haystack = [item.name, item.sku ?? "", item.manufacturer ?? "", item.model ?? ""]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [items, kindFilter, search]);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [search, kindFilter, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleDocClick(event: MouseEvent) {
+      if (!rootRef.current) return;
+      if (!rootRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleDocClick);
+    return () => document.removeEventListener("mousedown", handleDocClick);
+  }, [isOpen]);
+
+  function choose(id: string) {
+    onChange(id);
+    setIsOpen(false);
+    setSearch("");
+  }
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      if (!isOpen) setIsOpen(true);
+      setActiveIndex((prev) => Math.min(prev + 1, Math.max(filtered.length - 1, 0)));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex((prev) => Math.max(prev - 1, 0));
+    } else if (event.key === "Enter") {
+      if (isOpen && filtered[activeIndex]) {
+        event.preventDefault();
+        choose(filtered[activeIndex].id);
+      }
+    } else if (event.key === "Escape") {
+      setIsOpen(false);
+    }
+  }
+
+  return (
+    <div ref={rootRef} style={{ position: "relative" }}>
+      {selected && !isOpen ? (
+        <button
+          type="button"
+          className="input"
+          onClick={() => {
+            if (disabled) return;
+            setIsOpen(true);
+            setSearch("");
+            setTimeout(() => inputRef.current?.focus(), 0);
+          }}
+          disabled={disabled}
+          style={{
+            textAlign: "left",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "0.75rem",
+            minHeight: 44,
+            cursor: disabled ? "not-allowed" : "pointer",
+            width: "100%",
+          }}
+        >
+          <span className="grid" style={{ gap: "0.15rem" }}>
+            <span style={{ fontWeight: 600 }}>{selected.name}</span>
+            <span className="text-soft" style={{ fontSize: "0.85rem" }}>
+              {[
+                stockItemKindMeta[selected.kind].label,
+                selected.sku ? `арт. ${selected.sku}` : null,
+                selected.manufacturer || selected.model
+                  ? [selected.manufacturer, selected.model].filter(Boolean).join(" ")
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" • ")}
+            </span>
+          </span>
+          <span className="text-soft" aria-hidden="true">▾</span>
+        </button>
+      ) : (
+        <>
+          <input
+            ref={inputRef}
+            className="input"
+            type="text"
+            placeholder="Поиск по названию, SKU, производителю…"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              if (!isOpen) setIsOpen(true);
+            }}
+            onFocus={() => {
+              if (!disabled) setIsOpen(true);
+            }}
+            onKeyDown={handleKeyDown}
+            disabled={disabled}
+            style={{ minHeight: 44, width: "100%" }}
+            autoComplete="off"
+            aria-autocomplete="list"
+            aria-expanded={isOpen}
+            role="combobox"
+          />
+          <div className="row" style={{ gap: "0.35rem", flexWrap: "wrap", marginTop: "0.4rem" }}>
+            {(
+              [
+                { key: "all", label: "Все" },
+                { key: "zip", label: "ЗИП" },
+                { key: "component", label: "Компоненты" },
+              ] as { key: KindFilter; label: string }[]
+            ).map((option) => {
+              const active = kindFilter === option.key;
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  className={active ? "btn btn-accent" : "btn btn-ghost"}
+                  onClick={() => setKindFilter(option.key)}
+                  style={{ padding: "0.3rem 0.75rem", minHeight: 32, fontSize: "0.85rem", cursor: "pointer" }}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {isOpen && !disabled ? (
+        <div
+          role="listbox"
+          style={{
+            position: "absolute",
+            top: "calc(100% + 0.35rem)",
+            left: 0,
+            right: 0,
+            zIndex: 30,
+            maxHeight: 320,
+            overflowY: "auto",
+            background: "var(--panel)",
+            border: "1px solid var(--border)",
+            borderRadius: 12,
+            boxShadow: "0 10px 32px rgba(0,0,0,0.18)",
+          }}
+        >
+          {filtered.length === 0 ? (
+            <div className="text-soft" style={{ padding: "0.9rem 1rem" }}>
+              Ничего не найдено. Попробуйте сменить фильтр или создать новую ТМЦ.
+            </div>
+          ) : (
+            filtered.map((item, index) => {
+              const isActive = index === activeIndex;
+              const isSelected = item.id === value;
+              const isLow = item.current_qty < item.min_qty;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onClick={() => choose(item.id)}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "0.65rem 0.9rem",
+                    background: isActive ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "transparent",
+                    border: "none",
+                    borderBottom: "1px solid var(--border-soft, rgba(127,127,127,0.15))",
+                    cursor: "pointer",
+                    minHeight: 44,
+                  }}
+                >
+                  <div className="row" style={{ justifyContent: "space-between", gap: "0.75rem", alignItems: "flex-start" }}>
+                    <div className="grid" style={{ gap: "0.2rem", minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {item.name}
+                      </div>
+                      <div className="text-soft" style={{ fontSize: "0.82rem" }}>
+                        {[
+                          item.sku ? `арт. ${item.sku}` : null,
+                          item.manufacturer || item.model
+                            ? [item.manufacturer, item.model].filter(Boolean).join(" ")
+                            : null,
+                          item.storage_location_name ?? null,
+                        ]
+                          .filter(Boolean)
+                          .join(" • ") || "—"}
+                      </div>
+                    </div>
+                    <div className="grid" style={{ gap: "0.25rem", justifyItems: "end", flexShrink: 0 }}>
+                      <div className="row" style={{ gap: "0.3rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        <Badge tone={item.kind === "zip" ? "info" : "neutral"}>
+                          {stockItemKindMeta[item.kind].label}
+                        </Badge>
+                        {item.is_spare_part ? <Badge tone="warning">Запасная</Badge> : null}
+                        {item.is_active === false ? <Badge tone="neutral">Архив</Badge> : null}
+                      </div>
+                      <div className="text-soft" style={{ fontSize: "0.82rem" }}>
+                        {formatQty(item.current_qty, item.unit)}
+                        {isLow ? <span style={{ color: "var(--danger, #d64545)", marginLeft: "0.3rem" }}>· низкий</span> : null}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SelectedItemPreview({ item }: { item: StockItemOption }) {
+  const isLow = item.current_qty < item.min_qty;
+  return (
+    <div
+      className="section-card"
+      style={{
+        padding: "0.75rem 1rem",
+        background: "color-mix(in srgb, var(--panel-soft) 35%, transparent)",
+        borderLeft: "3px solid var(--accent)",
+      }}
+    >
+      <div className="row" style={{ justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
+        <div className="grid" style={{ gap: "0.15rem" }}>
+          <div className="text-soft" style={{ fontSize: "0.8rem" }}>Выбранная ТМЦ</div>
+          <div style={{ fontWeight: 600 }}>{item.name}</div>
+          {item.storage_location_name ? (
+            <div className="text-soft" style={{ fontSize: "0.85rem" }}>
+              Место: {item.storage_location_name}
+            </div>
+          ) : null}
+        </div>
+        <div className="grid" style={{ gap: "0.25rem", justifyItems: "end" }}>
+          <div className="text-soft" style={{ fontSize: "0.85rem" }}>
+            На складе: {formatQty(item.current_qty, item.unit)} · минимум {formatQty(item.min_qty, item.unit)}
+          </div>
+          {isLow ? <Badge tone="warning">Запас под контролем</Badge> : <Badge tone="success">Запас в норме</Badge>}
+        </div>
+      </div>
+    </div>
   );
 }

@@ -1,7 +1,7 @@
 import type { Role } from "@/lib/types";
 
 export type PprResponsibleRole = "lead" | "engineer" | "object_engineer";
-export type PprTaskStatus = "new" | "in_progress" | "done" | "closed" | "cancelled";
+export type PprTaskStatus = "new" | "in_progress" | "on_hold" | "done" | "closed" | "cancelled";
 export type PprEquipmentStatus = "active" | "repair" | "out_of_service" | "archived";
 export type PprMonthPlanItemStatus = "pending" | "materialized" | "carried_over" | "closed" | "cancelled";
 
@@ -134,6 +134,10 @@ export type PprTask = {
   is_rescheduled: boolean;
   general_comment: string | null;
   cancel_reason: string | null;
+  hold_reason: string | null;
+  held_at: string | null;
+  held_by: string | null;
+  hold_purchase_request_id: string | null;
   created_at?: string;
 };
 

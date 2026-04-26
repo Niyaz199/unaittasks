@@ -167,8 +167,26 @@ export function PprEquipmentAdmin({
               : !hasSelectedObject
                 ? "Сначала выберите объект, чтобы загрузить оборудование, системы и помещения только для него."
                 : !hasPrerequisites
-                  ? "Для создания оборудования в выбранном объекте нужны система и помещение."
+                  ? !availableSystems.length
+                    ? "Для создания оборудования в выбранном объекте нужна хотя бы одна система."
+                    : "Для создания оборудования нужно хотя бы одно помещение в этом объекте."
                   : "Добавьте первую единицу оборудования для выбранного объекта.",
+          actionLabel:
+            hasSelectedObject && !hasPrerequisites
+              ? availableSystems.length === 0
+                ? "Создать систему →"
+                : availableRooms.length === 0
+                  ? "Создать помещение →"
+                  : undefined
+              : undefined,
+          actionHref:
+            hasSelectedObject && !hasPrerequisites
+              ? availableSystems.length === 0
+                ? (`/ppr/systems?objectId=${filterObjectId}&new=1` as Route)
+                : availableRooms.length === 0
+                  ? (`/ppr/rooms?objectId=${filterObjectId}&new=1` as Route)
+                  : undefined
+              : undefined,
         }}
         isFilteredEmpty={filteredEquipment.length === 0}
         filters={

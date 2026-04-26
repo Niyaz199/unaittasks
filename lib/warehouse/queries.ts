@@ -3,6 +3,7 @@ import { listActorScopedObjectsForProfile, hasActorScopedObjectAccessForProfile 
 import { isGlobalObjectScopeRole } from "@/lib/access/matrix";
 import { canAccessWarehouseModule, canManageWarehouseCatalog } from "@/lib/capabilities";
 import type { Profile } from "@/lib/types";
+import { getStockItemSignedUrls } from "@/lib/warehouse/stock-item-files";
 
 type NamedRelation = { name: string } | Array<{ name: string }> | null;
 type StockLocationRelation = { id: string; name: string } | Array<{ id: string; name: string }> | null;
@@ -38,6 +39,9 @@ export type StockItemRow = {
   procurement_method: "engineer" | "procurement";
   unit: string;
   sku: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  description: string | null;
   min_qty: number;
   current_qty: number;
   storage_location_id: string | null;
@@ -48,6 +52,41 @@ export type StockItemRow = {
   storage_location: StockLocationRelation;
   system_group_links: StockItemSystemGroupLinkRow[] | null;
   ppr_template_links: StockItemPprTemplateLinkRow[] | null;
+};
+
+export type StockItemAttachmentRow = {
+  id: string;
+  object_id: string;
+  stock_item_id: string;
+  storage_path: string;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  uploaded_by: string | null;
+  created_at: string;
+};
+
+export type StockItemAttachmentWithUrl = StockItemAttachmentRow & { url: string | null };
+
+export type StockItemUsageRow = {
+  equipment_id: string;
+  equipment_name: string;
+  inventory_no: string | null;
+  object_id: string;
+  object_name: string | null;
+  system_id: string | null;
+  system_name: string | null;
+  quantity: number;
+  reserve_qty: number;
+  is_critical: boolean;
+};
+
+export type StockItemDetails = {
+  item: StockItemRow;
+  balances: StockBalanceRow[];
+  movements: StockMovementRow[];
+  usage: StockItemUsageRow[];
+  attachments: StockItemAttachmentWithUrl[];
 };
 
 export type StockLocationRow = {
@@ -106,6 +145,10 @@ export type StockBalanceRow = {
     current_qty: number;
     is_active: boolean;
   }> | null;
+  location?:
+    | { id: string; name: string }
+    | Array<{ id: string; name: string }>
+    | null;
 };
 
 export type StockMovementRow = {
@@ -247,7 +290,7 @@ export async function listStockItemsForProfile(
   let query = supabase
     .from("stock_items")
     .select(
-      "id,object_id,name,kind,is_spare_part,procurement_method,unit,sku,min_qty,current_qty,storage_location_id,comment,is_active,created_at,object:objects(name),storage_location:stock_locations(id,name),system_group_links:stock_item_system_groups(id,object_id,stock_item_id,system_group_id,created_at,system_group:ppr_system_groups(id,name,code)),ppr_template_links:stock_item_ppr_templates(id,object_id,stock_item_id,template_id,required_qty,created_at,template:ppr_work_templates(id,name,system_id))"
+      "id,object_id,name,kind,is_spare_part,procurement_method,unit,sku,manufacturer,model,description,min_qty,current_qty,storage_location_id,comment,is_active,created_at,object:objects(name),storage_location:stock_locations(id,name),system_group_links:stock_item_system_groups(id,object_id,stock_item_id,system_group_id,created_at,system_group:ppr_system_groups(id,name,code)),ppr_template_links:stock_item_ppr_templates(id,object_id,stock_item_id,template_id,required_qty,created_at,template:ppr_work_templates(id,name,system_id))"
     )
     .order("name", { ascending: true });
 
@@ -439,4 +482,123 @@ export async function listEquipmentComponentsForProfile(
   if (error) throw error;
 
   return (data ?? []) as EquipmentComponentRow[];
+}
+
+export async function getStockItemByIdForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">,
+  stockItemId: string
+): Promise<StockItemDetails | null> {
+  if (!canAccessWarehouseModule(profile.role)) {
+    throw new Error("Недостаточно прав для чтения ТМЦ");
+  }
+
+  const { data: item, error } = await supabase
+    .from("stock_items")
+    .select(
+      "id,object_id,name,kind,is_spare_part,procurement_method,unit,sku,manufacturer,model,description,min_qty,current_qty,storage_location_id,comment,is_active,created_at,object:objects(name),storage_location:stock_locations(id,name),system_group_links:stock_item_system_groups(id,object_id,stock_item_id,system_group_id,created_at,system_group:ppr_system_groups(id,name,code)),ppr_template_links:stock_item_ppr_templates(id,object_id,stock_item_id,template_id,required_qty,created_at,template:ppr_work_templates(id,name,system_id))"
+    )
+    .eq("id", stockItemId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!item) return null;
+
+  const canAccess =
+    isGlobalObjectScopeRole(profile.role) ||
+    (await hasActorScopedObjectAccessForProfile(supabase, profile, item.object_id));
+  if (!canAccess) return null;
+
+  const [balancesRes, movementsRes, componentsRes, attachmentsRes] = await Promise.all([
+    supabase
+      .from("stock_balances")
+      .select(
+        "id,object_id,item_id,location_id,qty,updated_at,item:stock_items(id,name,kind,unit,min_qty,current_qty,is_active),location:stock_locations(id,name)"
+      )
+      .eq("item_id", stockItemId)
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("stock_movements")
+      .select(
+        "id,object_id,item_id,location_id,movement_type,quantity,note,actor_id,created_at,actor:profiles(full_name),item:stock_items(name,unit)"
+      )
+      .eq("item_id", stockItemId)
+      .order("created_at", { ascending: false })
+      .limit(50),
+    supabase
+      .from("ppr_equipment_components")
+      .select(
+        "equipment_id,object_id,quantity,reserve_qty,is_critical,equipment:ppr_equipment(id,name,inventory_no,system_id,object_id,system:ppr_systems(id,name),object:objects(name))"
+      )
+      .eq("stock_item_id", stockItemId),
+    supabase
+      .from("stock_item_attachments")
+      .select("id,object_id,stock_item_id,storage_path,file_name,mime_type,size_bytes,uploaded_by,created_at")
+      .eq("stock_item_id", stockItemId)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  if (balancesRes.error) throw balancesRes.error;
+  if (movementsRes.error) throw movementsRes.error;
+  if (componentsRes.error) throw componentsRes.error;
+  if (attachmentsRes.error) throw attachmentsRes.error;
+
+  const usage: StockItemUsageRow[] = ((componentsRes.data ?? []) as unknown as Array<{
+    equipment_id: string;
+    object_id: string;
+    quantity: number;
+    reserve_qty: number;
+    is_critical: boolean;
+    equipment:
+      | {
+          id: string;
+          name: string;
+          inventory_no: string | null;
+          system_id: string | null;
+          system: { id: string; name: string } | Array<{ id: string; name: string }> | null;
+          object: { name: string } | Array<{ name: string }> | null;
+        }
+      | Array<{
+          id: string;
+          name: string;
+          inventory_no: string | null;
+          system_id: string | null;
+          system: { id: string; name: string } | Array<{ id: string; name: string }> | null;
+          object: { name: string } | Array<{ name: string }> | null;
+        }>
+      | null;
+  }>).map((row) => {
+    const eq = Array.isArray(row.equipment) ? row.equipment[0] : row.equipment;
+    const system = eq ? (Array.isArray(eq.system) ? eq.system[0] : eq.system) : null;
+    const object = eq ? (Array.isArray(eq.object) ? eq.object[0] : eq.object) : null;
+    return {
+      equipment_id: row.equipment_id,
+      equipment_name: eq?.name ?? "—",
+      inventory_no: eq?.inventory_no ?? null,
+      object_id: row.object_id,
+      object_name: object?.name ?? null,
+      system_id: system?.id ?? null,
+      system_name: system?.name ?? null,
+      quantity: row.quantity,
+      reserve_qty: row.reserve_qty,
+      is_critical: row.is_critical,
+    };
+  });
+
+  const rawAttachments = (attachmentsRes.data ?? []) as StockItemAttachmentRow[];
+  const signed = await getStockItemSignedUrls(
+    supabase,
+    rawAttachments.map((item) => item.storage_path)
+  );
+  const attachments: StockItemAttachmentWithUrl[] = rawAttachments.map((row) => ({
+    ...row,
+    url: signed[row.storage_path] ?? null,
+  }));
+
+  return {
+    item: item as StockItemRow,
+    balances: (balancesRes.data ?? []) as StockBalanceRow[],
+    movements: (movementsRes.data ?? []) as StockMovementRow[],
+    usage,
+    attachments,
+  };
 }

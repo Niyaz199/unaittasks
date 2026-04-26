@@ -105,8 +105,18 @@ export function PprTemplatesAdmin({
           message: !hasPrerequisites ? "Недостаточно структуры для создания шаблонов" : "Шаблоны ППР пока не созданы",
           hint:
             !hasPrerequisites
-              ? "Для шаблона ППР нужны доступные объекты и хотя бы одна система."
+              ? !objects.length
+                ? "Для начала нужен хотя бы один доступный объект."
+                : "Для шаблона ППР нужна хотя бы одна система."
               : "Создайте первый шаблон: он будет применяться ко всему активному оборудованию выбранной системы.",
+          actionLabel:
+            !hasPrerequisites && objects.length > 0 && systems.length === 0
+              ? "Создать систему →"
+              : undefined,
+          actionHref:
+            !hasPrerequisites && objects.length > 0 && systems.length === 0
+              ? ("/ppr/systems?new=1" as Route)
+              : undefined,
         }}
         isFilteredEmpty={filteredTemplates.length === 0}
         filters={

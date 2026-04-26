@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { downloadQrPng } from "@/lib/qr/export";
 
 type ActiveQrCode = {
   qr_token: string;
@@ -9,7 +10,19 @@ type ActiveQrCode = {
   is_active: boolean;
 };
 
-export function PprEquipmentQrBlock({ qrCode }: { qrCode: ActiveQrCode | null }) {
+type Props = {
+  qrCode: ActiveQrCode | null;
+  objectName?: string;
+  equipmentName?: string;
+  inventoryNo?: string;
+};
+
+export function PprEquipmentQrBlock({
+  qrCode,
+  objectName,
+  equipmentName,
+  inventoryNo,
+}: Props) {
   const [baseUrl, setBaseUrl] = useState("");
   const [copied, setCopied] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -23,8 +36,9 @@ export function PprEquipmentQrBlock({ qrCode }: { qrCode: ActiveQrCode | null })
   if (!qrCode) {
     return <div className="text-soft">Активный QR для оборудования не найден.</div>;
   }
-
-  const qrUrl = baseUrl ? `${baseUrl}/ppr/qr/${qrCode.qr_token}` : `/ppr/qr/${qrCode.qr_token}`;
+  const activeQr = qrCode;
+  const qrHref = `/ppr/qr/${activeQr.qr_token}`;
+  const qrUrl = baseUrl ? `${baseUrl}${qrHref}` : qrHref;
 
   async function handleCopy() {
     if (!baseUrl) return;
@@ -39,81 +53,77 @@ export function PprEquipmentQrBlock({ qrCode }: { qrCode: ActiveQrCode | null })
 
   function handleDownload() {
     if (!svgRef.current) return;
-    const svgData = new XMLSerializer().serializeToString(svgRef.current);
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-    const img = new Image();
-    
-    // Scale up for better resolution
-    const size = 1000;
-    canvas.width = size;
-    canvas.height = size;
-    
-    img.onload = () => {
-      if (!ctx) return;
-      // White background
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, size, size);
-      ctx.drawImage(img, 0, 0, size, size);
-      
-      const pngFile = canvas.toDataURL("image/png");
-      const downloadLink = document.createElement("a");
-      downloadLink.download = `QR_${qrCode?.qr_token}.png`;
-      downloadLink.href = `${pngFile}`;
-      downloadLink.click();
-    };
-    
-    img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
+    const safeName = (equipmentName ?? "equipment")
+      .replace(/[\\/:*?"<>|]+/g, "_")
+      .slice(0, 80);
+    downloadQrPng({
+      svgElement: svgRef.current,
+      fileName: `ppr-equipment-${safeName}.png`,
+      eyebrow: objectName,
+      title: equipmentName ?? "Оборудование ППР",
+      subtitle: inventoryNo ? `Инв. ${inventoryNo}` : undefined,
+      token: activeQr.qr_token,
+    });
   }
 
   return (
-    <div className="grid" style={{ gap: "1rem" }}>
-      <div className="row" style={{ alignItems: "flex-start", gap: "1.5rem", flexWrap: "wrap" }}>
-        
-        {/* QR Code Graphic */}
-        <div style={{ padding: "0.5rem", background: "#fff", borderRadius: "12px", width: "max-content" }}>
-          <QRCodeSVG 
-            value={baseUrl ? qrUrl : `https://example.com/ppr/qr/${qrCode.qr_token}`}
-            size={160}
+    <div className="warehouse-qr-shell">
+      <div className="warehouse-qr-layout">
+        <div className="warehouse-qr-preview">
+          <QRCodeSVG
+            value={baseUrl ? qrUrl : qrHref}
+            size={132}
             level="H"
-            includeMargin={true}
+            includeMargin
             ref={svgRef}
           />
+          {objectName ? (
+            <div className="warehouse-qr-preview-eyebrow">{objectName}</div>
+          ) : null}
+          <div className="warehouse-qr-preview-title">
+            {equipmentName ?? "Оборудование ППР"}
+          </div>
+          {inventoryNo ? (
+            <div
+              className="text-soft"
+              style={{ fontSize: "0.78rem", marginTop: "0.15rem", letterSpacing: "0.04em" }}
+            >
+              Инв. {inventoryNo}
+            </div>
+          ) : null}
         </div>
 
-        {/* QR Data & Actions */}
-        <div className="grid" style={{ gap: "0.75rem", flex: 1, minWidth: "200px" }}>
-          <div>
+        <div className="warehouse-qr-content">
+          <div className="warehouse-qr-meta">
             <div className="text-soft">Токен</div>
-            <div style={{ fontFamily: "monospace", fontSize: "1.05rem" }}>{qrCode.qr_token}</div>
+            <div className="warehouse-qr-token">{activeQr.qr_token}</div>
           </div>
-          <div className="row" style={{ gap: "1rem" }}>
-            <div>
+          <div className="warehouse-qr-stats">
+            <div className="warehouse-qr-stat">
               <div className="text-soft">Сгенерирован</div>
-              <div>{new Date(qrCode.generated_at).toLocaleString("ru-RU")}</div>
+              <div>{new Date(activeQr.generated_at).toLocaleString("ru-RU")}</div>
             </div>
-            <div>
+            <div className="warehouse-qr-stat">
               <div className="text-soft">Статус</div>
-              <div>{qrCode.is_active ? "Активен" : "Неактивен"}</div>
+              <div>{activeQr.is_active ? "Активен" : "Неактивен"}</div>
             </div>
           </div>
 
-          <div className="row" style={{ gap: "0.5rem", marginTop: "0.5rem", flexWrap: "wrap" }}>
+          <div className="warehouse-qr-actions">
+            <button type="button" className="btn btn-accent" onClick={handleDownload}>
+              Скачать PNG
+            </button>
             <button type="button" className="btn btn-ghost" onClick={handleCopy}>
               {copied ? "Скопировано!" : "Копировать ссылку"}
             </button>
-            <a 
-              href={`/ppr/qr/${qrCode.qr_token}`} 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="btn btn-ghost"
-              style={{ textDecoration: "none" }}
+            <a
+              href={qrHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-ghost warehouse-qr-link"
             >
-              Открыть
+              Открыть ссылку
             </a>
-            <button type="button" className="btn btn-ghost" onClick={handleDownload}>
-              Скачать PNG
-            </button>
           </div>
         </div>
       </div>

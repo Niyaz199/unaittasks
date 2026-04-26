@@ -385,3 +385,167 @@ export async function updatePprEquipmentAction(formData: FormData) {
   revalidatePath("/ppr/equipment");
   revalidatePath(`/ppr/equipment/${equipmentId}`);
 }
+
+export async function clonePprEquipmentAction(
+  formData: FormData
+): Promise<{ id: string }> {
+  const { profile, supabase, managedObjectIds } = await requireStructureManager();
+
+  const sourceEquipmentId = String(formData.get("source_equipment_id") ?? "").trim();
+  if (!sourceEquipmentId) {
+    throw new Error("Не указано исходное оборудование для копирования");
+  }
+
+  const newName = String(formData.get("name") ?? "").trim();
+  const newInventoryNo = String(formData.get("inventory_no") ?? "").trim();
+  const newDispatchName = String(formData.get("dispatch_name") ?? "").trim();
+  const newRoomId = String(formData.get("room_id") ?? "").trim() || null;
+  const newSerialNo = String(formData.get("serial_no") ?? "").trim() || null;
+  const newServiceStartDate = String(formData.get("service_start_date") ?? "").trim() || null;
+  const copyComponents = String(formData.get("copy_components") ?? "1") === "1";
+  const copyAssignments = String(formData.get("copy_assignments") ?? "1") === "1";
+
+  if (!newName) {
+    throw new Error("Укажите название для новой копии");
+  }
+
+  // Загружаем исходник со всеми полями
+  const { data: source, error: sourceError } = await supabase
+    .from("ppr_equipment")
+    .select(
+      "id,object_id,system_id,room_id,inventory_no,name,dispatch_name,service_start_date,status,serial_no,manufacturer,model,description,comment"
+    )
+    .eq("id", sourceEquipmentId)
+    .maybeSingle();
+  if (sourceError) throw sourceError;
+  if (!source) {
+    throw new Error("Исходное оборудование не найдено");
+  }
+
+  assertObjectAllowed(profile.role, managedObjectIds, source.object_id);
+  if (
+    !canManagePprStructure(
+      { id: profile.id, role: profile.role, accessibleObjectIds: managedObjectIds },
+      source.object_id
+    )
+  ) {
+    throw new Error("Нет прав на копирование оборудования ППР");
+  }
+
+  // Если задано новое помещение — проверяем, что оно того же объекта
+  const targetRoomId = newRoomId ?? (source.room_id as string);
+  await assertRoomBelongsToObject(supabase, targetRoomId, source.object_id);
+
+  // Если инвентарный номер задан — проверяем уникальность заранее, чтобы дать
+  // понятную ошибку. Если пустой — триггер БД ppr_set_inventory_no сгенерирует
+  // его автоматически (как при обычном создании оборудования).
+  if (newInventoryNo) {
+    const { data: existingByInv, error: existingError } = await supabase
+      .from("ppr_equipment")
+      .select("id")
+      .eq("inventory_no", newInventoryNo)
+      .maybeSingle();
+    if (existingError) throw existingError;
+    if (existingByInv) {
+      throw new Error(`Инвентарный номер «${newInventoryNo}» уже используется`);
+    }
+  }
+
+  // 1. Создаём копию оборудования
+  const { data: cloned, error: cloneError } = await supabase
+    .from("ppr_equipment")
+    .insert({
+      object_id: source.object_id,
+      system_id: source.system_id,
+      room_id: targetRoomId,
+      inventory_no: newInventoryNo || null,
+      name: newName,
+      dispatch_name: newDispatchName || newName,
+      service_start_date: newServiceStartDate ?? source.service_start_date,
+      status: source.status,
+      serial_no: newSerialNo,
+      manufacturer: source.manufacturer,
+      model: source.model,
+      description: source.description,
+      comment: source.comment,
+    })
+    .select("id,inventory_no")
+    .single();
+  if (cloneError) throw cloneError;
+
+  const newEquipmentId = cloned.id as string;
+  const finalInventoryNo = cloned.inventory_no as string;
+
+  // 2. Копируем состав комплектующих
+  let componentsCopied = 0;
+  if (copyComponents) {
+    const { data: srcComponents, error: srcCompError } = await supabase
+      .from("ppr_equipment_components")
+      .select("stock_item_id,quantity,reserve_qty,is_critical,note")
+      .eq("equipment_id", sourceEquipmentId);
+    if (srcCompError) throw srcCompError;
+
+    if (srcComponents && srcComponents.length > 0) {
+      const insertRows = srcComponents.map((c) => ({
+        object_id: source.object_id,
+        equipment_id: newEquipmentId,
+        stock_item_id: c.stock_item_id,
+        quantity: c.quantity,
+        reserve_qty: c.reserve_qty,
+        is_critical: c.is_critical,
+        note: c.note,
+      }));
+      const { error: insCompError } = await supabase
+        .from("ppr_equipment_components")
+        .insert(insertRows);
+      if (insCompError) throw insCompError;
+      componentsCopied = insertRows.length;
+    }
+  }
+
+  // 3. Копируем привязки шаблонов работ ППР
+  let assignmentsCopied = 0;
+  if (copyAssignments) {
+    const { data: srcAssignments, error: srcAsgError } = await supabase
+      .from("ppr_equipment_work_assignments")
+      .select("template_id,start_date,period_months,is_active")
+      .eq("equipment_id", sourceEquipmentId);
+    if (srcAsgError) throw srcAsgError;
+
+    if (srcAssignments && srcAssignments.length > 0) {
+      const insertRows = srcAssignments.map((a) => ({
+        object_id: source.object_id,
+        equipment_id: newEquipmentId,
+        template_id: a.template_id,
+        start_date: a.start_date,
+        period_months: a.period_months,
+        is_active: a.is_active,
+      }));
+      const { error: insAsgError } = await supabase
+        .from("ppr_equipment_work_assignments")
+        .insert(insertRows);
+      if (insAsgError) throw insAsgError;
+      assignmentsCopied = insertRows.length;
+    }
+  }
+
+  await writeAudit({
+    actorId: profile.id,
+    action: "clone_ppr_equipment",
+    entityType: "ppr_equipment",
+    entityId: newEquipmentId,
+    meta: {
+      object_id: source.object_id,
+      source_equipment_id: sourceEquipmentId,
+      inventory_no: finalInventoryNo,
+      inventory_no_auto: !newInventoryNo,
+      components_copied: componentsCopied,
+      assignments_copied: assignmentsCopied,
+    },
+  });
+
+  revalidatePath("/ppr/equipment");
+  revalidatePath(`/ppr/equipment/${sourceEquipmentId}`);
+
+  return { id: newEquipmentId };
+}

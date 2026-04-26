@@ -33,3 +33,15 @@ export const purchaseRequestCartToggleSchema = z.object({
   itemId: uuidSchema,
   inCart: z.boolean(),
 });
+
+export const purchaseRequestFromPprTaskItemSchema = z.object({
+  stockItemId: uuidSchema,
+  quantityRequested: z.coerce.number().positive(),
+  note: z.string().trim().max(2000).optional().nullable(),
+});
+
+export const purchaseRequestFromPprTaskSchema = z.object({
+  taskId: uuidSchema,
+  description: z.string().trim().max(4000).optional().nullable(),
+  items: z.array(purchaseRequestFromPprTaskItemSchema).min(1, "Выберите хотя бы одну позицию"),
+});

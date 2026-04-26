@@ -2,6 +2,8 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import type { Route } from "next";
 import { Archive, CheckCheck, ShoppingCart, TrendingDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
@@ -45,6 +47,28 @@ function resolveStockItem(
 ) {
   if (Array.isArray(raw)) return raw[0] ?? null;
   return raw ?? null;
+}
+
+function resolveSourceTaskEquipmentName(
+  task: PurchaseRequestDetailRow["source_task"]
+): string | null {
+  const node = Array.isArray(task) ? task[0] ?? null : task ?? null;
+  if (!node) return null;
+  const eq = Array.isArray(node.equipment) ? node.equipment[0] ?? null : node.equipment ?? null;
+  return eq?.name ?? null;
+}
+
+function PprTaskSourceLink({ request }: { request: PurchaseRequestDetailRow }) {
+  if (!request.source_task_id) return null;
+  const equipmentName = resolveSourceTaskEquipmentName(request.source_task ?? null);
+  const label = equipmentName ? `Из ППР-задачи · ${equipmentName}` : "Из ППР-задачи";
+  return (
+    <Link href={`/ppr/tasks/${request.source_task_id}` as Route} style={{ textDecoration: "none" }}>
+      <Badge tone="violet" style={{ cursor: "pointer" }}>
+        {label}
+      </Badge>
+    </Link>
+  );
 }
 
 function formatQty(value: number, unit: string) {
@@ -204,9 +228,13 @@ export function PurchaseRequestDetails({
             {request.source === "warehouse_daily" ? (
               <Badge tone="danger">Из ежедневного дефицита</Badge>
             ) : request.source === "ppr" ? (
-              <Badge tone="info">
-                Из плана ППР{request.ppr_plan_month ? ` · ${String(request.ppr_plan_month).slice(0, 7)}` : ""}
-              </Badge>
+              request.source_task_id ? (
+                <PprTaskSourceLink request={request} />
+              ) : (
+                <Badge tone="info">
+                  Из плана ППР{request.ppr_plan_month ? ` · ${String(request.ppr_plan_month).slice(0, 7)}` : ""}
+                </Badge>
+              )
             ) : (
               <Badge tone="info">Ручная заявка</Badge>
             )}

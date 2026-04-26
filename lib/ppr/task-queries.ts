@@ -23,11 +23,15 @@ export type PprTaskSummaryRow = {
   closed_at: string | null;
   cancelled_at: string | null;
   cancelled_by: string | null;
-  status: "new" | "in_progress" | "done" | "closed" | "cancelled";
+  status: "new" | "in_progress" | "on_hold" | "done" | "closed" | "cancelled";
   is_overdue: boolean;
   is_rescheduled: boolean;
   general_comment: string | null;
   cancel_reason: string | null;
+  hold_reason: string | null;
+  held_at: string | null;
+  held_by: string | null;
+  hold_purchase_request_id: string | null;
   created_at: string;
   object: { name: string } | Array<{ name: string }> | null;
   system: { name: string } | Array<{ name: string }> | null;
@@ -64,7 +68,7 @@ function buildPprTaskSummaryQuery(supabase: SupabaseClient) {
   return supabase
     .from("ppr_tasks")
     .select(
-      "id,object_id,system_id,equipment_id,responsible_user_id,assignee_id,planned_for,completed_at,closed_at,cancelled_at,cancelled_by,status,is_overdue,is_rescheduled,general_comment,cancel_reason,created_at,object:objects(name),system:ppr_systems(name),equipment:ppr_equipment(name,inventory_no),responsible:profiles!ppr_tasks_responsible_user_id_fkey(full_name),assignee:profiles!ppr_tasks_assignee_id_fkey(full_name)"
+      "id,object_id,system_id,equipment_id,responsible_user_id,assignee_id,planned_for,completed_at,closed_at,cancelled_at,cancelled_by,status,is_overdue,is_rescheduled,general_comment,cancel_reason,hold_reason,held_at,held_by,hold_purchase_request_id,created_at,object:objects(name),system:ppr_systems(name),equipment:ppr_equipment(name,inventory_no),responsible:profiles!ppr_tasks_responsible_user_id_fkey(full_name),assignee:profiles!ppr_tasks_assignee_id_fkey(full_name)"
     )
     .order("planned_for", { ascending: true })
     .order("created_at", { ascending: false });
@@ -88,7 +92,7 @@ export async function listPprTasksForProfile(
   } else if (kind === "archive") {
     query = query.in("status", ["closed", "cancelled"]);
   } else {
-    query = query.in("status", ["new", "in_progress", "done"]);
+    query = query.in("status", ["new", "in_progress", "on_hold", "done"]);
   }
 
   if (profile.role === "lead" || profile.role === "engineer" || profile.role === "object_engineer") {
@@ -190,7 +194,7 @@ export async function getPreferredActivePprTaskForEquipmentForProfile(
 
   let query = buildPprTaskSummaryQuery(supabase)
     .eq("equipment_id", equipmentId)
-    .in("status", ["new", "in_progress", "done"])
+    .in("status", ["new", "in_progress", "on_hold", "done"])
     .order("is_overdue", { ascending: false })
     .order("planned_for", { ascending: true })
     .order("created_at", { ascending: false })
@@ -275,11 +279,11 @@ export async function getActivePprTaskByAggregation(
   const { data, error } = await supabase
     .from("ppr_tasks")
     .select(
-      "id,object_id,system_id,equipment_id,responsible_user_id,assignee_id,planned_for,completed_at,closed_at,cancelled_at,cancelled_by,status,is_overdue,is_rescheduled,general_comment,cancel_reason,created_at"
+      "id,object_id,system_id,equipment_id,responsible_user_id,assignee_id,planned_for,completed_at,closed_at,cancelled_at,cancelled_by,status,is_overdue,is_rescheduled,general_comment,cancel_reason,hold_reason,held_at,held_by,hold_purchase_request_id,created_at"
     )
     .eq("equipment_id", options.equipmentId)
     .eq("planned_for", options.plannedFor)
-    .in("status", ["new", "in_progress", "done"])
+    .in("status", ["new", "in_progress", "on_hold", "done"])
     .maybeSingle();
   if (error) throw error;
   return (data ?? null) as
@@ -295,11 +299,15 @@ export async function getActivePprTaskByAggregation(
         closed_at: string | null;
         cancelled_at: string | null;
         cancelled_by: string | null;
-        status: "new" | "in_progress" | "done";
+        status: "new" | "in_progress" | "on_hold" | "done";
         is_overdue: boolean;
         is_rescheduled: boolean;
         general_comment: string | null;
         cancel_reason: string | null;
+        hold_reason: string | null;
+        held_at: string | null;
+        held_by: string | null;
+        hold_purchase_request_id: string | null;
         created_at: string;
       }
     | null;

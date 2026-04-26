@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, Building2, ChevronDown, Filter, Layers3, MapPinned, PackagePlus, Search, TriangleAlert } from "lucide-react";
@@ -26,6 +27,9 @@ type StockItemRow = {
   procurement_method: "engineer" | "procurement";
   unit: string;
   sku: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  description: string | null;
   min_qty: number;
   current_qty: number;
   storage_location_id: string | null;
@@ -629,9 +633,19 @@ export function StockItemsAdmin({
                     .filter(Boolean)
                     .join(", ");
                   return (
-                    <tr key={item.id} className={isLowStock ? "warehouse-row-alert" : undefined}>
+                    <tr
+                      key={item.id}
+                      className={isLowStock ? "warehouse-row-alert" : undefined}
+                      onClick={() => router.push(`/warehouse/items/${item.id}` as Route)}
+                      style={{ cursor: "pointer" }}
+                    >
                       <td>
-                        <div style={{ fontWeight: 600 }}>{item.name}</div>
+                        <Link
+                          href={`/warehouse/items/${item.id}` as Route}
+                          style={{ fontWeight: 600, textDecoration: "none", color: "inherit", cursor: "pointer" }}
+                        >
+                          {item.name}
+                        </Link>
                         <div className="text-soft" style={{ fontSize: "0.85rem" }}>
                           {item.sku ? `SKU: ${item.sku}` : null}
                         </div>
@@ -658,9 +672,16 @@ export function StockItemsAdmin({
                           {isLowStock && <Badge tone="danger">Ниже минимума</Badge>}
                         </div>
                       </td>
-                      <td className="text-right">
+                      <td className="text-right" onClick={(e) => e.stopPropagation()}>
                         {canManage ? (
-                          <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(item.id)}>
+                          <button
+                            className="btn btn-ghost ppr-action-btn"
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingId(item.id);
+                            }}
+                          >
                             Изменить
                           </button>
                         ) : (
@@ -677,10 +698,20 @@ export function StockItemsAdmin({
               {paginatedItems.map((item) => {
                 const isLowStock = item.current_qty < item.min_qty;
                 return (
-                  <div key={item.id} className="section-card mobile-card" style={{ padding: "0.8rem", display: "grid", gap: "0.6rem" }}>
+                  <div
+                    key={item.id}
+                    className="section-card mobile-card"
+                    style={{ padding: "0.8rem", display: "grid", gap: "0.6rem", cursor: "pointer" }}
+                    onClick={() => router.push(`/warehouse/items/${item.id}` as Route)}
+                  >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: "1rem", lineHeight: 1.2 }}>{item.name}</div>
+                        <Link
+                          href={`/warehouse/items/${item.id}` as Route}
+                          style={{ fontWeight: 600, fontSize: "1rem", lineHeight: 1.2, textDecoration: "none", color: "inherit", cursor: "pointer" }}
+                        >
+                          {item.name}
+                        </Link>
                         <div className="text-soft" style={{ fontSize: "0.8rem", marginTop: "0.2rem" }}>
                           {isObjectScoped ? stockItemKindMeta[item.kind].label : `${stockItemKindMeta[item.kind].label} • ${resolveName(item.object)}`}
                         </div>
@@ -722,8 +753,19 @@ export function StockItemsAdmin({
                     ) : null}
 
                     {canManage && (
-                      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.2rem" }}>
-                        <button className="btn btn-ghost ppr-action-btn" type="button" onClick={() => setEditingId(item.id)} style={{ width: "100%", justifyContent: "center" }}>
+                      <div
+                        style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.2rem" }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          className="btn btn-ghost ppr-action-btn"
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingId(item.id);
+                          }}
+                          style={{ width: "100%", justifyContent: "center" }}
+                        >
                           Изменить
                         </button>
                       </div>
@@ -779,6 +821,9 @@ export function StockItemsAdmin({
               procurement_method: editingItem.procurement_method,
               unit: editingItem.unit,
               sku: editingItem.sku ?? "",
+              manufacturer: editingItem.manufacturer ?? "",
+              model: editingItem.model ?? "",
+              description: editingItem.description ?? "",
               min_qty: String(editingItem.min_qty),
               storage_location_id: editingItem.storage_location_id ?? "",
               system_group_ids: (editingItem.system_group_links ?? []).map((link) => link.system_group_id),

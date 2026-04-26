@@ -2,9 +2,26 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { closePprTaskAction } from "@/app/actions/ppr-task-actions";
+import { PprTaskCloseWriteoffDialog } from "@/components/ppr/tasks/ppr-task-close-writeoff-dialog";
+import { resumePprTaskAction } from "@/app/actions/ppr-task-actions";
 
-type Status = "new" | "in_progress" | "done" | "closed" | "cancelled";
+type Status = "new" | "in_progress" | "on_hold" | "done" | "closed" | "cancelled";
+
+type StockItemBrief = {
+  id: string;
+  name: string;
+  unit: string;
+  kind: "zip" | "component";
+  current_qty: number;
+};
+
+type WriteoffComponent = {
+  id: string;
+  stock_item_id: string;
+  quantity: number;
+  is_critical: boolean;
+  stock_item: StockItemBrief | StockItemBrief[] | null;
+};
 
 type Props = {
   taskId: string;
@@ -13,11 +30,16 @@ type Props = {
   commentsCount: number;
   closedAt: string | null;
   cancelledAt: string | null;
+  heldAt?: string | null;
+  holdReason?: string | null;
+  holdPurchaseRequest?: { id: string; status: "new" | "in_progress" | "fulfilled" | "cancelled" } | null;
   permissions: {
     canStart: boolean;
     canComplete: boolean;
     canClose: boolean;
+    canResume: boolean;
   };
+  writeoffComponents?: WriteoffComponent[];
 };
 
 type ToneKey = "info" | "warning" | "success" | "neutral" | "danger";
@@ -67,6 +89,14 @@ function WrenchIcon() {
     </svg>
   );
 }
+function PauseIcon() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor" />
+      <rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" />
+    </svg>
+  );
+}
 function CrossIcon() {
   return (
     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -90,11 +120,16 @@ export function PprTaskStatusStrip({
   commentsCount,
   closedAt,
   cancelledAt,
+  heldAt,
+  holdReason,
+  holdPurchaseRequest,
   permissions,
+  writeoffComponents = [],
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [writeoffOpen, setWriteoffOpen] = useState(false);
 
   // Determine current state
   let tone: ToneKey = "neutral";
@@ -166,6 +201,38 @@ export function PprTaskStatusStrip({
         ? `Выполняет: ${assigneeName}.`
         : "Заявка выполняется.";
     }
+  } else if (status === "on_hold") {
+    tone = "warning";
+    icon = <PauseIcon />;
+    title = "Заявка на паузе";
+    const since = heldAt ? `с ${formatDate(heldAt)}` : "";
+    const reasonPart = holdReason ? `Причина: ${holdReason}` : "Причина не указана";
+    const prHint =
+      holdPurchaseRequest && (holdPurchaseRequest.status === "fulfilled" || holdPurchaseRequest.status === "cancelled")
+        ? holdPurchaseRequest.status === "fulfilled"
+          ? " Связанная заявка на закупку выполнена — можно возобновлять."
+          : " Связанная заявка на закупку отменена — проверьте и возобновите или отмените ППР."
+        : holdPurchaseRequest
+          ? " Ожидает заявку на закупку."
+          : "";
+    hint = `${reasonPart}. ${since}${since ? ". " : ""}${prHint}`.trim();
+    if (permissions.canResume) {
+      cta = {
+        label: "Возобновить",
+        onClick: () =>
+          startTransition(async () => {
+            try {
+              setError(null);
+              const formData = new FormData();
+              formData.set("task_id", taskId);
+              await resumePprTaskAction(formData);
+              router.refresh();
+            } catch (e) {
+              setError(e instanceof Error ? e.message : "Не удалось возобновить заявку");
+            }
+          }),
+      };
+    }
   } else if (status === "done") {
     tone = "success";
     icon = <CheckIcon />;
@@ -174,18 +241,10 @@ export function PprTaskStatusStrip({
       hint = "Проверьте отчёт и закройте заявку.";
       cta = {
         label: "Закрыть заявку",
-        onClick: () =>
-          startTransition(async () => {
-            try {
-              setError(null);
-              const formData = new FormData();
-              formData.set("task_id", taskId);
-              await closePprTaskAction(formData);
-              router.refresh();
-            } catch (e) {
-              setError(e instanceof Error ? e.message : "Не удалось закрыть заявку");
-            }
-          }),
+        onClick: () => {
+          setError(null);
+          setWriteoffOpen(true);
+        },
       };
     } else {
       title = "Работы выполнены";
@@ -292,6 +351,13 @@ export function PprTaskStatusStrip({
           {error}
         </div>
       ) : null}
+
+      <PprTaskCloseWriteoffDialog
+        taskId={taskId}
+        open={writeoffOpen}
+        onClose={() => setWriteoffOpen(false)}
+        components={writeoffComponents}
+      />
     </div>
   );
 }

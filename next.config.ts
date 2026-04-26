@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   typedRoutes: true,
+  allowedDevOrigins: ["127.0.0.1", "localhost", "192.168.0.132"],
   headers: async () => {
     return [
       {

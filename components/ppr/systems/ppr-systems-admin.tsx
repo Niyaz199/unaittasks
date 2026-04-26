@@ -52,14 +52,16 @@ export function PprSystemsAdmin({
   systemGroups,
   responsibleCandidates,
   canManageSystemGroups,
+  initialCreateOpen = false,
 }: {
   systems: SystemRow[];
   objects: ObjectOption[];
   systemGroups: GroupOption[];
   responsibleCandidates: ResponsibleOption[];
   canManageSystemGroups: boolean;
+  initialCreateOpen?: boolean;
 }) {
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(initialCreateOpen);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [createObjectId, setCreateObjectId] = useState("");

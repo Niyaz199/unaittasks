@@ -55,6 +55,7 @@ export default async function PprRoomsPage({
         }))}
         initialFilterObjectId={initialObjectId}
         initialFilterFloorId={initialFloorId}
+        initialCreateOpen={search.new === "1"}
       />
     </section>
   );

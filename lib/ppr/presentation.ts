@@ -5,6 +5,7 @@ type BadgeTone = "neutral" | "info" | "warning" | "success" | "danger" | "violet
 export const pprTaskStatusMeta: Record<PprTaskStatus, { label: string; tone: BadgeTone }> = {
   new: { label: "Новая", tone: "info" },
   in_progress: { label: "В работе", tone: "warning" },
+  on_hold: { label: "На паузе", tone: "violet" },
   done: { label: "Выполнена", tone: "success" },
   closed: { label: "Закрыта", tone: "neutral" },
   cancelled: { label: "Отменена", tone: "danger" },

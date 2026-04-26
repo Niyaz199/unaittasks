@@ -5,10 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { pprEquipmentStatusMeta } from "@/lib/ppr/presentation";
 import { PprEquipmentQrBlock } from "@/components/ppr/equipment/ppr-equipment-qr-block";
 import { PprEquipmentComponentsManager } from "@/components/ppr/equipment/ppr-equipment-components-manager";
+import { PprEquipmentCloneDialog } from "@/components/ppr/equipment/ppr-equipment-clone-dialog";
 
 type EquipmentDetails = {
   id: string;
   object_id: string;
+  room_id: string;
   inventory_no: string;
   name: string;
   dispatch_name: string;
@@ -23,6 +25,12 @@ type EquipmentDetails = {
   object: { name: string } | Array<{ name: string }> | null;
   system: { name: string } | Array<{ name: string }> | null;
   room: { name: string } | Array<{ name: string }> | null;
+};
+
+type CloneRoomOption = {
+  id: string;
+  name: string;
+  floor_label?: string | null;
 };
 
 type ActiveQrCode = {
@@ -54,6 +62,14 @@ type SystemGroupOption = {
   is_active?: boolean;
 };
 
+type PprTemplateOption = {
+  id: string;
+  name: string;
+  object_id: string;
+  system_id: string;
+  system_group_id: string;
+};
+
 type EquipmentComponentRow = {
   id: string;
   stock_item_id: string;
@@ -78,6 +94,10 @@ export function PprEquipmentDetails({
   stockItems,
   storageLocations,
   systemGroups,
+  pprTemplates = [],
+  cloneRooms = [],
+  cloneAssignmentsCount = 0,
+  canClone = false,
   canManageComponents,
 }: {
   equipment: EquipmentDetails;
@@ -86,9 +106,14 @@ export function PprEquipmentDetails({
   stockItems: EquipmentComponentItem[];
   storageLocations: LocationOption[];
   systemGroups: SystemGroupOption[];
+  pprTemplates?: PprTemplateOption[];
+  cloneRooms?: CloneRoomOption[];
+  cloneAssignmentsCount?: number;
+  canClone?: boolean;
   canManageComponents: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<TabId>("specs");
+  const [isCloneOpen, setIsCloneOpen] = useState(false);
   const statusMeta = pprEquipmentStatusMeta[equipment.status];
 
   return (
@@ -106,9 +131,22 @@ export function PprEquipmentDetails({
               {resolveName(equipment.system)} • {resolveName(equipment.room)}
             </div>
           </div>
-          <Badge tone={statusMeta.tone} style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }}>
-            {statusMeta.label}
-          </Badge>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+            <Badge tone={statusMeta.tone} style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }}>
+              {statusMeta.label}
+            </Badge>
+            {canClone ? (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setIsCloneOpen(true)}
+                style={{ padding: "0.4rem 0.85rem", minHeight: "36px", fontSize: "0.88rem" }}
+                title="Создать копию этого оборудования с тем же составом и шаблонами ППР"
+              >
+                Создать копию
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <div className="warehouse-location-metrics">
@@ -243,6 +281,7 @@ export function PprEquipmentDetails({
                 stockItems={stockItems}
                 storageLocations={storageLocations}
                 systemGroups={systemGroups}
+                pprTemplates={pprTemplates}
                 canManage={canManageComponents}
               />
             </>
@@ -271,11 +310,35 @@ export function PprEquipmentDetails({
                   <div className="text-soft">Код содержит токен идентификации для быстрого доступа с мобильного устройства.</div>
                 </div>
               </div>
-              <PprEquipmentQrBlock qrCode={qrCode} />
+              <PprEquipmentQrBlock
+                qrCode={qrCode}
+                objectName={resolveName(equipment.object)}
+                equipmentName={equipment.name}
+                inventoryNo={equipment.inventory_no}
+              />
             </>
           )}
         </div>
       </div>
+
+      {canClone ? (
+        <PprEquipmentCloneDialog
+          open={isCloneOpen}
+          onClose={() => setIsCloneOpen(false)}
+          source={{
+            id: equipment.id,
+            name: equipment.name,
+            inventory_no: equipment.inventory_no,
+            dispatch_name: equipment.dispatch_name,
+            service_start_date: equipment.service_start_date,
+            room_id: equipment.room_id,
+            object_name: resolveName(equipment.object),
+          }}
+          rooms={cloneRooms}
+          componentsCount={components.length}
+          assignmentsCount={cloneAssignmentsCount}
+        />
+      ) : null}
     </div>
   );
 }

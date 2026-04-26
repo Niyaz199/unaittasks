@@ -19,6 +19,9 @@ export const stockItemFormSchema = z.object({
   procurementMethod: procurementMethodSchema.default("engineer"),
   unit: z.string().trim().min(1).max(20),
   sku: z.string().trim().max(120).optional().nullable(),
+  manufacturer: z.string().trim().max(200).optional().nullable(),
+  model: z.string().trim().max(200).optional().nullable(),
+  description: z.string().trim().max(4000).optional().nullable(),
   minQty: z.coerce.number().min(0),
   storageLocationId: z.string().uuid().optional().nullable(),
   systemGroupIds: z.array(uuidSchema).default([]),
@@ -62,6 +65,27 @@ export const stockMovementFormSchema = z.object({
   quantity: z.coerce.number().positive(),
   note: z.string().trim().max(2000).optional().nullable(),
 });
+
+export const pprTaskCloseWriteoffItemSchema = z.object({
+  stockItemId: uuidSchema,
+  quantity: z.coerce.number().positive(),
+});
+
+export const pprTaskCloseWriteoffSchema = z
+  .object({
+    taskId: uuidSchema,
+    skip: z.boolean().default(false),
+    items: z.array(pprTaskCloseWriteoffItemSchema).default([]),
+  })
+  .superRefine((payload, ctx) => {
+    if (!payload.skip && payload.items.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["items"],
+        message: "Отметьте хотя бы одну позицию или включите «Ничего не расходовалось».",
+      });
+    }
+  });
 
 export const equipmentComponentFormSchema = z.object({
   equipmentId: uuidSchema,

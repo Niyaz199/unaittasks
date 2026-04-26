@@ -6,6 +6,7 @@ import { PprFormGroup, PprFormSection } from "@/components/ppr/ui/ppr-modal";
 import { useToast } from "@/components/ui/toast";
 import { procurementMethodMeta, stockItemKindMeta } from "@/lib/warehouse/presentation";
 import { MultiSelectCombobox } from "@/components/ui/multi-select-combobox";
+import { EmptyStateAction } from "@/components/ui/empty-state-action";
 
 type ObjectOption = { id: string; name: string };
 type LocationOption = { id: string; object_id: string; name: string; is_active?: boolean };
@@ -22,6 +23,9 @@ type StockItemFormValues = {
   procurement_method: "engineer" | "procurement";
   unit: string;
   sku: string;
+  manufacturer: string;
+  model: string;
+  description: string;
   min_qty: string;
   storage_location_id: string;
   system_group_ids: string[];
@@ -54,6 +58,9 @@ const defaultValues: StockItemFormValues = {
   procurement_method: "engineer",
   unit: "шт",
   sku: "",
+  manufacturer: "",
+  model: "",
+  description: "",
   min_qty: "0",
   storage_location_id: "",
   system_group_ids: [],
@@ -145,6 +152,7 @@ export function StockItemForm({
     const availableIds = new Set(availablePprTemplates.map((t) => t.id));
     setPprLinks((prev) => {
       const filtered = prev.filter((link) => !link.template_id || availableIds.has(link.template_id));
+      if (filtered.length === prev.length) return prev;
       return filtered.length > 0 ? filtered : [{ template_id: "", required_qty: "1" }];
     });
   }, [availablePprTemplates, isPprItem]);
@@ -318,6 +326,17 @@ export function StockItemForm({
             </label>
           )}
 
+          {/* Производитель и модель в 2 колонки */}
+          <div className="ctf-assign-grid">
+            <PprFormGroup label="Производитель" description="необязательно" hint="Например: Schneider Electric, Honeywell">
+              <input className="input" name="manufacturer" defaultValue={values.manufacturer} placeholder="Напр.: Schneider Electric" />
+            </PprFormGroup>
+
+            <PprFormGroup label="Модель" description="необязательно" hint="Модель или обозначение по каталогу">
+              <input className="input" name="model" defaultValue={values.model} placeholder="Напр.: ATV320U15N4C" />
+            </PprFormGroup>
+          </div>
+
           {/* Артикул и Ед. изм. в 2 колонки */}
           <div className="ctf-assign-grid">
             <PprFormGroup label="Артикул / SKU" description="необязательно" hint="Код из каталога поставщика или внутренний номер">
@@ -328,6 +347,16 @@ export function StockItemForm({
               <input className="input" name="unit" defaultValue={values.unit} placeholder="шт / м / упак." required />
             </PprFormGroup>
           </div>
+
+          <PprFormGroup label="Описание" description="необязательно" hint="Характеристики, особенности установки, предостережения">
+            <textarea
+              className="input"
+              name="description"
+              defaultValue={values.description}
+              rows={3}
+              placeholder="Например: 3-фазный преобразователь частоты, 1.5 кВт, IP20"
+            />
+          </PprFormGroup>
 
           {/* Метод закупки */}
           <PprFormGroup label="Метод закупки" hint={procurementHints[selectedProcurement]}>
@@ -347,13 +376,24 @@ export function StockItemForm({
         {/* ─── 2. Учёт и хранение ─── */}
         {needsStorage ? (
           <PprFormSection title="Учёт и хранение" desc="Где находится товар и в каком количестве">
+            {selectedObjectId && filteredLocations.length === 0 ? (
+              <EmptyStateAction
+                tone="warning"
+                title="У этого объекта ещё нет мест хранения"
+                description="Чтобы выбрать, где будет лежать ТМЦ, сначала создайте склад, шкаф или зону хранения."
+                primary={{
+                  label: "Создать место хранения",
+                  href: `/warehouse/locations?objectId=${selectedObjectId}&new=1`,
+                }}
+              />
+            ) : null}
             <PprFormGroup
               label="Место хранения"
               hint={
                 !selectedObjectId
                   ? "Сначала выберите объект выше"
                   : filteredLocations.length === 0
-                  ? "Для этого объекта ещё нет складских мест"
+                  ? "Откройте «Создать место хранения» выше — после создания вернитесь сюда."
                   : "Выберите полку, шкаф или зону, где хранится товар"
               }
             >

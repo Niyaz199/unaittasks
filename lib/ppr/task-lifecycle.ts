@@ -27,6 +27,10 @@ type TaskRow = Pick<
   | "cancelled_at"
   | "cancelled_by"
   | "cancel_reason"
+  | "hold_reason"
+  | "held_at"
+  | "held_by"
+  | "hold_purchase_request_id"
   | "is_overdue"
   | "is_rescheduled"
 >;
@@ -58,7 +62,7 @@ export async function getPprTaskLifecycleRow(supabase: SupabaseClient, taskId: s
   const { data, error } = await supabase
     .from("ppr_tasks")
     .select(
-      "id,object_id,responsible_user_id,assignee_id,status,planned_for,completed_at,closed_at,cancelled_at,cancelled_by,cancel_reason,is_overdue,is_rescheduled"
+      "id,object_id,responsible_user_id,assignee_id,status,planned_for,completed_at,closed_at,cancelled_at,cancelled_by,cancel_reason,hold_reason,held_at,held_by,hold_purchase_request_id,is_overdue,is_rescheduled"
     )
     .eq("id", taskId)
     .maybeSingle();
@@ -118,6 +122,28 @@ export function canCompletePprTask(actor: PprActor, task: Pick<PprTask, "object_
 
 export function canClosePprTaskLifecycle(actor: PprActor, task: Pick<PprTask, "object_id" | "responsible_user_id" | "status">) {
   return task.status === "done" && canClosePprTask(actor, task);
+}
+
+export function canPausePprTaskLifecycle(
+  actor: PprActor,
+  task: Pick<PprTask, "object_id" | "responsible_user_id" | "assignee_id" | "status">
+) {
+  return (
+    task.status === "in_progress" &&
+    canExecutePprTask(actor, task) &&
+    canTransitionPprTaskStatus(task.status, "on_hold")
+  );
+}
+
+export function canResumePprTaskLifecycle(
+  actor: PprActor,
+  task: Pick<PprTask, "object_id" | "responsible_user_id" | "assignee_id" | "status">
+) {
+  return (
+    task.status === "on_hold" &&
+    canExecutePprTask(actor, task) &&
+    canTransitionPprTaskStatus(task.status, "in_progress")
+  );
 }
 
 export function canCancelPprTaskLifecycle(actor: PprActor, task: Pick<PprTask, "object_id" | "responsible_user_id" | "status">) {

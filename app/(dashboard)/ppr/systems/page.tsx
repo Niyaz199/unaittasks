@@ -12,11 +12,17 @@ import { PageHeader } from "@/components/ui/page-header";
 import { BackButton } from "@/components/ui/back-button";
 import { PprSystemsAdmin } from "@/components/ppr/systems/ppr-systems-admin";
 
-export default async function PprSystemsPage() {
+export default async function PprSystemsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const search = searchParams ? await searchParams : {};
   const { profile } = await requireProfile();
   if (!canAccessPprStructureScreens(profile.role)) {
     return <div className="empty-state">Доступ к структуре ППР запрещён.</div>;
   }
+  const initialCreateOpen = search.new === "1";
 
   const supabase = await createSupabaseServerClient();
   const [objects, systemGroups, systems] = await Promise.all([
@@ -43,6 +49,7 @@ export default async function PprSystemsPage() {
         systemGroups={systemGroups}
         responsibleCandidates={responsibleCandidates}
         canManageSystemGroups={canAccessPprSystemGroupScreens(profile.role)}
+        initialCreateOpen={initialCreateOpen}
       />
     </section>
   );

@@ -12,7 +12,21 @@
       "Bash(C:/Users/ssniy/AppData/Roaming/npm/ruflo.cmd mcp *)",
       "Bash(timeout 5 \"C:/Users/ssniy/AppData/Roaming/npm/ruflo.cmd\" mcp start)",
       "mcp__gitnexus__impact",
-      "mcp__gitnexus__detect_changes"
+      "mcp__gitnexus__detect_changes",
+      "Bash(sort -t: -k2 -rn)",
+      "Bash(npx tsc *)",
+      "Bash(python3 .claude/skills/ui-ux-pro-max/scripts/search.py \"warehouse inventory item detail card engineer\" --design-system)",
+      "Bash(python .claude/skills/ui-ux-pro-max/scripts/search.py \"warehouse inventory item detail card engineer\" --design-system)",
+      "Bash(python ~/.claude/skills/ui-ux-pro-max/scripts/search.py \"warehouse inventory item detail engineer\" --design-system)",
+      "mcp__gitnexus__query",
+      "mcp__ruflo__session_list",
+      "mcp__ruflo__memory_search",
+      "mcp__ruflo__memory_list",
+      "Bash(env)",
+      "mcp__gitnexus__list_repos",
+      "Bash(npm root *)",
+      "Bash(node -e \"console.log\\(require.resolve\\('docx'\\)\\)\")",
+      "Bash(npm install *)"
     ]
   }
 }

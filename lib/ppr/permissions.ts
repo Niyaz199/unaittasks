@@ -48,7 +48,7 @@ export function canManagePprCalendar(actor: PprActor, options: PprCalendarOption
 }
 
 export function isActivePprTaskStatus(status: string) {
-  return status === "new" || status === "in_progress" || status === "done";
+  return status === "new" || status === "in_progress" || status === "on_hold" || status === "done";
 }
 
 export function canReadPprTask(actor: PprActor, task: Pick<PprTask, "object_id" | "responsible_user_id" | "assignee_id">) {
@@ -106,7 +106,8 @@ export function canAssignAsPprTaskExecutor(role: Role) {
 
 export function canTransitionPprTaskStatus(currentStatus: PprTask["status"], nextStatus: PprTask["status"]) {
   if (currentStatus === "new") return nextStatus === "in_progress";
-  if (currentStatus === "in_progress") return nextStatus === "done";
+  if (currentStatus === "in_progress") return nextStatus === "done" || nextStatus === "on_hold";
+  if (currentStatus === "on_hold") return nextStatus === "in_progress";
   if (currentStatus === "done") return nextStatus === "closed";
   return false;
 }

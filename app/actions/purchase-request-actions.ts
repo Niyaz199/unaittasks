@@ -14,6 +14,7 @@ import {
   purchaseRequestCartToggleSchema,
   purchaseRequestFinalizeDraftSchema,
   purchaseRequestFormSchema,
+  purchaseRequestFromPprTaskSchema,
   purchaseRequestReassignItemSchema,
   purchaseRequestStatusFormSchema,
 } from "@/lib/purchase-requests/validators";
@@ -156,6 +157,138 @@ export async function createPurchaseRequestAction(formData: FormData) {
   }
 
   revalidatePurchaseRequestPaths();
+}
+
+export async function createPurchaseRequestFromPprTaskAction(formData: FormData) {
+  const { profile, supabase } = await requireProfile();
+  if (!canCreatePurchaseRequests(profile.role)) {
+    throw new Error("Нет доступа к созданию заявок на закупку");
+  }
+
+  const rawItems = String(formData.get("items") ?? "[]");
+  let parsedItems: unknown;
+  try {
+    parsedItems = JSON.parse(rawItems);
+  } catch {
+    throw new Error("Некорректный список позиций");
+  }
+
+  const payload = purchaseRequestFromPprTaskSchema.parse({
+    taskId: String(formData.get("task_id") ?? ""),
+    description: String(formData.get("description") ?? "") || null,
+    items: parsedItems,
+  });
+
+  const { data: task, error: taskError } = await supabase
+    .from("ppr_tasks")
+    .select("id,object_id,equipment_id,status,equipment:ppr_equipment(name)")
+    .eq("id", payload.taskId)
+    .single();
+  if (taskError) throw taskError;
+
+  if (task.status === "closed" || task.status === "cancelled") {
+    throw new Error("Нельзя создать заявку на закупку из архивной ППР-задачи");
+  }
+
+  const objects = await listPurchaseRequestCreatableObjectsForProfile(supabase, profile);
+  assertObjectAllowed(
+    profile.role,
+    objects.map((item) => item.id),
+    task.object_id,
+    "Объект недоступен для создания заявки"
+  );
+
+  const stockItemIds = Array.from(new Set(payload.items.map((item) => item.stockItemId)));
+  const { data: stockItems, error: stockItemsError } = await supabase
+    .from("stock_items")
+    .select("id,object_id,name,unit,storage_location_id,storage_location:stock_locations(name)")
+    .in("id", stockItemIds);
+  if (stockItemsError) throw stockItemsError;
+
+  const stockItemMap = new Map(stockItems.map((row) => [row.id, row]));
+  for (const item of payload.items) {
+    const stockItem = stockItemMap.get(item.stockItemId);
+    if (!stockItem) throw new Error("Одна из выбранных ТМЦ недоступна");
+    if (stockItem.object_id !== task.object_id) {
+      throw new Error("Все ТМЦ должны относиться к объекту задачи");
+    }
+  }
+
+  const { data: objectRow, error: objectError } = await supabase
+    .from("objects")
+    .select("object_engineer_id")
+    .eq("id", task.object_id)
+    .single();
+  if (objectError) throw objectError;
+
+  const equipmentRel = task.equipment as { name?: string | null } | { name?: string | null }[] | null;
+  const equipmentName = Array.isArray(equipmentRel) ? equipmentRel[0]?.name : equipmentRel?.name;
+  const autoDescription = equipmentName ? `Заявка по ППР-задаче: ${equipmentName}` : "Заявка по ППР-задаче";
+
+  const { data: request, error: requestError } = await supabase
+    .from("purchase_requests")
+    .insert({
+      object_id: task.object_id,
+      status: "new",
+      source: "ppr",
+      source_task_id: task.id,
+      request_kind: "final",
+      executor_role: "engineer",
+      description: payload.description?.trim() || autoDescription,
+      requested_by: profile.id,
+      assigned_to: objectRow.object_engineer_id ?? null,
+    })
+    .select("id")
+    .single();
+  if (requestError) throw requestError;
+
+  const itemsInsert = payload.items.map((item) => {
+    const stockItem = stockItemMap.get(item.stockItemId)!;
+    const loc = Array.isArray(stockItem.storage_location) ? stockItem.storage_location[0] ?? null : stockItem.storage_location;
+    return {
+      request_id: request.id,
+      object_id: task.object_id,
+      stock_item_id: stockItem.id,
+      title: stockItem.name,
+      unit: stockItem.unit,
+      quantity_requested: item.quantityRequested,
+      note: item.note?.trim() || null,
+      is_auto_generated: false,
+      assigned_role: "engineer",
+      storage_location_id: stockItem.storage_location_id ?? null,
+      location_name_snapshot: loc?.name ?? null,
+    };
+  });
+
+  const { error: itemsError } = await supabase.from("purchase_request_items").insert(itemsInsert);
+  if (itemsError) throw itemsError;
+
+  await writeAudit({
+    actorId: profile.id,
+    action: "create_purchase_request",
+    entityType: "purchase_request",
+    entityId: request.id,
+    meta: {
+      object_id: task.object_id,
+      source: "ppr",
+      source_task_id: task.id,
+      items_count: itemsInsert.length,
+      assigned_to: objectRow.object_engineer_id ?? null,
+    },
+    supabase,
+  });
+
+  if (objectRow.object_engineer_id) {
+    await sendPushToUser(objectRow.object_engineer_id, {
+      title: "Новая заявка на закупку (ППР)",
+      body: autoDescription,
+      url: `/purchase-requests?objectId=${encodeURIComponent(task.object_id)}`,
+    });
+  }
+
+  revalidatePurchaseRequestPaths();
+  revalidatePath(`/ppr/tasks/${task.id}`);
+  return { requestId: request.id };
 }
 
 export async function updatePurchaseRequestStatusAction(formData: FormData) {

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const pprResponsibleRoleSchema = z.enum(["lead", "engineer", "object_engineer"]);
-export const pprTaskStatusSchema = z.enum(["new", "in_progress", "done", "closed", "cancelled"]);
+export const pprTaskStatusSchema = z.enum(["new", "in_progress", "on_hold", "done", "closed", "cancelled"]);
 export const pprEquipmentStatusSchema = z.enum(["active", "repair", "out_of_service", "archived"]);
 export const pprMonthPlanItemStatusSchema = z.enum(["pending", "materialized", "carried_over", "closed", "cancelled"]);
 export const pprExecutionModeSchema = z.enum(["in_house", "contractor"]);

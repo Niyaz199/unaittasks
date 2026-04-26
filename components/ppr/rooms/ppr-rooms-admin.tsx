@@ -72,6 +72,7 @@ export function PprRoomsAdmin({
   roomTypes,
   initialFilterObjectId = "",
   initialFilterFloorId = "",
+  initialCreateOpen = false,
 }: {
   rooms: RoomRow[];
   objects: ObjectOption[];
@@ -79,9 +80,10 @@ export function PprRoomsAdmin({
   roomTypes: RoomTypeOption[];
   initialFilterObjectId?: string;
   initialFilterFloorId?: string;
+  initialCreateOpen?: boolean;
 }) {
   const router = useRouter();
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(initialCreateOpen);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);

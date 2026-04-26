@@ -25,6 +25,8 @@ type PurchaseRequestBaseRow = {
   processed_at: string | null;
   approved_by: string | null;
   ppr_plan_month: string | null;
+  source_task_id: string | null;
+  source_task?: { id: string; equipment?: { name: string | null } | Array<{ name: string | null }> | null } | Array<{ id: string; equipment?: { name: string | null } | Array<{ name: string | null }> | null }> | null;
   created_at: string;
   updated_at: string;
   fulfilled_at: string | null;
@@ -75,10 +77,10 @@ export type PurchaseRequestArchiveMode = "active" | "archived";
 export type PurchaseRequestFlow = "engineer_requests" | "warehouse_daily" | "ppr";
 
 const purchaseRequestSummarySelect =
-  "id,object_id,status,source,request_kind,executor_role,description,requested_by,assigned_to,draft_date,origin_request_id,processed_at,approved_by,ppr_plan_month,created_at,updated_at,fulfilled_at,cancelled_at,object:objects(name),requester:profiles!purchase_requests_requested_by_fkey(full_name),assignee:profiles!purchase_requests_assigned_to_fkey(full_name)";
+  "id,object_id,status,source,request_kind,executor_role,description,requested_by,assigned_to,draft_date,origin_request_id,processed_at,approved_by,ppr_plan_month,source_task_id,created_at,updated_at,fulfilled_at,cancelled_at,object:objects(name),requester:profiles!purchase_requests_requested_by_fkey(full_name),assignee:profiles!purchase_requests_assigned_to_fkey(full_name)";
 
 const purchaseRequestDetailSelect =
-  "id,object_id,status,source,request_kind,executor_role,description,requested_by,assigned_to,draft_date,origin_request_id,processed_at,approved_by,ppr_plan_month,created_at,updated_at,fulfilled_at,cancelled_at,object:objects(name),requester:profiles!purchase_requests_requested_by_fkey(full_name),assignee:profiles!purchase_requests_assigned_to_fkey(full_name),items:purchase_request_items(id,request_id,object_id,stock_item_id,title,unit,quantity_requested,note,is_auto_generated,assigned_role,current_qty_snapshot,min_qty_snapshot,storage_location_id,location_name_snapshot,characteristics,in_cart,cart_marked_at,ppr_system_id,created_at,stock_item:stock_items(name,unit,sku,kind,procurement_method),ppr_system:ppr_systems(name))";
+  "id,object_id,status,source,request_kind,executor_role,description,requested_by,assigned_to,draft_date,origin_request_id,processed_at,approved_by,ppr_plan_month,source_task_id,created_at,updated_at,fulfilled_at,cancelled_at,object:objects(name),requester:profiles!purchase_requests_requested_by_fkey(full_name),assignee:profiles!purchase_requests_assigned_to_fkey(full_name),source_task:ppr_tasks!purchase_requests_source_task_id_fkey(id,equipment:ppr_equipment(name)),items:purchase_request_items(id,request_id,object_id,stock_item_id,title,unit,quantity_requested,note,is_auto_generated,assigned_role,current_qty_snapshot,min_qty_snapshot,storage_location_id,location_name_snapshot,characteristics,in_cart,cart_marked_at,ppr_system_id,created_at,stock_item:stock_items(name,unit,sku,kind,procurement_method),ppr_system:ppr_systems(name))";
 
 function usesOwnPurchaseRequestScope(role: Profile["role"]) {
   return role === "engineer" || role === "tech";

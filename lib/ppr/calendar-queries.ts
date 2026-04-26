@@ -495,8 +495,8 @@ export async function listPprMonthPlanItemsForProfile(
     system: { name: string } | Array<{ name: string }> | null;
     object: { name: string } | Array<{ name: string }> | null;
     task:
-      | { id: string; status: "new" | "in_progress" | "done" | "closed" | "cancelled"; planned_for: string }
-      | Array<{ id: string; status: "new" | "in_progress" | "done" | "closed" | "cancelled"; planned_for: string }>
+      | { id: string; status: "new" | "in_progress" | "on_hold" | "done" | "closed" | "cancelled"; planned_for: string }
+      | Array<{ id: string; status: "new" | "in_progress" | "on_hold" | "done" | "closed" | "cancelled"; planned_for: string }>
       | null;
   }>;
 }

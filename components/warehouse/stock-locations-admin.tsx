@@ -45,15 +45,17 @@ export function StockLocationsAdmin({
   systems,
   rooms,
   initialFilterObjectId = "",
+  initialCreateOpen = false,
 }: {
   locations: StockLocationRow[];
   objects: ObjectOption[];
   systems: SystemOption[];
   rooms: RoomOption[];
   initialFilterObjectId?: string;
+  initialCreateOpen?: boolean;
 }) {
   const router = useRouter();
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(initialCreateOpen);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");

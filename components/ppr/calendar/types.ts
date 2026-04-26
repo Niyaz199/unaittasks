@@ -45,8 +45,8 @@ export type EquipmentRelation = {
 };
 
 export type MonthPlanTaskRelation =
-  | { id: string; status: "new" | "in_progress" | "done" | "closed" | "cancelled"; planned_for: string }
-  | Array<{ id: string; status: "new" | "in_progress" | "done" | "closed" | "cancelled"; planned_for: string }>
+  | { id: string; status: "new" | "in_progress" | "on_hold" | "done" | "closed" | "cancelled"; planned_for: string }
+  | Array<{ id: string; status: "new" | "in_progress" | "on_hold" | "done" | "closed" | "cancelled"; planned_for: string }>
   | null;
 
 export type MonthPlanItemRow = {
