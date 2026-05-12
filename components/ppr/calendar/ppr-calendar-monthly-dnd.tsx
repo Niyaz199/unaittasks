@@ -269,6 +269,63 @@ export function PprCalendarAdmin({
             </button>
           </div>
         </div>
+
+        {/* Активные фильтры как кликабельные chip'ы — открывают drawer для редактирования */}
+        <div
+          className="row"
+          style={{
+            gap: "0.4rem",
+            flexWrap: "wrap",
+            alignItems: "center",
+            marginTop: "0.6rem",
+            paddingTop: "0.6rem",
+            borderTop: "1px solid color-mix(in srgb, var(--line) 35%, transparent)",
+          }}
+          aria-label="Активные фильтры календаря"
+        >
+          <span className="text-soft" style={{ fontSize: "0.78rem", marginRight: "0.2rem" }}>
+            Фильтр:
+          </span>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setIsFiltersOpen(true)}
+            style={{ fontSize: "0.8rem", padding: "0.25rem 0.6rem", lineHeight: 1.2 }}
+            title="Изменить год"
+          >
+            {currentYear} <span style={{ opacity: 0.7, marginLeft: "0.2rem" }}>▾</span>
+          </button>
+          <button
+            type="button"
+            className={`btn ${selectedObjectId ? "btn-secondary" : "btn-ghost"}`}
+            onClick={() => setIsFiltersOpen(true)}
+            style={{ fontSize: "0.8rem", padding: "0.25rem 0.6rem", lineHeight: 1.2 }}
+            title={selectedObjectId ? "Изменить объект" : "Выбрать объект"}
+          >
+            {selectedObject?.name ?? "Все объекты"}
+            <span style={{ opacity: 0.7, marginLeft: "0.2rem" }}>▾</span>
+          </button>
+          <button
+            type="button"
+            className={`btn ${selectedGroupId ? "btn-secondary" : "btn-ghost"}`}
+            onClick={() => setIsFiltersOpen(true)}
+            style={{ fontSize: "0.8rem", padding: "0.25rem 0.6rem", lineHeight: 1.2 }}
+            title={selectedGroupId ? "Изменить группу систем" : "Выбрать группу систем"}
+          >
+            {selectedGroup?.name ?? "Все группы"}
+            <span style={{ opacity: 0.7, marginLeft: "0.2rem" }}>▾</span>
+          </button>
+          <button
+            type="button"
+            className={`btn ${selectedSystemId ? "btn-secondary" : "btn-ghost"}`}
+            onClick={() => setIsFiltersOpen(true)}
+            style={{ fontSize: "0.8rem", padding: "0.25rem 0.6rem", lineHeight: 1.2 }}
+            title={selectedSystemId ? "Изменить систему" : "Выбрать систему"}
+          >
+            {selectedSystem?.name ?? "Все системы"}
+            <span style={{ opacity: 0.7, marginLeft: "0.2rem" }}>▾</span>
+          </button>
+        </div>
       </div>
 
       {isFiltersOpen ? (
