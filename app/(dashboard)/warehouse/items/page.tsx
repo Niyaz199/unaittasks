@@ -45,11 +45,33 @@ export default async function WarehouseItemsPage({
     shouldShowCatalog && canManage && selectedObjectId
       ? supabase
           .from("ppr_equipment")
-          .select("id,name,dispatch_name,inventory_no,object_id")
+          .select("id,name,dispatch_name,inventory_no,object_id,system_id,system:ppr_systems!inner(system_group_id)")
           .eq("object_id", selectedObjectId)
           .order("name")
-          .then((res) => (res.data ?? []) as Array<{ id: string; name: string; dispatch_name: string | null; inventory_no: string | null; object_id: string }>)
-      : Promise.resolve([] as Array<{ id: string; name: string; dispatch_name: string | null; inventory_no: string | null; object_id: string }>),
+          .then((res) => {
+            type Row = {
+              id: string;
+              name: string;
+              dispatch_name: string | null;
+              inventory_no: string | null;
+              object_id: string;
+              system_id: string;
+              system: { system_group_id: string } | Array<{ system_group_id: string }> | null;
+            };
+            return ((res.data ?? []) as Row[]).map((row) => {
+              const sys = Array.isArray(row.system) ? row.system[0] ?? null : row.system;
+              return {
+                id: row.id,
+                name: row.name,
+                dispatch_name: row.dispatch_name,
+                inventory_no: row.inventory_no,
+                object_id: row.object_id,
+                system_id: row.system_id,
+                system_group_id: sys?.system_group_id ?? null,
+              };
+            });
+          })
+      : Promise.resolve([] as Array<{ id: string; name: string; dispatch_name: string | null; inventory_no: string | null; object_id: string; system_id: string; system_group_id: string | null }>),
   ]);
 
   const description = selectedObject

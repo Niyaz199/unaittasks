@@ -102,7 +102,7 @@ export function StockItemsAdmin({
   locations: LocationOption[];
   systemGroups: SystemGroupOption[];
   pprTemplates?: PprTemplateOption[];
-  equipment?: Array<{ id: string; name: string; dispatch_name: string | null; inventory_no: string | null; object_id: string }>;
+  equipment?: Array<{ id: string; name: string; dispatch_name: string | null; inventory_no: string | null; object_id: string; system_id: string; system_group_id: string | null }>;
   canManage: boolean;
   initialFilterObjectId?: string;
   currentObject?: ObjectOption | null;

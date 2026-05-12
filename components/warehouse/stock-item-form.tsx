@@ -13,7 +13,15 @@ type ObjectOption = { id: string; name: string };
 type LocationOption = { id: string; object_id: string; name: string; is_active?: boolean };
 type SystemGroupOption = { id: string; name: string; code: string; is_active?: boolean };
 type PprTemplateOption = { id: string; name: string; object_id: string; system_id: string; system_group_id: string };
-type EquipmentOption = { id: string; name: string; dispatch_name?: string | null; inventory_no?: string | null; object_id: string };
+type EquipmentOption = {
+  id: string;
+  name: string;
+  dispatch_name?: string | null;
+  inventory_no?: string | null;
+  object_id: string;
+  system_id?: string;
+  system_group_id?: string | null;
+};
 
 type PprLinkRow = { template_id: string; required_qty: string };
 type EquipmentLinkRow = { equipment_id: string; quantity: string; reserve_qty: string; is_critical: boolean; note: string };
@@ -114,7 +122,11 @@ export function StockItemForm({
   const [pprLinks, setPprLinks] = useState<PprLinkRow[]>(
     values.ppr_template_links.length > 0 ? values.ppr_template_links : [{ template_id: "", required_qty: "1" }]
   );
-  const [isEquipmentComponent, setIsEquipmentComponent] = useState(values.equipment_links.length > 0);
+  // Для kind='component' принадлежность к оборудованию подразумевается всегда
+  // (это деталь конкретного оборудования). Для kind='zip' — опционально.
+  const [isEquipmentComponent, setIsEquipmentComponent] = useState(
+    values.equipment_links.length > 0 || values.kind === "component"
+  );
   const [equipmentLinks, setEquipmentLinks] = useState<EquipmentLinkRow[]>(
     values.equipment_links.length > 0
       ? values.equipment_links
@@ -188,10 +200,24 @@ export function StockItemForm({
     onChange?.();
   }
 
-  const availableEquipment = useMemo(
-    () => equipment.filter((item) => !selectedObjectId || item.object_id === selectedObjectId),
-    [equipment, selectedObjectId]
-  );
+  // При kind='component' принудительно держим галочку включённой:
+  // компонент по определению является частью оборудования.
+  useEffect(() => {
+    if (selectedKind === "component" && !isEquipmentComponent) {
+      setIsEquipmentComponent(true);
+    }
+  }, [selectedKind, isEquipmentComponent]);
+
+  const availableEquipment = useMemo(() => {
+    return equipment.filter((item) => {
+      if (selectedObjectId && item.object_id !== selectedObjectId) return false;
+      // Если выбраны группы систем — оборудование должно принадлежать одной из них.
+      if (selectedSystemGroupIds.length > 0 && item.system_group_id) {
+        return selectedSystemGroupIds.includes(item.system_group_id);
+      }
+      return true;
+    });
+  }, [equipment, selectedObjectId, selectedSystemGroupIds]);
 
   const usedEquipmentIds = new Set(equipmentLinks.map((l) => l.equipment_id).filter(Boolean));
 
@@ -522,7 +548,7 @@ export function StockItemForm({
                   display: "flex",
                   alignItems: "flex-start",
                   gap: "0.65rem",
-                  cursor: "pointer",
+                  cursor: selectedKind === "component" ? "default" : "pointer",
                   padding: "0.65rem 0.9rem",
                   borderRadius: "var(--radius)",
                   background: isEquipmentComponent
@@ -532,11 +558,13 @@ export function StockItemForm({
                     ? "inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent)"
                     : "inset 0 0 0 1px color-mix(in srgb, #8ea8d0 14%, transparent)",
                   transition: "background 0.15s, box-shadow 0.15s",
+                  opacity: selectedKind === "component" ? 0.85 : 1,
                 }}
               >
                 <input
                   type="checkbox"
                   checked={isEquipmentComponent}
+                  disabled={selectedKind === "component"}
                   onChange={(event) => {
                     setIsEquipmentComponent(event.target.checked);
                     if (!event.target.checked) {
@@ -547,9 +575,18 @@ export function StockItemForm({
                   style={{ marginTop: "0.1rem", flexShrink: 0 }}
                 />
                 <span style={{ display: "grid", gap: "0.15rem" }}>
-                  <span style={{ fontWeight: 500, fontSize: "0.875rem" }}>Является составляющей оборудования</span>
+                  <span style={{ fontWeight: 500, fontSize: "0.875rem" }}>
+                    Является составляющей оборудования
+                    {selectedKind === "component" ? (
+                      <span className="text-soft" style={{ fontWeight: 400, fontSize: "0.78rem", marginLeft: "0.4rem" }}>
+                        (обязательно для компонентов)
+                      </span>
+                    ) : null}
+                  </span>
                   <span style={{ fontSize: "0.72rem", color: "var(--text-soft)", lineHeight: 1.4 }}>
-                    ТМЦ будет добавлена в состав выбранного оборудования сразу при создании.
+                    {selectedKind === "component"
+                      ? "Компонент по определению относится к конкретному оборудованию — укажите к какому."
+                      : "ТМЦ будет добавлена в состав выбранного оборудования сразу при создании."}
                   </span>
                 </span>
               </label>
@@ -563,7 +600,9 @@ export function StockItemForm({
                   )}
                   {selectedObjectId && availableEquipment.length === 0 && (
                     <p className="text-soft" style={{ fontSize: "0.85rem", margin: 0, color: "var(--warning)" }}>
-                      У выбранного объекта пока нет оборудования.
+                      {selectedSystemGroupIds.length > 0
+                        ? "В выбранных группах систем пока нет оборудования. Уберите фильтр в «Группа инженерных систем», чтобы увидеть всё."
+                        : "У выбранного объекта пока нет оборудования."}
                     </p>
                   )}
                   {selectedObjectId && availableEquipment.length > 0 && (
