@@ -7,6 +7,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { PprModal, PprFormGroup } from "@/components/ppr/ui/ppr-modal";
 import { PprPageShell } from "@/components/ppr/ui/ppr-page-shell";
 import { StatusBadge } from "@/components/ppr/ui/status-badge";
+import { AssigneeCombobox, type AssigneeOption } from "@/components/ui/assignee-combobox";
 
 type SystemRow = {
   id: string;
@@ -191,47 +192,48 @@ export function PprSystemsAdmin({
         isFilteredEmpty={filteredSystems.length === 0}
         filters={
           <>
-            <select
-              className="select"
-              value={filterObjectId}
-              onChange={(e) => setFilterObjectId(e.target.value)}
-              style={{ maxWidth: "200px" }}
-            >
-              <option value="">Все объекты</option>
-              {objects.map((obj) => (
-                <option key={obj.id} value={obj.id}>
-                  {obj.name}
-                </option>
-              ))}
-            </select>
+            <div style={{ maxWidth: "240px", width: "100%" }}>
+              <AssigneeCombobox
+                name="filter_object_id"
+                placeholder="Все объекты"
+                defaultValue={filterObjectId}
+                selectionHint="Выберите объект из списка"
+                options={objects.map<AssigneeOption>((obj) => ({
+                  id: obj.id,
+                  label: obj.name,
+                }))}
+                onSelectedIdChange={(id) => setFilterObjectId(id)}
+              />
+            </div>
 
-            <select
-              className="select"
-              value={filterGroupId}
-              onChange={(e) => setFilterGroupId(e.target.value)}
-              style={{ maxWidth: "200px" }}
-            >
-              <option value="">Все группы</option>
-              {systemGroups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
+            <div style={{ maxWidth: "240px", width: "100%" }}>
+              <AssigneeCombobox
+                name="filter_group_id"
+                placeholder="Все группы"
+                defaultValue={filterGroupId}
+                selectionHint="Выберите группу систем из списка"
+                options={systemGroups.map<AssigneeOption>((group) => ({
+                  id: group.id,
+                  label: group.name,
+                }))}
+                onSelectedIdChange={(id) => setFilterGroupId(id)}
+              />
+            </div>
 
-            <select
-              className="select"
-              value={filterResponsibleId}
-              onChange={(e) => setFilterResponsibleId(e.target.value)}
-              style={{ maxWidth: "200px" }}
-            >
-              <option value="">Все ответственные</option>
-              {responsibleCandidates.map((resp) => (
-                <option key={resp.id} value={resp.id}>
-                  {resp.full_name}
-                </option>
-              ))}
-            </select>
+            <div style={{ maxWidth: "240px", width: "100%" }}>
+              <AssigneeCombobox
+                name="filter_responsible_id"
+                placeholder="Все ответственные"
+                defaultValue={filterResponsibleId}
+                selectionHint="Выберите ответственного из списка"
+                options={responsibleCandidates.map<AssigneeOption>((resp) => ({
+                  id: resp.id,
+                  label: resp.full_name,
+                  subtitle: roleLabel(resp.role),
+                }))}
+                onSelectedIdChange={(id) => setFilterResponsibleId(id)}
+              />
+            </div>
 
             <select
               className="select"
@@ -304,27 +306,31 @@ export function PprSystemsAdmin({
         <form action={createPprSystemAction} onSubmit={() => setIsCreateOpen(false)} onChange={() => setIsDirty(true)} className="ppr-modal-content">
           <div className="ppr-modal-body grid">
             <PprFormGroup label="Объект">
-              <select
-                className="select"
+              <AssigneeCombobox
                 name="object_id"
+                placeholder="Выберите объект"
                 required
-                value={createObjectId}
-                onChange={(event) => setCreateObjectId(event.target.value)}
-              >
-                <option value="" disabled>Выберите объект</option>
-                {objects.map((item) => (
-                  <option key={item.id} value={item.id}>{item.name}</option>
-                ))}
-              </select>
+                defaultValue={createObjectId}
+                selectionHint="Выберите объект из списка"
+                options={objects.map<AssigneeOption>((item) => ({
+                  id: item.id,
+                  label: item.name,
+                }))}
+                onSelectedIdChange={(id) => setCreateObjectId(id)}
+              />
             </PprFormGroup>
 
             <PprFormGroup label="Группа систем">
-              <select className="select" name="system_group_id" required defaultValue="">
-                <option value="" disabled>Выберите группу систем</option>
-                {systemGroups.filter((group) => group.is_active).map((group) => (
-                  <option key={group.id} value={group.id}>{group.name}</option>
-                ))}
-              </select>
+              <AssigneeCombobox
+                name="system_group_id"
+                placeholder="Выберите группу систем"
+                required
+                selectionHint="Выберите группу систем из списка"
+                options={systemGroups.filter((group) => group.is_active).map<AssigneeOption>((group) => ({
+                  id: group.id,
+                  label: group.name,
+                }))}
+              />
             </PprFormGroup>
 
             <PprFormGroup label="Название системы">
@@ -336,19 +342,18 @@ export function PprSystemsAdmin({
             </PprFormGroup>
 
             <PprFormGroup label="Ответственный инженер">
-              <select
-                className="select"
+              <AssigneeCombobox
+                key={`create-responsible-${createObjectId || "none"}`}
                 name="responsible_user_id"
-                value={createResponsibleUserId}
-                onChange={(event) => setCreateResponsibleUserId(event.target.value)}
-              >
-                <option value="">Без ответственного</option>
-                {createResponsibleCandidates.map((candidate) => (
-                  <option key={candidate.id} value={candidate.id}>
-                    {candidate.full_name} — {roleLabel(candidate.role)}
-                  </option>
-                ))}
-              </select>
+                placeholder="Без ответственного"
+                defaultValue={createResponsibleUserId}
+                selectionHint="Выберите ответственного инженера из списка"
+                options={createResponsibleCandidates.map<AssigneeOption>((candidate) => ({
+                  id: candidate.id,
+                  label: `${candidate.full_name} — ${roleLabel(candidate.role)}`,
+                }))}
+                onSelectedIdChange={(id) => setCreateResponsibleUserId(id)}
+              />
             </PprFormGroup>
 
             <label className="row" style={{ alignItems: "center", gap: "0.5rem", marginTop: "0.5rem" }}>
@@ -369,25 +374,32 @@ export function PprSystemsAdmin({
               <input type="hidden" name="system_id" value={editingSystem.id} />
 
               <PprFormGroup label="Объект">
-                <select
-                  className="select"
+                <AssigneeCombobox
                   name="object_id"
+                  placeholder="Выберите объект"
                   required
-                  value={editObjectId}
-                  onChange={(event) => setEditObjectId(event.target.value)}
-                >
-                  {objects.map((item) => (
-                    <option key={item.id} value={item.id}>{item.name}</option>
-                  ))}
-                </select>
+                  defaultValue={editObjectId}
+                  selectionHint="Выберите объект из списка"
+                  options={objects.map<AssigneeOption>((item) => ({
+                    id: item.id,
+                    label: item.name,
+                  }))}
+                  onSelectedIdChange={(id) => setEditObjectId(id)}
+                />
               </PprFormGroup>
 
               <PprFormGroup label="Группа систем">
-                <select className="select" name="system_group_id" required defaultValue={editingSystem.system_group_id}>
-                  {systemGroups.map((group) => (
-                    <option key={group.id} value={group.id}>{group.name}</option>
-                  ))}
-                </select>
+                <AssigneeCombobox
+                  name="system_group_id"
+                  placeholder="Выберите группу систем"
+                  required
+                  defaultValue={editingSystem.system_group_id}
+                  selectionHint="Выберите группу систем из списка"
+                  options={systemGroups.map<AssigneeOption>((group) => ({
+                    id: group.id,
+                    label: group.name,
+                  }))}
+                />
               </PprFormGroup>
 
               <PprFormGroup label="Название системы">
@@ -399,19 +411,18 @@ export function PprSystemsAdmin({
               </PprFormGroup>
 
               <PprFormGroup label="Ответственный инженер">
-                <select
-                  className="select"
+                <AssigneeCombobox
+                  key={`edit-responsible-${editObjectId || "none"}`}
                   name="responsible_user_id"
-                  value={editResponsibleUserId}
-                  onChange={(event) => setEditResponsibleUserId(event.target.value)}
-                >
-                  <option value="">Без ответственного</option>
-                  {editResponsibleCandidates.map((candidate) => (
-                    <option key={candidate.id} value={candidate.id}>
-                      {candidate.full_name} — {roleLabel(candidate.role)}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Без ответственного"
+                  defaultValue={editResponsibleUserId}
+                  selectionHint="Выберите ответственного инженера из списка"
+                  options={editResponsibleCandidates.map<AssigneeOption>((candidate) => ({
+                    id: candidate.id,
+                    label: `${candidate.full_name} — ${roleLabel(candidate.role)}`,
+                  }))}
+                  onSelectedIdChange={(id) => setEditResponsibleUserId(id)}
+                />
               </PprFormGroup>
 
               <label className="row" style={{ alignItems: "center", gap: "0.5rem", marginTop: "0.5rem" }}>

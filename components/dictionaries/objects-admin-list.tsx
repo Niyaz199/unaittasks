@@ -5,6 +5,7 @@ import { deleteObjectAction, updateObjectAction } from "@/app/actions/task-actio
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
+import { AssigneeCombobox, type AssigneeOption } from "@/components/ui/assignee-combobox";
 
 type ObjectRow = {
   id: string;
@@ -106,19 +107,16 @@ export function ObjectsAdminList({
             </div>
             <div className="ctf-field">
               <label className="ctf-label" htmlFor="edit-object-engineer">Инженер объекта</label>
-              <select
-                id="edit-object-engineer"
-                className="select"
+              <AssigneeCombobox
                 name="object_engineer_id"
+                placeholder="Без инженера объекта"
                 defaultValue={editingObject.object_engineer_id ?? ""}
-              >
-                <option value="">Без инженера объекта</option>
-                {objectEngineers.map((engineer) => (
-                  <option key={engineer.id} value={engineer.id}>
-                    {engineer.full_name}
-                  </option>
-                ))}
-              </select>
+                selectionHint="Выберите инженера из списка или оставьте пустым"
+                options={objectEngineers.map<AssigneeOption>((engineer) => ({
+                  id: engineer.id,
+                  label: engineer.full_name,
+                }))}
+              />
             </div>
             <div className="row">
               <button className="btn btn-accent" type="submit">

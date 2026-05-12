@@ -9,6 +9,7 @@ import { PprModal } from "@/components/ppr/ui/ppr-modal";
 import { pprEquipmentStatusMeta } from "@/lib/ppr/presentation";
 import { PprPageShell } from "@/components/ppr/ui/ppr-page-shell";
 import { PprEquipmentTree } from "@/components/ppr/equipment/ppr-equipment-tree";
+import { AssigneeCombobox, type AssigneeOption } from "@/components/ui/assignee-combobox";
 
 const PprEquipmentForm = dynamic(
   () => import("@/components/ppr/equipment/ppr-equipment-form").then((module) => module.PprEquipmentForm),
@@ -191,47 +192,38 @@ export function PprEquipmentAdmin({
         isFilteredEmpty={filteredEquipment.length === 0}
         filters={
           <>
-            <select
-              className="select"
-              value={filterObjectId}
-              onChange={(e) => {
-                const nextObjectId = e.target.value;
-                setFilterObjectId(nextObjectId);
-                setFilterRoomId("");
-                updateSearchParams(nextObjectId);
-              }}
-              style={{
-                maxWidth: "200px",
-                ...(!filterObjectId ? {
-                  borderColor: "color-mix(in srgb, var(--accent) 60%, transparent)",
-                  boxShadow: "0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent)",
-                } : {}),
-              }}
-            >
-              <option value="">— Выберите объект —</option>
-              {objects.map((obj) => (
-                <option key={obj.id} value={obj.id}>
-                  {obj.name}
-                </option>
-              ))}
-            </select>
+            <div style={{ maxWidth: "240px", width: "100%" }}>
+              <AssigneeCombobox
+                name="filter_object_id"
+                placeholder="— Выберите объект —"
+                defaultValue={filterObjectId}
+                selectionHint="Выберите объект из списка"
+                options={objects.map<AssigneeOption>((obj) => ({
+                  id: obj.id,
+                  label: obj.name,
+                }))}
+                onSelectedIdChange={(id) => {
+                  setFilterObjectId(id);
+                  setFilterRoomId("");
+                  updateSearchParams(id);
+                }}
+              />
+            </div>
 
-            <select
-              className="select"
-              value={filterRoomId}
-              onChange={(e) => setFilterRoomId(e.target.value)}
-              disabled={!hasSelectedObject}
-              style={{ maxWidth: "200px" }}
-            >
-              <option value="">Все помещения</option>
-              {availableRooms.map((room) => (
-                <option key={room.id} value={room.id}>
-                  {room.name}
-                  {room.floor_name ? ` • ${room.floor_name}` : ""}
-                  {room.room_type_name ? ` • ${room.room_type_name}` : ""}
-                </option>
-              ))}
-            </select>
+            <div style={{ maxWidth: "240px", width: "100%", opacity: hasSelectedObject ? 1 : 0.5, pointerEvents: hasSelectedObject ? "auto" : "none" }}>
+              <AssigneeCombobox
+                key={`filter-room-${filterObjectId || "any"}`}
+                name="filter_room_id"
+                placeholder="Все помещения"
+                defaultValue={filterRoomId}
+                selectionHint="Выберите помещение из списка"
+                options={availableRooms.map<AssigneeOption>((room) => ({
+                  id: room.id,
+                  label: [room.name, room.floor_name, room.room_type_name].filter(Boolean).join(" • "),
+                }))}
+                onSelectedIdChange={(id) => setFilterRoomId(id)}
+              />
+            </div>
 
             <select
               className="select"

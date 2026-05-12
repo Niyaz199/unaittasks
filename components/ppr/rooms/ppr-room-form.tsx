@@ -5,6 +5,7 @@ import type { Route } from "next";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { PprFormGroup } from "@/components/ppr/ui/ppr-modal";
 import { useToast } from "@/components/ui/toast";
+import { AssigneeCombobox, type AssigneeOption } from "@/components/ui/assignee-combobox";
 
 type ObjectOption = { id: string; name: string };
 type FloorOption = { id: string; object_id: string; name: string; sort_order: number; is_active: boolean };
@@ -151,23 +152,20 @@ export function PprRoomForm({
         ) : null}
 
         <PprFormGroup label="Объект">
-          <select
-            className="select"
-            name="object_id"
-            required
-            value={selectedObjectId}
-            onChange={(event) => setSelectedObjectId(event.target.value)}
-            disabled={isPending}
-          >
-            <option value="" disabled>
-              Выберите объект
-            </option>
-            {objects.map((objectItem) => (
-              <option key={objectItem.id} value={objectItem.id}>
-                {objectItem.name}
-              </option>
-            ))}
-          </select>
+          <div style={{ opacity: isPending ? 0.6 : 1, pointerEvents: isPending ? "none" : "auto" }}>
+            <AssigneeCombobox
+              name="object_id"
+              placeholder="Выберите объект"
+              required
+              defaultValue={selectedObjectId}
+              selectionHint="Выберите объект из списка"
+              options={objects.map<AssigneeOption>((objectItem) => ({
+                id: objectItem.id,
+                label: objectItem.name,
+              }))}
+              onSelectedIdChange={(id) => setSelectedObjectId(id)}
+            />
+          </div>
         </PprFormGroup>
 
         <PprFormGroup label="Название помещения">
@@ -191,24 +189,21 @@ export function PprRoomForm({
                 </Link>
               </div>
             ) : (
-              <select
-                className="select"
-                name="floor_id"
-                required
-                value={selectedFloorId}
-                onChange={(event) => setSelectedFloorId(event.target.value)}
-                disabled={!selectedObjectId || isPending}
-              >
-                <option value="" disabled>
-                  {selectedObjectId ? "Выберите этаж" : "Сначала выберите объект"}
-                </option>
-                {availableFloors.map((floor) => (
-                  <option key={floor.id} value={floor.id}>
-                    {floor.name}
-                    {floor.is_active ? "" : " (неактивен)"}
-                  </option>
-                ))}
-              </select>
+              <div style={{ opacity: !selectedObjectId || isPending ? 0.6 : 1, pointerEvents: !selectedObjectId || isPending ? "none" : "auto" }}>
+                <AssigneeCombobox
+                  key={`floor-${selectedObjectId || "any"}`}
+                  name="floor_id"
+                  placeholder={selectedObjectId ? "Выберите этаж" : "Сначала выберите объект"}
+                  required
+                  defaultValue={selectedFloorId}
+                  selectionHint="Выберите этаж из списка"
+                  options={availableFloors.map<AssigneeOption>((floor) => ({
+                    id: floor.id,
+                    label: floor.name + (floor.is_active ? "" : " (неактивен)"),
+                  }))}
+                  onSelectedIdChange={(id) => setSelectedFloorId(id)}
+                />
+              </div>
             )}
           </PprFormGroup>
 
@@ -221,24 +216,20 @@ export function PprRoomForm({
                 </Link>
               </div>
             ) : (
-              <select
-                className="select"
-                name="room_type_id"
-                required
-                value={selectedRoomTypeId}
-                onChange={(event) => setSelectedRoomTypeId(event.target.value)}
-                disabled={isPending}
-              >
-                <option value="" disabled>
-                  Выберите тип помещения
-                </option>
-                {availableRoomTypes.map((roomType) => (
-                  <option key={roomType.id} value={roomType.id}>
-                    {roomType.name}
-                    {roomType.is_active ? "" : " (неактивен)"}
-                  </option>
-                ))}
-              </select>
+              <div style={{ opacity: isPending ? 0.6 : 1, pointerEvents: isPending ? "none" : "auto" }}>
+                <AssigneeCombobox
+                  name="room_type_id"
+                  placeholder="Выберите тип помещения"
+                  required
+                  defaultValue={selectedRoomTypeId}
+                  selectionHint="Выберите тип помещения из списка"
+                  options={availableRoomTypes.map<AssigneeOption>((roomType) => ({
+                    id: roomType.id,
+                    label: roomType.name + (roomType.is_active ? "" : " (неактивен)"),
+                  }))}
+                  onSelectedIdChange={(id) => setSelectedRoomTypeId(id)}
+                />
+              </div>
             )}
           </PprFormGroup>
         </div>

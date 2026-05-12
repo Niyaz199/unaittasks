@@ -9,6 +9,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { PprModal } from "@/components/ppr/ui/ppr-modal";
 import { PprPageShell } from "@/components/ppr/ui/ppr-page-shell";
 import { StatusBadge } from "@/components/ppr/ui/status-badge";
+import { AssigneeCombobox, type AssigneeOption } from "@/components/ui/assignee-combobox";
 
 const PprRoomForm = dynamic(
   () => import("@/components/ppr/rooms/ppr-room-form").then((module) => module.PprRoomForm),
@@ -212,58 +213,52 @@ export function PprRoomsAdmin({
         isFilteredEmpty={filteredRooms.length === 0}
         filters={
           <>
-            <select
-              className="select"
-              value={filterObjectId}
-              onChange={(e) => {
-                const nextObjectId = e.target.value;
-                setFilterObjectId(nextObjectId);
-                setFilterFloorId("");
-                updateSearchParams(nextObjectId);
-              }}
-              style={{
-                maxWidth: "200px",
-                ...(!filterObjectId ? {
-                  borderColor: "color-mix(in srgb, var(--accent) 60%, transparent)",
-                  boxShadow: "0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent)",
-                } : {}),
-              }}
-            >
-              <option value="">— Выберите объект —</option>
-              {objects.map((obj) => (
-                <option key={obj.id} value={obj.id}>
-                  {obj.name}
-                </option>
-              ))}
-            </select>
+            <div style={{ maxWidth: "240px", width: "100%" }}>
+              <AssigneeCombobox
+                name="filter_object_id"
+                placeholder="— Выберите объект —"
+                defaultValue={filterObjectId}
+                selectionHint="Выберите объект из списка"
+                options={objects.map<AssigneeOption>((obj) => ({
+                  id: obj.id,
+                  label: obj.name,
+                }))}
+                onSelectedIdChange={(id) => {
+                  setFilterObjectId(id);
+                  setFilterFloorId("");
+                  updateSearchParams(id);
+                }}
+              />
+            </div>
 
-            <select
-              className="select"
-              value={filterFloorId}
-              onChange={(e) => setFilterFloorId(e.target.value)}
-              style={{ maxWidth: "180px" }}
-            >
-              <option value="">Все этажи</option>
-              {availableFloors.map((floor) => (
-                <option key={floor.id} value={floor.id}>
-                  {floor.name}
-                </option>
-              ))}
-            </select>
+            <div style={{ maxWidth: "220px", width: "100%" }}>
+              <AssigneeCombobox
+                key={`filter-floor-${filterObjectId || "any"}`}
+                name="filter_floor_id"
+                placeholder="Все этажи"
+                defaultValue={filterFloorId}
+                selectionHint="Выберите этаж из списка"
+                options={availableFloors.map<AssigneeOption>((floor) => ({
+                  id: floor.id,
+                  label: floor.name,
+                }))}
+                onSelectedIdChange={(id) => setFilterFloorId(id)}
+              />
+            </div>
 
-            <select
-              className="select"
-              value={filterRoomTypeId}
-              onChange={(e) => setFilterRoomTypeId(e.target.value)}
-              style={{ maxWidth: "220px" }}
-            >
-              <option value="">Все типы помещений</option>
-              {availableRoomTypes.map((roomType) => (
-                <option key={roomType.id} value={roomType.id}>
-                  {roomType.name}
-                </option>
-              ))}
-            </select>
+            <div style={{ maxWidth: "260px", width: "100%" }}>
+              <AssigneeCombobox
+                name="filter_room_type_id"
+                placeholder="Все типы помещений"
+                defaultValue={filterRoomTypeId}
+                selectionHint="Выберите тип помещения из списка"
+                options={availableRoomTypes.map<AssigneeOption>((roomType) => ({
+                  id: roomType.id,
+                  label: roomType.name,
+                }))}
+                onSelectedIdChange={(id) => setFilterRoomTypeId(id)}
+              />
+            </div>
 
             <select
               className="select"

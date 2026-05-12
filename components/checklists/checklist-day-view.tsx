@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
 import { PhotoPicker, type PickedFile } from "@/components/tasks/photo-picker";
 import { useToast } from "@/components/ui/toast";
+import { AssigneeCombobox, type AssigneeOption } from "@/components/ui/assignee-combobox";
 import { formatOperationalDateLabel } from "@/lib/daily-checklists/scheduler";
 import type {
   DailyChecklistDayData,
@@ -123,26 +124,34 @@ function ChecklistTaskModal({
         <div className="grid" style={{ gap: "1rem", gridTemplateColumns: "1fr 1fr" }}>
           <label className="grid" style={{ gap: "0.35rem" }}>
             <span className="text-soft">Объект</span>
-            <select className="select" value={objectId} onChange={(event) => setObjectId(event.target.value)}>
-              <option value="">Выберите объект</option>
-              {objects.map((object) => (
-                <option key={object.id} value={object.id}>
-                  {object.name}
-                </option>
-              ))}
-            </select>
+            <AssigneeCombobox
+              name="object_id"
+              placeholder="Выберите объект"
+              defaultValue={objectId}
+              selectionHint="Выберите объект из списка"
+              options={objects.map<AssigneeOption>((object) => ({
+                id: object.id,
+                label: object.name,
+              }))}
+              onSelectedIdChange={(id) => setObjectId(id)}
+            />
           </label>
 
           <label className="grid" style={{ gap: "0.35rem" }}>
             <span className="text-soft">Исполнитель</span>
-            <select className="select" value={assigneeId} onChange={(event) => setAssigneeId(event.target.value)}>
-              <option value="">Выберите исполнителя</option>
-              {filteredAssignees.map((candidate) => (
-                <option key={candidate.id} value={candidate.id}>
-                  {candidate.full_name}
-                </option>
-              ))}
-            </select>
+            <AssigneeCombobox
+              key={`assignee-${objectId || "any"}`}
+              name="assignee_id"
+              placeholder="Выберите исполнителя"
+              defaultValue={assigneeId}
+              selectionHint="Выберите исполнителя из списка"
+              options={filteredAssignees.map<AssigneeOption>((candidate) => ({
+                id: candidate.id,
+                label: candidate.full_name,
+                subtitle: candidate.email ?? null,
+              }))}
+              onSelectedIdChange={(id) => setAssigneeId(id)}
+            />
           </label>
         </div>
 

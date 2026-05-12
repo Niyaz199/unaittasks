@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { PprFormGroup, PprFormSection } from "@/components/ppr/ui/ppr-modal";
+import { AssigneeCombobox, type AssigneeOption } from "@/components/ui/assignee-combobox";
 
 type ObjectOption = { id: string; name: string };
 type SystemOption = { id: string; object_id: string; name: string };
@@ -103,33 +104,34 @@ export function PprTemplateEditor({
         <PprFormSection title="Привязка">
           <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
             <PprFormGroup label="Объект">
-              <select
-                className="select"
+              <AssigneeCombobox
                 name="object_id"
+                placeholder="Выберите объект"
                 required
-                value={selectedObjectId}
-                onChange={(event) => setSelectedObjectId(event.target.value)}
-              >
-                <option value="" disabled>Выберите объект</option>
-                {objects.map((item) => (
-                  <option key={item.id} value={item.id}>{item.name}</option>
-                ))}
-              </select>
+                defaultValue={selectedObjectId}
+                selectionHint="Выберите объект из списка"
+                options={objects.map<AssigneeOption>((item) => ({
+                  id: item.id,
+                  label: item.name,
+                }))}
+                onSelectedIdChange={(id) => setSelectedObjectId(id)}
+              />
             </PprFormGroup>
 
             <PprFormGroup label="Система">
-              <select
-                className="select"
+              <AssigneeCombobox
+                key={`system-${selectedObjectId || "any"}`}
                 name="system_id"
+                placeholder="Выберите систему"
                 required
-                value={selectedSystemId}
-                onChange={(event) => setSelectedSystemId(event.target.value)}
-              >
-                <option value="" disabled>Выберите систему</option>
-                {filteredSystems.map((item) => (
-                  <option key={item.id} value={item.id}>{item.name}</option>
-                ))}
-              </select>
+                defaultValue={selectedSystemId}
+                selectionHint="Выберите систему из списка"
+                options={filteredSystems.map<AssigneeOption>((item) => ({
+                  id: item.id,
+                  label: item.name,
+                }))}
+                onSelectedIdChange={(id) => setSelectedSystemId(id)}
+              />
             </PprFormGroup>
           </div>
         </PprFormSection>

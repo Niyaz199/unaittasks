@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { clonePprEquipmentAction } from "@/app/actions/ppr-directory-actions";
+import { AssigneeCombobox, type AssigneeOption } from "@/components/ui/assignee-combobox";
 
 type RoomOption = {
   id: string;
@@ -160,18 +161,20 @@ export function PprEquipmentCloneDialog({
             <span className="text-soft" style={{ fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>
               Помещение
             </span>
-            <select
-              className="select"
-              value={roomId}
-              onChange={(e) => setRoomId(e.target.value)}
-              disabled={pending}
-            >
-              {rooms.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.floor_label ? `${r.floor_label} • ${r.name}` : r.name}
-                </option>
-              ))}
-            </select>
+            <div style={{ opacity: pending ? 0.6 : 1, pointerEvents: pending ? "none" : "auto" }}>
+              <AssigneeCombobox
+                name="room_id"
+                placeholder="Выберите помещение"
+                required
+                defaultValue={roomId}
+                selectionHint="Выберите помещение из списка"
+                options={rooms.map<AssigneeOption>((r) => ({
+                  id: r.id,
+                  label: [r.floor_label, r.name].filter(Boolean).join(" • "),
+                }))}
+                onSelectedIdChange={(id) => setRoomId(id)}
+              />
+            </div>
           </label>
 
           <div className="row" style={{ gap: "0.75rem", flexWrap: "wrap" }}>

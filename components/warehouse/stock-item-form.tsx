@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/toast";
 import { procurementMethodMeta, stockItemKindMeta } from "@/lib/warehouse/presentation";
 import { MultiSelectCombobox } from "@/components/ui/multi-select-combobox";
 import { EmptyStateAction } from "@/components/ui/empty-state-action";
+import { AssigneeCombobox, type AssigneeOption } from "@/components/ui/assignee-combobox";
 
 type ObjectOption = { id: string; name: string };
 type LocationOption = { id: string; object_id: string; name: string; is_active?: boolean };
@@ -218,18 +219,18 @@ export function StockItemForm({
                 </div>
               </>
             ) : (
-              <select
-                className="select"
+              <AssigneeCombobox
                 name="object_id"
+                placeholder="Выберите объект"
                 required
-                value={selectedObjectId}
-                onChange={(event) => setSelectedObjectId(event.target.value)}
-              >
-                <option value="" disabled>Выберите объект</option>
-                {objects.map((item) => (
-                  <option key={item.id} value={item.id}>{item.name}</option>
-                ))}
-              </select>
+                defaultValue={selectedObjectId}
+                selectionHint="Выберите объект из списка"
+                options={objects.map<AssigneeOption>((item) => ({
+                  id: item.id,
+                  label: item.name,
+                }))}
+                onSelectedIdChange={(id) => setSelectedObjectId(id)}
+              />
             )}
           </PprFormGroup>
 
@@ -397,23 +398,21 @@ export function StockItemForm({
                   : "Выберите полку, шкаф или зону, где хранится товар"
               }
             >
-              <select
-                className="select"
+              <AssigneeCombobox
+                key={`location-${selectedObjectId || "any"}`}
                 name="storage_location_id"
+                placeholder={selectedObjectId ? "Выберите место хранения" : "Сначала выберите объект"}
                 required
-                value={selectedLocationId}
-                onChange={(event) => setSelectedLocationId(event.target.value)}
-                disabled={!filteredLocations.length}
-              >
-                <option value="" disabled>
-                  {selectedObjectId ? "Выберите место хранения" : "Сначала выберите объект"}
-                </option>
-                {filteredLocations.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}{item.is_active === false ? " (неактивно)" : ""}
-                  </option>
-                ))}
-              </select>
+                defaultValue={selectedLocationId}
+                selectionHint="Выберите ячейку хранения из списка"
+                options={filteredLocations.map<AssigneeOption>((item) => ({
+                  id: item.id,
+                  label: [item.name, item.is_active === false ? "(неактивно)" : null]
+                    .filter(Boolean)
+                    .join(" • "),
+                }))}
+                onSelectedIdChange={(id) => setSelectedLocationId(id)}
+              />
             </PprFormGroup>
 
             <div className="ctf-assign-grid">
@@ -509,19 +508,19 @@ export function StockItemForm({
                 return (
                   <div key={index} className="row" style={{ gap: "0.6rem", alignItems: "flex-start" }}>
                     <div style={{ flex: "1 1 0", minWidth: 0 }}>
-                      <select
-                        className="select"
-                        value={link.template_id}
-                        onChange={(event) => updatePprLink(index, "template_id", event.target.value)}
+                      <AssigneeCombobox
+                        key={`ppr-link-${index}-${optionsForRow.length}`}
+                        name={`__ppr_template_${index}`}
+                        placeholder={availablePprTemplates.length > 0 ? "Выберите шаблон ППР" : "Нет доступных шаблонов"}
                         required={isPprItem}
-                      >
-                        <option value="" disabled>
-                          {availablePprTemplates.length > 0 ? "Выберите шаблон ППР" : "Нет доступных шаблонов"}
-                        </option>
-                        {optionsForRow.map((t) => (
-                          <option key={t.id} value={t.id}>{t.name}</option>
-                        ))}
-                      </select>
+                        defaultValue={link.template_id}
+                        selectionHint="Выберите шаблон ППР из списка"
+                        options={optionsForRow.map<AssigneeOption>((t) => ({
+                          id: t.id,
+                          label: t.name,
+                        }))}
+                        onSelectedIdChange={(id) => updatePprLink(index, "template_id", id)}
+                      />
                     </div>
                     <div style={{ width: "110px", flexShrink: 0 }}>
                       <input

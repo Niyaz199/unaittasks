@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { PprFormGroup, PprFormSection } from "@/components/ppr/ui/ppr-modal";
 import { useToast } from "@/components/ui/toast";
+import { AssigneeCombobox, type AssigneeOption } from "@/components/ui/assignee-combobox";
 
 type ObjectOption = { id: string; name: string };
 type StockItemOption = { id: string; object_id: string; name: string; unit: string; is_active: boolean };
@@ -76,39 +77,38 @@ export function PurchaseRequestForm({
       <div className="ppr-modal-body grid">
         <PprFormSection title="Новая заявка на закупку" desc="Любой сотрудник может оставить потребность инженеру объекта">
           <PprFormGroup label="Объект">
-            <select
-              className="select"
+            <AssigneeCombobox
               name="object_id"
+              placeholder="Выберите объект"
               required
-              value={selectedObjectId}
-              onChange={(event) => setSelectedObjectId(event.target.value)}
-            >
-              <option value="" disabled>
-                Выберите объект
-              </option>
-              {objects.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
+              defaultValue={selectedObjectId}
+              selectionHint="Выберите объект из списка"
+              options={objects.map<AssigneeOption>((item) => ({
+                id: item.id,
+                label: item.name,
+              }))}
+              onSelectedIdChange={(id) => {
+                setSelectedObjectId(id);
+                if (selectedStockItemId && !filteredItems.some((item) => item.id === selectedStockItemId)) {
+                  setSelectedStockItemId("");
+                }
+              }}
+            />
           </PprFormGroup>
 
           <PprFormGroup label="ТМЦ из каталога" description="необязательно">
-            <select
-              className="select"
+            <AssigneeCombobox
+              key={`stock-${selectedObjectId || "any"}`}
               name="stock_item_id"
-              value={selectedStockItemId}
-              onChange={(event) => setSelectedStockItemId(event.target.value)}
-            >
-              <option value="">Без привязки к карточке ТМЦ</option>
-              {filteredItems.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                  {item.is_active ? "" : " (неактивна)"}
-                </option>
-              ))}
-            </select>
+              placeholder="Без привязки к карточке ТМЦ"
+              defaultValue={selectedStockItemId}
+              selectionHint="Выберите ТМЦ из списка"
+              options={filteredItems.map<AssigneeOption>((item) => ({
+                id: item.id,
+                label: [item.name, item.is_active ? null : "(неактивна)"].filter(Boolean).join(" • "),
+              }))}
+              onSelectedIdChange={(id) => setSelectedStockItemId(id)}
+            />
           </PprFormGroup>
 
           <div className="grid" style={{ gridTemplateColumns: "1.6fr 0.6fr 0.8fr", gap: "1rem" }}>

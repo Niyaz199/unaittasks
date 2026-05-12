@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PprFormGroup, PprFormSection } from "@/components/ppr/ui/ppr-modal";
 import { useToast } from "@/components/ui/toast";
+import { AssigneeCombobox, type AssigneeOption } from "@/components/ui/assignee-combobox";
 
 type ObjectOption = { id: string; name: string };
 type SystemOption = { id: string; object_id: string; name: string; is_active?: boolean };
@@ -91,65 +92,55 @@ export function StockLocationForm({
 
         <PprFormSection title="Место хранения" desc="Складская зона, шкаф, стеллаж или кладовая внутри объекта">
           <PprFormGroup label="Объект">
-            <select
-              className="select"
+            <AssigneeCombobox
               name="object_id"
+              placeholder="Выберите объект"
               required
-              value={selectedObjectId}
-              onChange={(event) => setSelectedObjectId(event.target.value)}
-            >
-              <option value="" disabled>
-                Выберите объект
-              </option>
-              {objects.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
+              defaultValue={selectedObjectId}
+              selectionHint="Выберите объект из списка"
+              options={objects.map<AssigneeOption>((item) => ({
+                id: item.id,
+                label: item.name,
+              }))}
+              onSelectedIdChange={(id) => setSelectedObjectId(id)}
+            />
           </PprFormGroup>
 
           <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
             <PprFormGroup label="Система">
-              <select
-                className="select"
+              <AssigneeCombobox
+                key={`system-${selectedObjectId || "any"}`}
                 name="system_id"
+                placeholder={selectedObjectId ? "Выберите систему" : "Сначала выберите объект"}
                 required
-                value={selectedSystemId}
-                onChange={(event) => setSelectedSystemId(event.target.value)}
-                disabled={!selectedObjectId || !filteredSystems.length}
-              >
-                <option value="" disabled>
-                  {selectedObjectId ? "Выберите систему" : "Сначала выберите объект"}
-                </option>
-                {filteredSystems.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                    {item.is_active === false ? " (неактивна)" : ""}
-                  </option>
-                ))}
-              </select>
+                defaultValue={selectedSystemId}
+                selectionHint="Выберите систему из списка"
+                options={filteredSystems.map<AssigneeOption>((item) => ({
+                  id: item.id,
+                  label: [item.name, item.is_active === false ? "(неактивна)" : null]
+                    .filter(Boolean)
+                    .join(" • "),
+                }))}
+                onSelectedIdChange={(id) => setSelectedSystemId(id)}
+              />
             </PprFormGroup>
 
             <PprFormGroup label="Помещение">
-              <select
-                className="select"
+              <AssigneeCombobox
+                key={`room-${selectedObjectId || "any"}`}
                 name="room_id"
+                placeholder={selectedObjectId ? "Выберите помещение" : "Сначала выберите объект"}
                 required
-                value={selectedRoomId}
-                onChange={(event) => setSelectedRoomId(event.target.value)}
-                disabled={!selectedObjectId || !filteredRooms.length}
-              >
-                <option value="" disabled>
-                  {selectedObjectId ? "Выберите помещение" : "Сначала выберите объект"}
-                </option>
-                {filteredRooms.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                    {item.is_active === false ? " (неактивно)" : ""}
-                  </option>
-                ))}
-              </select>
+                defaultValue={selectedRoomId}
+                selectionHint="Выберите помещение из списка"
+                options={filteredRooms.map<AssigneeOption>((item) => ({
+                  id: item.id,
+                  label: [item.name, item.is_active === false ? "(неактивно)" : null]
+                    .filter(Boolean)
+                    .join(" • "),
+                }))}
+                onSelectedIdChange={(id) => setSelectedRoomId(id)}
+              />
             </PprFormGroup>
           </div>
 

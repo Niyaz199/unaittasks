@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Route } from "next";
 import type { CalendarObjectOption, CalendarSystemGroupOption, CalendarSystemOption } from "./types";
+import { AssigneeCombobox, type AssigneeOption } from "@/components/ui/assignee-combobox";
 
 type DrawerProps = {
   objects: CalendarObjectOption[];
@@ -70,28 +71,40 @@ export function PprFiltersDrawer({ objects, systemGroups, systems, initial, onCl
           <input className="input" type="number" min={2024} max={2100} name="year" defaultValue={initial.year} />
 
           <label className="tl-filter-label">Объект</label>
-          <select className="select" name="object" defaultValue={initial.objectId ?? ""}>
-            <option value="">Все объекты</option>
-            {objects.map((obj) => (
-              <option key={obj.id} value={obj.id}>{obj.name}</option>
-            ))}
-          </select>
+          <AssigneeCombobox
+            name="object"
+            placeholder="Все объекты"
+            defaultValue={initial.objectId ?? ""}
+            selectionHint="Выберите объект из списка"
+            options={objects.map<AssigneeOption>((obj) => ({
+              id: obj.id,
+              label: obj.name,
+            }))}
+          />
 
           <label className="tl-filter-label">Группа систем</label>
-          <select className="select" name="group" defaultValue={initial.groupId ?? ""}>
-            <option value="">Все группы</option>
-            {systemGroups.map((group) => (
-              <option key={group.id} value={group.id}>{group.name}</option>
-            ))}
-          </select>
+          <AssigneeCombobox
+            name="group"
+            placeholder="Все группы"
+            defaultValue={initial.groupId ?? ""}
+            selectionHint="Выберите группу систем из списка"
+            options={systemGroups.map<AssigneeOption>((group) => ({
+              id: group.id,
+              label: group.name,
+            }))}
+          />
 
           <label className="tl-filter-label">Система</label>
-          <select className="select" name="system" defaultValue={initial.systemId ?? ""}>
-            <option value="">Все системы</option>
-            {systems.map((system) => (
-              <option key={system.id} value={system.id}>{system.name}</option>
-            ))}
-          </select>
+          <AssigneeCombobox
+            name="system"
+            placeholder="Все системы"
+            defaultValue={initial.systemId ?? ""}
+            selectionHint="Выберите систему из списка"
+            options={systems.map<AssigneeOption>((system) => ({
+              id: system.id,
+              label: system.name,
+            }))}
+          />
 
           <div className="row filters-actions" style={{ marginTop: "1rem" }}>
             <button className="btn btn-accent" type="submit">Применить</button>

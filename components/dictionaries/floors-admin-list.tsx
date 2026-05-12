@@ -8,6 +8,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { PprModal, PprFormGroup } from "@/components/ppr/ui/ppr-modal";
 import { PprPageShell } from "@/components/ppr/ui/ppr-page-shell";
 import { StatusBadge } from "@/components/ppr/ui/status-badge";
+import { AssigneeCombobox, type AssigneeOption } from "@/components/ui/assignee-combobox";
 
 type ObjectOption = { id: string; name: string };
 type FloorRow = {
@@ -225,16 +226,16 @@ export function FloorsAdminList({
           >
             <div className="ppr-modal-body grid">
               <PprFormGroup label="Объект">
-                <select className="select" name="object_id" required defaultValue="">
-                  <option value="" disabled>
-                    Выберите объект
-                  </option>
-                  {objects.map((objectItem) => (
-                    <option key={objectItem.id} value={objectItem.id}>
-                      {objectItem.name}
-                    </option>
-                  ))}
-                </select>
+                <AssigneeCombobox
+                  name="object_id"
+                  placeholder="Выберите объект"
+                  required
+                  selectionHint="Выберите объект из списка"
+                  options={objects.map<AssigneeOption>((objectItem) => ({
+                    id: objectItem.id,
+                    label: objectItem.name,
+                  }))}
+                />
               </PprFormGroup>
               <PprFormGroup label="Название этажа">
                 <input className="input" name="name" placeholder="Например: 1, -1, Кровля" required />
@@ -279,13 +280,17 @@ export function FloorsAdminList({
               <div className="ppr-modal-body grid">
                 <input type="hidden" name="floor_id" value={editingFloor.id} />
                 <PprFormGroup label="Объект">
-                  <select className="select" name="object_id" required defaultValue={editingFloor.object_id}>
-                    {objects.map((objectItem) => (
-                      <option key={objectItem.id} value={objectItem.id}>
-                        {objectItem.name}
-                      </option>
-                    ))}
-                  </select>
+                  <AssigneeCombobox
+                    name="object_id"
+                    placeholder="Выберите объект"
+                    required
+                    defaultValue={editingFloor.object_id}
+                    selectionHint="Выберите объект из списка"
+                    options={objects.map<AssigneeOption>((objectItem) => ({
+                      id: objectItem.id,
+                      label: objectItem.name,
+                    }))}
+                  />
                 </PprFormGroup>
                 <PprFormGroup label="Название этажа">
                   <input className="input" name="name" defaultValue={editingFloor.name} required />

@@ -5,6 +5,7 @@ import { PprTaskList } from "@/components/ppr/tasks/ppr-task-list";
 import { PprPageShell } from "@/components/ppr/ui/ppr-page-shell";
 import { pprTaskStatusMeta } from "@/lib/ppr/presentation";
 import type { PprTaskSummaryRow } from "@/lib/ppr/queries";
+import { AssigneeCombobox, type AssigneeOption } from "@/components/ui/assignee-combobox";
 
 export function PprTasksAdmin({
   tasks,
@@ -104,38 +105,39 @@ export function PprTasksAdmin({
       filters={
         <>
           {objects.length > 1 && (
-            <select
-              className="select"
-              value={filterObjectId}
-              onChange={(e) => {
-                setFilterObjectId(e.target.value);
-                setFilterSystemId("");
-              }}
-              style={{ maxWidth: "200px" }}
-            >
-              <option value="">Все объекты</option>
-              {objects.map((obj) => (
-                <option key={obj.id} value={obj.id}>
-                  {obj.name}
-                </option>
-              ))}
-            </select>
+            <div style={{ maxWidth: "240px", width: "100%" }}>
+              <AssigneeCombobox
+                name="filter_object_id"
+                placeholder="Все объекты"
+                defaultValue={filterObjectId}
+                selectionHint="Выберите объект из списка"
+                options={objects.map<AssigneeOption>((obj) => ({
+                  id: obj.id,
+                  label: obj.name,
+                }))}
+                onSelectedIdChange={(id) => {
+                  setFilterObjectId(id);
+                  setFilterSystemId("");
+                }}
+              />
+            </div>
           )}
 
           {systems.length > 1 && (
-            <select
-              className="select"
-              value={filterSystemId}
-              onChange={(e) => setFilterSystemId(e.target.value)}
-              style={{ maxWidth: "200px" }}
-            >
-              <option value="">Все системы</option>
-              {systems.map((sys) => (
-                <option key={sys.id} value={sys.id}>
-                  {sys.name}
-                </option>
-              ))}
-            </select>
+            <div style={{ maxWidth: "240px", width: "100%" }}>
+              <AssigneeCombobox
+                key={`filter-system-${filterObjectId || "any"}`}
+                name="filter_system_id"
+                placeholder="Все системы"
+                defaultValue={filterSystemId}
+                selectionHint="Выберите систему из списка"
+                options={systems.map<AssigneeOption>((sys) => ({
+                  id: sys.id,
+                  label: sys.name,
+                }))}
+                onSelectedIdChange={(id) => setFilterSystemId(id)}
+              />
+            </div>
           )}
 
           {statuses.length > 1 && (

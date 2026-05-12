@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { PprTaskAssigneeCandidateRow } from "@/lib/ppr/queries";
 import { pausePprTaskAction } from "@/app/actions/ppr-task-actions";
+import { AssigneeCombobox, type AssigneeOption } from "@/components/ui/assignee-combobox";
 
 type PurchaseRequestOption = {
   id: string;
@@ -99,14 +100,19 @@ export function PprTaskLifecycleControls({
             <span className="text-soft" style={{ fontWeight: 400, fontSize: "0.82rem" }}>▾</span>
           </summary>
           <div className="row" style={{ gap: "0.5rem", flexWrap: "wrap", padding: "0 0.7rem 0.7rem" }}>
-            <select className="select" value={assigneeId} onChange={(event) => setAssigneeId(event.target.value)} style={{ flex: "1 1 220px" }}>
-              <option value="">Без исполнителя</option>
-              {assigneeCandidates.map((candidate) => (
-                <option key={candidate.id} value={candidate.id}>
-                  {candidate.full_name} ({roleLabel(candidate.role)})
-                </option>
-              ))}
-            </select>
+            <div style={{ flex: "1 1 220px" }}>
+              <AssigneeCombobox
+                name="assignee_id"
+                placeholder="Без исполнителя"
+                defaultValue={assigneeId}
+                selectionHint="Выберите исполнителя из списка"
+                options={assigneeCandidates.map<AssigneeOption>((candidate) => ({
+                  id: candidate.id,
+                  label: `${candidate.full_name} (${roleLabel(candidate.role)})`,
+                }))}
+                onSelectedIdChange={(id) => setAssigneeId(id)}
+              />
+            </div>
             <button
               className="btn btn-accent"
               type="button"
@@ -201,23 +207,23 @@ export function PprTaskLifecycleControls({
                 <span className="text-soft" style={{ fontSize: "0.82rem" }}>
                   Связать с заявкой на закупку (необязательно)
                 </span>
-                <select
-                  className="select"
-                  value={pausePurchaseRequestId}
-                  onChange={(event) => setPausePurchaseRequestId(event.target.value)}
-                >
-                  <option value="">Не связывать</option>
-                  {pauseLinkableRequests.map((pr) => {
+                <AssigneeCombobox
+                  name="pause_purchase_request_id"
+                  placeholder="Не связывать"
+                  defaultValue={pausePurchaseRequestId}
+                  selectionHint="Выберите заявку на закупку из списка"
+                  options={pauseLinkableRequests.map<AssigneeOption>((pr) => {
                     const label = pr.description
                       ? pr.description.slice(0, 60)
                       : `Заявка от ${new Date(pr.created_at).toLocaleDateString("ru-RU")}`;
-                    return (
-                      <option key={pr.id} value={pr.id}>
-                        {label} — {pr.status === "fulfilled" ? "выполнена" : pr.status === "cancelled" ? "отменена" : pr.status === "in_progress" ? "в работе" : "новая"}
-                      </option>
-                    );
+                    const statusLabel = pr.status === "fulfilled" ? "выполнена" : pr.status === "cancelled" ? "отменена" : pr.status === "in_progress" ? "в работе" : "новая";
+                    return {
+                      id: pr.id,
+                      label: `${label} — ${statusLabel}`,
+                    };
                   })}
-                </select>
+                  onSelectedIdChange={(id) => setPausePurchaseRequestId(id)}
+                />
               </label>
             ) : null}
             <div className="row">

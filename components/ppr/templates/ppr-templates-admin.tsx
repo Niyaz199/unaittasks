@@ -9,6 +9,7 @@ import { PprModal } from "@/components/ppr/ui/ppr-modal";
 import { Badge } from "@/components/ui/badge";
 import { PprTemplateEditor } from "@/components/ppr/templates/ppr-template-editor";
 import { PprPageShell } from "@/components/ppr/ui/ppr-page-shell";
+import { AssigneeCombobox, type AssigneeOption } from "@/components/ui/assignee-combobox";
 
 type TemplateRow = {
   id: string;
@@ -121,38 +122,39 @@ export function PprTemplatesAdmin({
         isFilteredEmpty={filteredTemplates.length === 0}
         filters={
           <>
-            <select
-              className="select"
-              value={filterObjectId}
-              onChange={(e) => {
-                setFilterObjectId(e.target.value);
-                setFilterSystemId("");
-              }}
-              style={{ maxWidth: "200px" }}
-            >
-              <option value="">Все объекты</option>
-              {objects.map((obj) => (
-                <option key={obj.id} value={obj.id}>
-                  {obj.name}
-                </option>
-              ))}
-            </select>
+            <div style={{ maxWidth: "240px", width: "100%" }}>
+              <AssigneeCombobox
+                name="filter_object_id"
+                placeholder="Все объекты"
+                defaultValue={filterObjectId}
+                selectionHint="Выберите объект из списка"
+                options={objects.map<AssigneeOption>((obj) => ({
+                  id: obj.id,
+                  label: obj.name,
+                }))}
+                onSelectedIdChange={(id) => {
+                  setFilterObjectId(id);
+                  setFilterSystemId("");
+                }}
+              />
+            </div>
 
-            <select
-              className="select"
-              value={filterSystemId}
-              onChange={(e) => setFilterSystemId(e.target.value)}
-              style={{ maxWidth: "200px" }}
-            >
-              <option value="">Все системы</option>
-              {systems
-                .filter((sys) => !filterObjectId || sys.object_id === filterObjectId)
-                .map((sys) => (
-                  <option key={sys.id} value={sys.id}>
-                    {sys.name}
-                  </option>
-                ))}
-            </select>
+            <div style={{ maxWidth: "240px", width: "100%" }}>
+              <AssigneeCombobox
+                key={`filter-system-${filterObjectId || "any"}`}
+                name="filter_system_id"
+                placeholder="Все системы"
+                defaultValue={filterSystemId}
+                selectionHint="Выберите систему из списка"
+                options={systems
+                  .filter((sys) => !filterObjectId || sys.object_id === filterObjectId)
+                  .map<AssigneeOption>((sys) => ({
+                    id: sys.id,
+                    label: sys.name,
+                  }))}
+                onSelectedIdChange={(id) => setFilterSystemId(id)}
+              />
+            </div>
 
             <select
               className="select"

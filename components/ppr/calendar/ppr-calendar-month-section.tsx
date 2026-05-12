@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { pprMonthPlanItemStatusMeta, pprTaskStatusMeta } from "@/lib/ppr/presentation";
+import { AssigneeCombobox, type AssigneeOption } from "@/components/ui/assignee-combobox";
 import {
   buildDaySummaries,
   buildEquipmentMonthRows,
@@ -143,16 +144,17 @@ function MonthlySecondaryTools({
         <form action={generatePprMonthPlanAction} className="row" style={{ gap: "0.75rem", flexWrap: "wrap", alignItems: "end" }}>
           <label className="grid" style={{ gap: "0.3rem", minWidth: "280px" }}>
             <span className="text-soft">Система для генерации</span>
-            <select className="select" name="system_id" required defaultValue={selectedSystemId ?? ""}>
-              <option value="" disabled>
-                Выберите систему
-              </option>
-              {filteredSystems.map((system) => (
-                <option key={system.id} value={system.id}>
-                  {system.name}
-                </option>
-              ))}
-            </select>
+            <AssigneeCombobox
+              name="system_id"
+              placeholder="Выберите систему"
+              required
+              defaultValue={selectedSystemId ?? ""}
+              selectionHint="Выберите систему из списка"
+              options={filteredSystems.map<AssigneeOption>((system) => ({
+                id: system.id,
+                label: system.name,
+              }))}
+            />
           </label>
           <input type="hidden" name="plan_month" value={currentMonthInput} />
           <button className="btn btn-accent" type="submit">
