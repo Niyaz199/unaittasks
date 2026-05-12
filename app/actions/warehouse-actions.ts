@@ -13,6 +13,7 @@ import {
   stockLocationFormSchema,
   stockMovementFormSchema,
   pprTemplateLinkSchema,
+  stockItemEquipmentLinkSchema,
 } from "@/lib/warehouse/validators";
 import { writeAudit } from "@/lib/audit";
 
@@ -165,6 +166,94 @@ function parsePprTemplateLinks(formData: FormData): Array<{ templateId: string; 
     .filter((item): item is { templateId: string; requiredQty: number } => item !== null);
 }
 
+function parseEquipmentLinks(formData: FormData): Array<{
+  equipmentId: string;
+  quantity: number;
+  reserveQty: number;
+  isCritical: boolean;
+  note: string | null;
+}> {
+  const equipmentIds = formData.getAll("equipment_link_id").map(String);
+  const quantities = formData.getAll("equipment_link_qty").map(String);
+  const reserves = formData.getAll("equipment_link_reserve").map(String);
+  const criticals = formData.getAll("equipment_link_critical").map(String);
+  const notes = formData.getAll("equipment_link_note").map(String);
+  return equipmentIds
+    .map((equipmentId, index) => {
+      if (!equipmentId) return null;
+      const raw = {
+        equipmentId,
+        quantity: quantities[index] ?? "1",
+        reserveQty: reserves[index] ?? "0",
+        isCritical: criticals[index] === "on" || criticals[index] === "true" || criticals[index] === "1",
+        note: notes[index] && notes[index].trim() ? notes[index] : null,
+      };
+      const parsed = stockItemEquipmentLinkSchema.safeParse(raw);
+      if (!parsed.success) return null;
+      return {
+        equipmentId: parsed.data.equipmentId,
+        quantity: parsed.data.quantity,
+        reserveQty: parsed.data.reserveQty,
+        isCritical: parsed.data.isCritical,
+        note: parsed.data.note ?? null,
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+}
+
+async function replaceStockItemEquipmentComponents(
+  supabase: Awaited<ReturnType<typeof requireProfile>>["supabase"],
+  itemId: string,
+  objectId: string,
+  links: Array<{ equipmentId: string; quantity: number; reserveQty: number; isCritical: boolean; note?: string | null }>
+) {
+  // Удаляем существующие связи между этим ТМЦ и любым оборудованием.
+  const { error: deleteError } = await supabase
+    .from("ppr_equipment_components")
+    .delete()
+    .eq("stock_item_id", itemId);
+  if (deleteError) throw deleteError;
+
+  if (!links.length) return;
+
+  // Дедуп по equipmentId — берём последнюю запись с одинаковым id.
+  const deduped = new Map<string, (typeof links)[number]>();
+  for (const link of links) {
+    deduped.set(link.equipmentId, link);
+  }
+  const uniqueEquipmentIds = [...deduped.keys()];
+
+  // Проверяем, что выбранное оборудование принадлежит тому же объекту.
+  const { data: equipmentRows, error: eqError } = await supabase
+    .from("ppr_equipment")
+    .select("id,object_id")
+    .in("id", uniqueEquipmentIds);
+  if (eqError) throw eqError;
+
+  const allowed = new Set(
+    (equipmentRows ?? [])
+      .filter((row) => row.object_id === objectId)
+      .map((row) => row.id as string)
+  );
+  const invalidIds = uniqueEquipmentIds.filter((id) => !allowed.has(id));
+  if (invalidIds.length > 0) {
+    throw new Error("Выбранное оборудование не принадлежит объекту ТМЦ.");
+  }
+
+  const { error: insertError } = await supabase.from("ppr_equipment_components").insert(
+    [...deduped.values()].map((link) => ({
+      object_id: objectId,
+      equipment_id: link.equipmentId,
+      stock_item_id: itemId,
+      quantity: link.quantity,
+      reserve_qty: link.reserveQty,
+      is_critical: link.isCritical,
+      note: link.note ?? null,
+    }))
+  );
+  if (insertError) throw insertError;
+}
+
 export async function createStockItemAction(formData: FormData) {
   const { profile, supabase, managedObjectIds } = await requireWarehouseManager();
   const initialQtyRaw = formData.get("initial_qty");
@@ -186,6 +275,7 @@ export async function createStockItemAction(formData: FormData) {
       .map((value) => String(value))
       .filter(Boolean),
     pprTemplateLinks: parsePprTemplateLinks(formData),
+    equipmentLinks: parseEquipmentLinks(formData),
     initialQty: initialQtyRaw === null || String(initialQtyRaw).trim() === "" ? null : String(initialQtyRaw),
     comment: String(formData.get("comment") ?? "") || null,
     isActive: formData.get("is_active") === "on",
@@ -227,6 +317,7 @@ export async function createStockItemAction(formData: FormData) {
 
   await replaceStockItemSystemGroups(supabase, data.id, payload.objectId, payload.systemGroupIds);
   await replaceStockItemPprTemplates(supabase, data.id, payload.objectId, payload.pprTemplateLinks);
+  await replaceStockItemEquipmentComponents(supabase, data.id, payload.objectId, payload.equipmentLinks);
 
   if (payload.initialQty && payload.initialQty > 0) {
     const { data: movement, error: movementError } = await supabase
@@ -305,6 +396,7 @@ export async function updateStockItemAction(formData: FormData) {
       .map((value) => String(value))
       .filter(Boolean),
     pprTemplateLinks: parsePprTemplateLinks(formData),
+    equipmentLinks: parseEquipmentLinks(formData),
     initialQty: null,
     comment: String(formData.get("comment") ?? "") || null,
     isActive: formData.get("is_active") === "on",
@@ -341,6 +433,7 @@ export async function updateStockItemAction(formData: FormData) {
 
   await replaceStockItemSystemGroups(supabase, itemId, payload.objectId, payload.systemGroupIds);
   await replaceStockItemPprTemplates(supabase, itemId, payload.objectId, payload.pprTemplateLinks);
+  await replaceStockItemEquipmentComponents(supabase, itemId, payload.objectId, payload.equipmentLinks);
 
   await writeAudit({
     actorId: profile.id,

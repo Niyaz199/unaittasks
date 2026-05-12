@@ -32,7 +32,7 @@ export default async function WarehouseItemsPage({
   const isAllObjectsMode = !selectedObject && showAllObjects;
   const shouldShowCatalog = Boolean(selectedObject) || isAllObjectsMode;
   const canManage = canManageWarehouseCatalog(profile.role);
-  const [items, locations, systemGroups, pprTemplates, summaries] = await Promise.all([
+  const [items, locations, systemGroups, pprTemplates, summaries, equipmentRows] = await Promise.all([
     shouldShowCatalog ? listStockItemsForProfile(supabase, profile, selectedObjectId ? { objectId: selectedObjectId } : {}) : Promise.resolve([]),
     shouldShowCatalog
       ? listStockLocationsForProfile(supabase, profile, selectedObjectId ? { objectId: selectedObjectId } : {})
@@ -42,6 +42,14 @@ export default async function WarehouseItemsPage({
       ? listPprWorkTemplatesForWarehouse(supabase, selectedObjectId ? { objectId: selectedObjectId } : {})
       : Promise.resolve([]),
     shouldShowCatalog ? Promise.resolve([]) : listWarehouseObjectSummariesForProfile(supabase, profile),
+    shouldShowCatalog && canManage && selectedObjectId
+      ? supabase
+          .from("ppr_equipment")
+          .select("id,name,dispatch_name,inventory_no,object_id")
+          .eq("object_id", selectedObjectId)
+          .order("name")
+          .then((res) => (res.data ?? []) as Array<{ id: string; name: string; dispatch_name: string | null; inventory_no: string | null; object_id: string }>)
+      : Promise.resolve([] as Array<{ id: string; name: string; dispatch_name: string | null; inventory_no: string | null; object_id: string }>),
   ]);
 
   const description = selectedObject
@@ -64,6 +72,7 @@ export default async function WarehouseItemsPage({
           locations={locations.map((item) => ({ id: item.id, object_id: item.object_id, name: item.name, is_active: item.is_active }))}
           systemGroups={systemGroups}
           pprTemplates={pprTemplates}
+          equipment={equipmentRows}
           canManage={canManage}
           initialFilterObjectId={selectedObjectId}
           currentObject={selectedObject ? { id: selectedObject.id, name: selectedObject.name } : null}

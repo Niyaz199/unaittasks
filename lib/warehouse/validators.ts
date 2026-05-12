@@ -11,6 +11,14 @@ export const pprTemplateLinkSchema = z.object({
   requiredQty: z.coerce.number().positive(),
 });
 
+export const stockItemEquipmentLinkSchema = z.object({
+  equipmentId: uuidSchema,
+  quantity: z.coerce.number().positive(),
+  reserveQty: z.coerce.number().min(0).default(0),
+  isCritical: z.boolean().default(false),
+  note: z.string().trim().max(2000).optional().nullable(),
+});
+
 export const stockItemFormSchema = z.object({
   objectId: uuidSchema,
   name: z.string().trim().min(2),
@@ -26,6 +34,7 @@ export const stockItemFormSchema = z.object({
   storageLocationId: z.string().uuid().optional().nullable(),
   systemGroupIds: z.array(uuidSchema).default([]),
   pprTemplateLinks: z.array(pprTemplateLinkSchema).default([]),
+  equipmentLinks: z.array(stockItemEquipmentLinkSchema).default([]),
   initialQty: z.coerce.number().min(0).optional().nullable(),
   comment: z.string().trim().max(4000).optional().nullable(),
   isActive: z.boolean().default(true),

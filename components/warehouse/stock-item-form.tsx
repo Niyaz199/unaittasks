@@ -13,8 +13,10 @@ type ObjectOption = { id: string; name: string };
 type LocationOption = { id: string; object_id: string; name: string; is_active?: boolean };
 type SystemGroupOption = { id: string; name: string; code: string; is_active?: boolean };
 type PprTemplateOption = { id: string; name: string; object_id: string; system_id: string; system_group_id: string };
+type EquipmentOption = { id: string; name: string; dispatch_name?: string | null; inventory_no?: string | null; object_id: string };
 
 type PprLinkRow = { template_id: string; required_qty: string };
+type EquipmentLinkRow = { equipment_id: string; quantity: string; reserve_qty: string; is_critical: boolean; note: string };
 
 type StockItemFormValues = {
   object_id: string;
@@ -31,6 +33,7 @@ type StockItemFormValues = {
   storage_location_id: string;
   system_group_ids: string[];
   ppr_template_links: PprLinkRow[];
+  equipment_links: EquipmentLinkRow[];
   initial_qty: string;
   comment: string;
   is_active: boolean;
@@ -42,6 +45,7 @@ type Props = {
   locations: LocationOption[];
   systemGroups: SystemGroupOption[];
   pprTemplates?: PprTemplateOption[];
+  equipment?: EquipmentOption[];
   initialValues?: Partial<StockItemFormValues>;
   itemId?: string;
   fixedObjectId?: string;
@@ -66,6 +70,7 @@ const defaultValues: StockItemFormValues = {
   storage_location_id: "",
   system_group_ids: [],
   ppr_template_links: [],
+  equipment_links: [],
   initial_qty: "",
   comment: "",
   is_active: true,
@@ -87,6 +92,7 @@ export function StockItemForm({
   locations,
   systemGroups,
   pprTemplates = [],
+  equipment = [],
   initialValues,
   itemId,
   fixedObjectId,
@@ -107,6 +113,12 @@ export function StockItemForm({
   const [isPprItem, setIsPprItem] = useState(values.ppr_template_links.length > 0);
   const [pprLinks, setPprLinks] = useState<PprLinkRow[]>(
     values.ppr_template_links.length > 0 ? values.ppr_template_links : [{ template_id: "", required_qty: "1" }]
+  );
+  const [isEquipmentComponent, setIsEquipmentComponent] = useState(values.equipment_links.length > 0);
+  const [equipmentLinks, setEquipmentLinks] = useState<EquipmentLinkRow[]>(
+    values.equipment_links.length > 0
+      ? values.equipment_links
+      : [{ equipment_id: "", quantity: "1", reserve_qty: "0", is_critical: false, note: "" }]
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { addToast } = useToast();
@@ -176,6 +188,45 @@ export function StockItemForm({
     onChange?.();
   }
 
+  const availableEquipment = useMemo(
+    () => equipment.filter((item) => !selectedObjectId || item.object_id === selectedObjectId),
+    [equipment, selectedObjectId]
+  );
+
+  const usedEquipmentIds = new Set(equipmentLinks.map((l) => l.equipment_id).filter(Boolean));
+
+  function addEquipmentLink() {
+    setEquipmentLinks((prev) => [...prev, { equipment_id: "", quantity: "1", reserve_qty: "0", is_critical: false, note: "" }]);
+    onChange?.();
+  }
+
+  function removeEquipmentLink(index: number) {
+    setEquipmentLinks((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      return next.length > 0
+        ? next
+        : [{ equipment_id: "", quantity: "1", reserve_qty: "0", is_critical: false, note: "" }];
+    });
+    onChange?.();
+  }
+
+  function updateEquipmentLink<K extends keyof EquipmentLinkRow>(index: number, field: K, value: EquipmentLinkRow[K]) {
+    setEquipmentLinks((prev) => prev.map((link, i) => (i === index ? { ...link, [field]: value } : link)));
+    onChange?.();
+  }
+
+  useEffect(() => {
+    if (!isEquipmentComponent) return;
+    // При смене объекта чистим выбранные оборудования, которые больше не относятся к этому объекту.
+    const availableIds = new Set(availableEquipment.map((e) => e.id));
+    setEquipmentLinks((prev) => {
+      const filtered = prev.map((link) =>
+        link.equipment_id && !availableIds.has(link.equipment_id) ? { ...link, equipment_id: "" } : link
+      );
+      return filtered;
+    });
+  }, [availableEquipment, isEquipmentComponent]);
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
@@ -186,6 +237,17 @@ export function StockItemForm({
           if (link.template_id && link.required_qty) {
             formData.append("ppr_link_template_id", link.template_id);
             formData.append("ppr_link_required_qty", link.required_qty);
+          }
+        }
+      }
+      if (isEquipmentComponent) {
+        for (const link of equipmentLinks) {
+          if (link.equipment_id && link.quantity) {
+            formData.append("equipment_link_id", link.equipment_id);
+            formData.append("equipment_link_qty", link.quantity);
+            formData.append("equipment_link_reserve", link.reserve_qty || "0");
+            formData.append("equipment_link_critical", link.is_critical ? "on" : "");
+            formData.append("equipment_link_note", link.note || "");
           }
         }
       }
@@ -451,6 +513,177 @@ export function StockItemForm({
               onChange={setSelectedSystemGroupIds}
             />
           </PprFormGroup>
+
+          {/* ── Привязка к оборудованию (составляющая) ── */}
+          {equipment.length > 0 && (
+            <>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "0.65rem",
+                  cursor: "pointer",
+                  padding: "0.65rem 0.9rem",
+                  borderRadius: "var(--radius)",
+                  background: isEquipmentComponent
+                    ? "color-mix(in srgb, var(--accent) 8%, transparent)"
+                    : "color-mix(in srgb, var(--panel-soft) 30%, transparent)",
+                  boxShadow: isEquipmentComponent
+                    ? "inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent)"
+                    : "inset 0 0 0 1px color-mix(in srgb, #8ea8d0 14%, transparent)",
+                  transition: "background 0.15s, box-shadow 0.15s",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={isEquipmentComponent}
+                  onChange={(event) => {
+                    setIsEquipmentComponent(event.target.checked);
+                    if (!event.target.checked) {
+                      setEquipmentLinks([{ equipment_id: "", quantity: "1", reserve_qty: "0", is_critical: false, note: "" }]);
+                    }
+                    onChange?.();
+                  }}
+                  style={{ marginTop: "0.1rem", flexShrink: 0 }}
+                />
+                <span style={{ display: "grid", gap: "0.15rem" }}>
+                  <span style={{ fontWeight: 500, fontSize: "0.875rem" }}>Является составляющей оборудования</span>
+                  <span style={{ fontSize: "0.72rem", color: "var(--text-soft)", lineHeight: 1.4 }}>
+                    ТМЦ будет добавлена в состав выбранного оборудования сразу при создании.
+                  </span>
+                </span>
+              </label>
+
+              {isEquipmentComponent && (
+                <div className="grid" style={{ gap: "0.75rem" }}>
+                  {!selectedObjectId && (
+                    <p className="text-soft" style={{ fontSize: "0.85rem", margin: 0, color: "var(--warning)" }}>
+                      Сначала выберите объект выше, чтобы стали доступны его единицы оборудования.
+                    </p>
+                  )}
+                  {selectedObjectId && availableEquipment.length === 0 && (
+                    <p className="text-soft" style={{ fontSize: "0.85rem", margin: 0, color: "var(--warning)" }}>
+                      У выбранного объекта пока нет оборудования.
+                    </p>
+                  )}
+                  {selectedObjectId && availableEquipment.length > 0 && (
+                    <>
+                      <p className="text-soft" style={{ fontSize: "0.85rem", margin: 0 }}>
+                        Укажите оборудование, штатное количество, резерв на складе и пометьте критичные компоненты.
+                      </p>
+                      {equipmentLinks.map((link, index) => {
+                        const optionsForRow = availableEquipment.filter(
+                          (e) => !usedEquipmentIds.has(e.id) || e.id === link.equipment_id
+                        );
+                        return (
+                          <div
+                            key={index}
+                            className="section-card"
+                            style={{ padding: "0.65rem 0.8rem", display: "grid", gap: "0.5rem" }}
+                          >
+                            <div className="row" style={{ gap: "0.6rem", alignItems: "flex-start" }}>
+                              <div style={{ flex: "1 1 0", minWidth: 0 }}>
+                                <AssigneeCombobox
+                                  key={`equip-link-${index}-${selectedObjectId}-${optionsForRow.length}`}
+                                  name={`__equipment_${index}`}
+                                  placeholder="Выберите оборудование"
+                                  required={isEquipmentComponent}
+                                  defaultValue={link.equipment_id}
+                                  selectionHint="Выберите оборудование из списка"
+                                  options={optionsForRow.map<AssigneeOption>((e) => ({
+                                    id: e.id,
+                                    label: [e.dispatch_name || e.name, e.inventory_no ? `(${e.inventory_no})` : null]
+                                      .filter(Boolean)
+                                      .join(" "),
+                                    subtitle: e.dispatch_name ? e.name : null,
+                                  }))}
+                                  onSelectedIdChange={(id) => updateEquipmentLink(index, "equipment_id", id)}
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                className="btn btn-ghost"
+                                style={{ padding: "0.45rem", flexShrink: 0 }}
+                                onClick={() => removeEquipmentLink(index)}
+                                title="Удалить строку"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                            <div
+                              className="row"
+                              style={{ gap: "0.5rem", flexWrap: "wrap", alignItems: "flex-end" }}
+                            >
+                              <div style={{ width: "120px", display: "grid", gap: "0.2rem" }}>
+                                <label className="text-soft" style={{ fontSize: "0.72rem" }}>Кол-во</label>
+                                <input
+                                  className="input"
+                                  type="number"
+                                  min="0.001"
+                                  step="0.001"
+                                  value={link.quantity}
+                                  onChange={(e) => updateEquipmentLink(index, "quantity", e.target.value)}
+                                  required={isEquipmentComponent && Boolean(link.equipment_id)}
+                                />
+                              </div>
+                              <div style={{ width: "120px", display: "grid", gap: "0.2rem" }}>
+                                <label className="text-soft" style={{ fontSize: "0.72rem" }}>Резерв на складе</label>
+                                <input
+                                  className="input"
+                                  type="number"
+                                  min="0"
+                                  step="0.001"
+                                  value={link.reserve_qty}
+                                  onChange={(e) => updateEquipmentLink(index, "reserve_qty", e.target.value)}
+                                />
+                              </div>
+                              <label
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.4rem",
+                                  cursor: "pointer",
+                                  padding: "0.25rem 0.6rem",
+                                  fontSize: "0.8rem",
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={link.is_critical}
+                                  onChange={(e) => updateEquipmentLink(index, "is_critical", e.target.checked)}
+                                />
+                                <span>Критичный</span>
+                              </label>
+                              <div style={{ flex: "1 1 200px", display: "grid", gap: "0.2rem" }}>
+                                <label className="text-soft" style={{ fontSize: "0.72rem" }}>Комментарий</label>
+                                <input
+                                  className="input"
+                                  type="text"
+                                  value={link.note}
+                                  onChange={(e) => updateEquipmentLink(index, "note", e.target.value)}
+                                  placeholder="Напр.: заменяется раз в год"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        style={{ justifyContent: "flex-start", gap: "0.5rem", padding: "0.3rem 0" }}
+                        onClick={addEquipmentLink}
+                        disabled={equipmentLinks.length >= availableEquipment.length}
+                      >
+                        <PlusCircle size={15} />
+                        Добавить ещё оборудование
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          )}
 
           {/* ── Участвует в ППР ── */}
           <label

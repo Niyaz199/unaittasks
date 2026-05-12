@@ -91,6 +91,7 @@ export function StockItemsAdmin({
   locations,
   systemGroups,
   pprTemplates = [],
+  equipment = [],
   canManage,
   initialFilterObjectId = "",
   currentObject = null,
@@ -101,6 +102,7 @@ export function StockItemsAdmin({
   locations: LocationOption[];
   systemGroups: SystemGroupOption[];
   pprTemplates?: PprTemplateOption[];
+  equipment?: Array<{ id: string; name: string; dispatch_name: string | null; inventory_no: string | null; object_id: string }>;
   canManage: boolean;
   initialFilterObjectId?: string;
   currentObject?: ObjectOption | null;
@@ -793,6 +795,7 @@ export function StockItemsAdmin({
           locations={locations}
           systemGroups={systemGroups}
           pprTemplates={pprTemplates}
+          equipment={equipment}
           fixedObjectId={isObjectScoped ? currentObject?.id : undefined}
           fixedObjectName={isObjectScoped ? currentObject?.name : undefined}
           onSubmitted={() => { setIsCreateOpen(false); setIsDirty(false); }}
@@ -810,6 +813,7 @@ export function StockItemsAdmin({
             locations={locations}
             systemGroups={systemGroups}
             pprTemplates={pprTemplates}
+            equipment={equipment}
             onSubmitted={() => { setEditingId(null); setIsDirty(false); }}
             onChange={() => setIsDirty(true)}
             submitLabel="Сохранить"
