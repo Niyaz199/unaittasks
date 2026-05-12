@@ -342,6 +342,27 @@ export async function createTaskAction(formData: FormData) {
   revalidatePath("/new");
 }
 
+function extractActionErrorMessage(err: unknown): string {
+  // Стандартные Error-инстансы
+  if (err instanceof Error && err.message.trim()) {
+    return err.message;
+  }
+  // PostgrestError от supabase-js не наследует Error: { code, message, details, hint }
+  if (err && typeof err === "object") {
+    const obj = err as { message?: unknown; code?: unknown; details?: unknown; hint?: unknown };
+    // RLS-violation — самый частый источник «непонятных» ошибок при INSERT/UPDATE
+    if (obj.code === "42501") {
+      return "Недостаточно прав на эту операцию (RLS). Проверьте роль и привязку к объекту.";
+    }
+    const message = typeof obj.message === "string" ? obj.message.trim() : "";
+    if (message) {
+      const code = typeof obj.code === "string" ? obj.code : null;
+      return code ? `${message} (${code})` : message;
+    }
+  }
+  return "Неизвестная ошибка";
+}
+
 export async function createTaskActionSafe(
   formData: FormData
 ): Promise<{ ok: true; taskId: string } | { ok: false; error: string }> {
@@ -361,8 +382,7 @@ export async function createTaskActionSafe(
 
     return { ok: true, taskId: result.taskId };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Неизвестная ошибка";
-    return { ok: false, error: message };
+    return { ok: false, error: extractActionErrorMessage(err) };
   }
 }
 

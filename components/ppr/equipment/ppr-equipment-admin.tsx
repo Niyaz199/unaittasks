@@ -227,6 +227,8 @@ export function PprEquipmentAdmin({
               {availableRooms.map((room) => (
                 <option key={room.id} value={room.id}>
                   {room.name}
+                  {room.floor_name ? ` • ${room.floor_name}` : ""}
+                  {room.room_type_name ? ` • ${room.room_type_name}` : ""}
                 </option>
               ))}
             </select>

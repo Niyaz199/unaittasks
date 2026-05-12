@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { pprEquipmentStatusMeta } from "@/lib/ppr/presentation";
 import { PprFormGroup, PprFormSection } from "@/components/ppr/ui/ppr-modal";
 import { useToast } from "@/components/ui/toast";
+import { AssigneeCombobox, type AssigneeOption } from "@/components/ui/assignee-combobox";
 
 type ObjectOption = { id: string; name: string };
 type SystemOption = { id: string; object_id: string; name: string };
@@ -155,17 +156,20 @@ export function PprEquipmentForm({
           </PprFormGroup>
 
           <PprFormGroup label="Помещение">
-            <select className="select" name="room_id" required value={selectedRoomId} onChange={(event) => setSelectedRoomId(event.target.value)}>
-              <option value="" disabled>Выберите помещение</option>
-              {filteredRooms.map((room) => (
-                <option key={room.id} value={room.id}>
-                  {room.name}
-                  {room.floor_name ? ` • ${room.floor_name}` : ""}
-                  {room.room_type_name ? ` • ${room.room_type_name}` : ""}
-                  {room.is_active ? "" : " (неактивно)"}
-                </option>
-              ))}
-            </select>
+            <AssigneeCombobox
+              key={`room-${selectedObjectId || "any"}`}
+              name="room_id"
+              placeholder="Выберите помещение (поиск по названию, этажу, типу)"
+              required
+              defaultValue={selectedRoomId}
+              options={filteredRooms.map<AssigneeOption>((room) => ({
+                id: room.id,
+                label: [room.name, room.floor_name, room.room_type_name]
+                  .filter(Boolean)
+                  .join(" • ") + (room.is_active ? "" : " (неактивно)"),
+              }))}
+              onSelectedIdChange={(id) => setSelectedRoomId(id)}
+            />
           </PprFormGroup>
         </PprFormSection>
 
