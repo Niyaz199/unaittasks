@@ -1,10 +1,16 @@
 import { requireProfile } from "@/lib/auth";
 import { listFloorsForProfile } from "@/lib/floors";
 import { listRoomTypesForProfile } from "@/lib/room-types";
-import { canReadObjectRooms, listObjectRoomManageableObjectsForProfile, listObjectRoomsForProfile } from "@/lib/object-rooms";
+import {
+  canReadObjectRooms,
+  listObjectRoomManageableObjectsForProfile,
+  listObjectRoomsForProfile,
+  listObjectRoomsObjectSummariesForProfile,
+} from "@/lib/object-rooms";
 import { PageHeader } from "@/components/ui/page-header";
 import { BackButton } from "@/components/ui/back-button";
 import { PprRoomsAdmin } from "@/components/ppr/rooms/ppr-rooms-admin";
+import { PprRoomsObjectHub } from "@/components/ppr/rooms/ppr-rooms-object-hub";
 
 export default async function PprRoomsPage({
   searchParams,
@@ -19,44 +25,54 @@ export default async function PprRoomsPage({
 
   const objects = await listObjectRoomManageableObjectsForProfile(supabase, profile);
   const requestedObjectId = typeof search.objectId === "string" ? search.objectId : "";
-  const initialObjectId = objects.some((item) => item.id === requestedObjectId) ? requestedObjectId : "";
+  const selectedObjectId = objects.some((item) => item.id === requestedObjectId) ? requestedObjectId : "";
+  const shouldShowCatalog = Boolean(selectedObjectId);
   const initialFloorId = typeof search.floorId === "string" ? search.floorId : "";
 
-  const [rooms, floors, roomTypes] = await Promise.all([
-    initialObjectId ? listObjectRoomsForProfile(supabase, profile, { objectId: initialObjectId }) : Promise.resolve([]),
-    initialObjectId ? listFloorsForProfile(supabase, profile, { objectId: initialObjectId }) : Promise.resolve([]),
-    listRoomTypesForProfile(supabase, profile),
+  const [rooms, floors, roomTypes, summaries] = await Promise.all([
+    shouldShowCatalog ? listObjectRoomsForProfile(supabase, profile, { objectId: selectedObjectId }) : Promise.resolve([]),
+    shouldShowCatalog ? listFloorsForProfile(supabase, profile, { objectId: selectedObjectId }) : Promise.resolve([]),
+    shouldShowCatalog ? listRoomTypesForProfile(supabase, profile) : Promise.resolve([]),
+    shouldShowCatalog ? Promise.resolve([]) : listObjectRoomsObjectSummariesForProfile(supabase, profile),
   ]);
 
+  const objectName = objects.find((o) => o.id === selectedObjectId)?.name ?? "";
+  const description = shouldShowCatalog
+    ? `«${objectName}»: помещения с QR-кодами и карточками.`
+    : "Выберите объект, чтобы открыть его помещения.";
 
   return (
     <section className="grid">
       <PageHeader
         title="Помещения объектов"
-        description={initialObjectId ? "Помещения выбранного объекта с QR-кодами и карточками." : "Выберите объект в фильтре ниже, чтобы загрузить список помещений."}
+        description={description}
         actions={<BackButton fallback="/ppr" label="← Назад к ППР" />}
       />
 
-      <PprRoomsAdmin
-        rooms={rooms}
-        objects={objects}
-        floors={floors.map((item) => ({
-          id: item.id,
-          object_id: item.object_id,
-          name: item.name,
-          sort_order: item.sort_order,
-          is_active: item.is_active,
-        }))}
-        roomTypes={roomTypes.map((item) => ({
-          id: item.id,
-          name: item.name,
-          sort_order: item.sort_order,
-          is_active: item.is_active,
-        }))}
-        initialFilterObjectId={initialObjectId}
-        initialFilterFloorId={initialFloorId}
-        initialCreateOpen={search.new === "1"}
-      />
+      {shouldShowCatalog ? (
+        <PprRoomsAdmin
+          rooms={rooms}
+          objects={objects}
+          floors={floors.map((item) => ({
+            id: item.id,
+            object_id: item.object_id,
+            name: item.name,
+            sort_order: item.sort_order,
+            is_active: item.is_active,
+          }))}
+          roomTypes={roomTypes.map((item) => ({
+            id: item.id,
+            name: item.name,
+            sort_order: item.sort_order,
+            is_active: item.is_active,
+          }))}
+          initialFilterObjectId={selectedObjectId}
+          initialFilterFloorId={initialFloorId}
+          initialCreateOpen={search.new === "1"}
+        />
+      ) : (
+        <PprRoomsObjectHub summaries={summaries} />
+      )}
     </section>
   );
 }

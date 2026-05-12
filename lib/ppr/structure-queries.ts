@@ -471,3 +471,61 @@ export async function listPprWorkTemplatesForWarehouse(
   });
 }
 
+export type PprSystemsObjectSummaryRow = {
+  object_id: string;
+  object_name: string;
+  total_count: number;
+  active_count: number;
+  group_count: number;
+  with_responsible_count: number;
+};
+
+export async function listPprSystemsObjectSummariesForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">
+): Promise<PprSystemsObjectSummaryRow[]> {
+  assertPprStructureQueryAccess(profile.role);
+  const objects = await listPprManageableObjectsForProfile(supabase, profile);
+  if (!objects.length) return [];
+
+  const objectIds = objects.map((item) => item.id);
+  const { data, error } = await supabase
+    .from("ppr_systems")
+    .select("object_id,is_active,system_group_id,responsible_user_id")
+    .in("object_id", objectIds);
+  if (error) throw error;
+
+  const stats = new Map<
+    string,
+    { total: number; active: number; groups: Set<string>; withResponsible: number }
+  >();
+  for (const row of (data ?? []) as Array<{
+    object_id: string;
+    is_active: boolean;
+    system_group_id: string | null;
+    responsible_user_id: string | null;
+  }>) {
+    const current =
+      stats.get(row.object_id) ?? { total: 0, active: 0, groups: new Set<string>(), withResponsible: 0 };
+    current.total += 1;
+    if (row.is_active) current.active += 1;
+    if (row.system_group_id) current.groups.add(row.system_group_id);
+    if (row.responsible_user_id) current.withResponsible += 1;
+    stats.set(row.object_id, current);
+  }
+
+  return objects
+    .map((object) => {
+      const s = stats.get(object.id);
+      return {
+        object_id: object.id,
+        object_name: object.name,
+        total_count: s?.total ?? 0,
+        active_count: s?.active ?? 0,
+        group_count: s?.groups.size ?? 0,
+        with_responsible_count: s?.withResponsible ?? 0,
+      };
+    })
+    .sort((a, b) => a.object_name.localeCompare(b.object_name, "ru"));
+}
+

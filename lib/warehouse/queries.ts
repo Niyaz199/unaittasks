@@ -602,3 +602,70 @@ export async function getStockItemByIdForProfile(
     attachments,
   };
 }
+
+export type StockLocationsObjectSummaryRow = {
+  object_id: string;
+  object_name: string;
+  total_count: number;
+  active_count: number;
+  with_qr_count: number;
+};
+
+export async function listStockLocationsObjectSummariesForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">
+): Promise<StockLocationsObjectSummaryRow[]> {
+  const objects = await listWarehouseReadableObjectsForProfile(supabase, profile);
+  if (!objects.length) return [];
+
+  const objectIds = objects.map((item) => item.id);
+  const { data: locations, error: locationsError } = await supabase
+    .from("stock_locations")
+    .select("id,object_id,is_active")
+    .in("object_id", objectIds);
+  if (locationsError) throw locationsError;
+
+  const locationRows = (locations ?? []) as Array<{ id: string; object_id: string; is_active: boolean }>;
+
+  const stats = new Map<string, { total: number; active: number; withQr: number }>();
+  for (const row of locationRows) {
+    const current = stats.get(row.object_id) ?? { total: 0, active: 0, withQr: 0 };
+    current.total += 1;
+    if (row.is_active) current.active += 1;
+    stats.set(row.object_id, current);
+  }
+
+  const locationIdToObject = new Map(locationRows.map((row) => [row.id, row.object_id] as const));
+  if (locationIdToObject.size) {
+    const { data: qrCodes, error: qrError } = await supabase
+      .from("stock_location_qr_codes")
+      .select("location_id")
+      .eq("is_active", true)
+      .in("location_id", Array.from(locationIdToObject.keys()));
+    if (qrError) throw qrError;
+
+    const countedLocations = new Set<string>();
+    for (const row of (qrCodes ?? []) as Array<{ location_id: string }>) {
+      if (countedLocations.has(row.location_id)) continue;
+      countedLocations.add(row.location_id);
+      const objectId = locationIdToObject.get(row.location_id);
+      if (!objectId) continue;
+      const current = stats.get(objectId) ?? { total: 0, active: 0, withQr: 0 };
+      current.withQr += 1;
+      stats.set(objectId, current);
+    }
+  }
+
+  return objects
+    .map((object) => {
+      const s = stats.get(object.id);
+      return {
+        object_id: object.id,
+        object_name: object.name,
+        total_count: s?.total ?? 0,
+        active_count: s?.active ?? 0,
+        with_qr_count: s?.withQr ?? 0,
+      };
+    })
+    .sort((a, b) => a.object_name.localeCompare(b.object_name, "ru"));
+}

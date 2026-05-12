@@ -199,6 +199,58 @@ export async function getObjectRoomQrCodeByTokenForProfile(
   return row as ObjectRoomQrCode | null;
 }
 
+export type ObjectRoomsObjectSummaryRow = {
+  object_id: string;
+  object_name: string;
+  total_count: number;
+  active_count: number;
+  inactive_count: number;
+  floor_count: number;
+};
+
+export async function listObjectRoomsObjectSummariesForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">
+): Promise<ObjectRoomsObjectSummaryRow[]> {
+  const objects = await listObjectRoomManageableObjectsForProfile(supabase, profile);
+  if (!objects.length) return [];
+
+  const objectIds = objects.map((item) => item.id);
+  const { data, error } = await supabase
+    .from("object_rooms")
+    .select("object_id,floor_id,is_active")
+    .in("object_id", objectIds);
+  if (error) throw error;
+
+  const stats = new Map<
+    string,
+    { total: number; active: number; inactive: number; floors: Set<string> }
+  >();
+  for (const row of (data ?? []) as Array<{ object_id: string; floor_id: string | null; is_active: boolean }>) {
+    const current =
+      stats.get(row.object_id) ?? { total: 0, active: 0, inactive: 0, floors: new Set<string>() };
+    current.total += 1;
+    if (row.is_active) current.active += 1;
+    else current.inactive += 1;
+    if (row.floor_id) current.floors.add(row.floor_id);
+    stats.set(row.object_id, current);
+  }
+
+  return objects
+    .map((object) => {
+      const s = stats.get(object.id);
+      return {
+        object_id: object.id,
+        object_name: object.name,
+        total_count: s?.total ?? 0,
+        active_count: s?.active ?? 0,
+        inactive_count: s?.inactive ?? 0,
+        floor_count: s?.floors.size ?? 0,
+      };
+    })
+    .sort((a, b) => a.object_name.localeCompare(b.object_name, "ru"));
+}
+
 export async function regenerateObjectRoomQrCodeForProfile(
   supabase: SupabaseClient,
   profile: Pick<Profile, "id" | "role">,
