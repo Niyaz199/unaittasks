@@ -288,6 +288,69 @@ export async function saveRoundsRoomSelectionBatch(
   };
 }
 
+export type RoundsTodayObjectSummaryRow = {
+  object_id: string;
+  object_name: string;
+  total_rooms: number;
+  checked_count: number;
+  missing_count: number;
+};
+
+export async function listRoundsTodayObjectSummariesForProfile(
+  supabase: SupabaseClient,
+  profile: Pick<Profile, "id" | "role">,
+  options?: { operationalDate?: string }
+): Promise<RoundsTodayObjectSummaryRow[]> {
+  const objects = await listRoundsReadableObjectsForProfile(supabase, profile);
+  if (!objects.length) return [];
+
+  const objectIds = objects.map((item) => item.id);
+  const operationalDate =
+    options?.operationalDate?.trim() || toOperationalDate(new Date(), getRoundsProjectTimeZone());
+
+  const [{ data: roomsData, error: roomsError }, { data: checkinsData, error: checkinsError }] = await Promise.all([
+    supabase
+      .from("object_rooms")
+      .select("id,object_id")
+      .eq("rounds_enabled", true)
+      .eq("is_active", true)
+      .in("object_id", objectIds),
+    supabase
+      .from("rounds_checkins")
+      .select("room_id,object_id")
+      .eq("operational_date", operationalDate)
+      .in("object_id", objectIds),
+  ]);
+  if (roomsError) throw roomsError;
+  if (checkinsError) throw checkinsError;
+
+  const totalByObject = new Map<string, number>();
+  for (const row of (roomsData ?? []) as Array<{ id: string; object_id: string }>) {
+    totalByObject.set(row.object_id, (totalByObject.get(row.object_id) ?? 0) + 1);
+  }
+
+  const checkedRoomsByObject = new Map<string, Set<string>>();
+  for (const row of (checkinsData ?? []) as Array<{ room_id: string; object_id: string }>) {
+    const set = checkedRoomsByObject.get(row.object_id) ?? new Set<string>();
+    set.add(row.room_id);
+    checkedRoomsByObject.set(row.object_id, set);
+  }
+
+  return objects
+    .map((object) => {
+      const total = totalByObject.get(object.id) ?? 0;
+      const checked = checkedRoomsByObject.get(object.id)?.size ?? 0;
+      return {
+        object_id: object.id,
+        object_name: object.name,
+        total_rooms: total,
+        checked_count: checked,
+        missing_count: Math.max(0, total - checked),
+      };
+    })
+    .sort((a, b) => a.object_name.localeCompare(b.object_name, "ru"));
+}
+
 export async function getRoundsTodayForProfile(
   supabase: SupabaseClient,
   profile: Pick<Profile, "id" | "role">,

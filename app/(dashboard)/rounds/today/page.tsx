@@ -3,9 +3,16 @@ import { requireProfile } from "@/lib/auth";
 import { BackButton } from "@/components/ui/back-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { canReadRoundsReports } from "@/lib/rounds/permissions";
-import { getRoundsTodayForProfile } from "@/lib/rounds/queries";
+import {
+  getRoundsTodayForProfile,
+  listRoundsReadableObjectsForProfile,
+  listRoundsTodayObjectSummariesForProfile,
+} from "@/lib/rounds/queries";
 import { formatDateLabel } from "@/lib/rounds/date";
+import { toOperationalDate } from "@/lib/rounds/date";
+import { getRoundsProjectTimeZone } from "@/lib/rounds/constants";
 import { RoundsTodayBoard } from "@/components/rounds/rounds-today-board";
+import { RoundsTodayObjectHub } from "@/components/rounds/rounds-today-object-hub";
 
 export default async function RoundsTodayPage({
   searchParams,
@@ -28,27 +35,51 @@ export default async function RoundsTodayPage({
     );
   }
 
-  const data = await getRoundsTodayForProfile(supabase, profile, {
-    objectId: typeof search.objectId === "string" ? search.objectId : undefined,
-    operationalDate: typeof search.operationalDate === "string" ? search.operationalDate : undefined,
-    query: typeof search.q === "string" ? search.q : undefined,
-  });
+  const requestedObjectId = typeof search.objectId === "string" ? search.objectId : "";
+  const requestedDate = typeof search.operationalDate === "string" ? search.operationalDate : undefined;
+  const requestedQuery = typeof search.q === "string" ? search.q : "";
+
+  const objects = await listRoundsReadableObjectsForProfile(supabase, profile);
+  const selectedObjectId = objects.some((item) => item.id === requestedObjectId) ? requestedObjectId : "";
+  const shouldShowBoard = Boolean(selectedObjectId);
+  const operationalDate = requestedDate?.trim() || toOperationalDate(new Date(), getRoundsProjectTimeZone());
+
+  const [boardData, summaries] = await Promise.all([
+    shouldShowBoard
+      ? getRoundsTodayForProfile(supabase, profile, {
+          objectId: selectedObjectId,
+          operationalDate,
+          query: requestedQuery || undefined,
+        })
+      : Promise.resolve(null),
+    shouldShowBoard
+      ? Promise.resolve([])
+      : listRoundsTodayObjectSummariesForProfile(supabase, profile, { operationalDate }),
+  ]);
+
+  const description = shouldShowBoard
+    ? `Операционная дата: ${formatDateLabel(boardData!.operationalDate)}. В списке только помещения, включенные в обходы.`
+    : `Операционная дата: ${formatDateLabel(operationalDate)}. Выберите объект, чтобы увидеть список помещений.`;
 
   return (
     <section className="grid">
       <PageHeader
         title="Обходы: сегодня"
-        description={`Операционная дата: ${formatDateLabel(data.operationalDate)}. В списке только помещения, включенные в обходы.`}
+        description={description}
         actions={<BackButton fallback="/rounds" label="← К обходам" />}
       />
 
-      <RoundsTodayBoard
-        objects={data.objects}
-        rows={data.rows}
-        initialObjectId={typeof search.objectId === "string" ? search.objectId : ""}
-        initialOperationalDate={data.operationalDate}
-        initialQuery={typeof search.q === "string" ? search.q : ""}
-      />
+      {shouldShowBoard ? (
+        <RoundsTodayBoard
+          objects={boardData!.objects}
+          rows={boardData!.rows}
+          initialObjectId={selectedObjectId}
+          initialOperationalDate={boardData!.operationalDate}
+          initialQuery={requestedQuery}
+        />
+      ) : (
+        <RoundsTodayObjectHub summaries={summaries} operationalDate={operationalDate} />
+      )}
     </section>
   );
 }
