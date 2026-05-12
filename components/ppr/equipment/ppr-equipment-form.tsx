@@ -162,6 +162,7 @@ export function PprEquipmentForm({
               placeholder="Выберите помещение (поиск по названию, этажу, типу)"
               required
               defaultValue={selectedRoomId}
+              selectionHint="Выберите помещение из списка"
               options={filteredRooms.map<AssigneeOption>((room) => ({
                 id: room.id,
                 label: [room.name, room.floor_name, room.room_type_name]

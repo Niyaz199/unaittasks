@@ -17,6 +17,8 @@ type Props = {
   required?: boolean;
   defaultValue?: string;
   onSelectedIdChange?: (id: string) => void;
+  /** Подсказка, появляющаяся когда введён текст, но опция из списка не выбрана. */
+  selectionHint?: string;
 };
 
 export function AssigneeCombobox({
@@ -26,6 +28,7 @@ export function AssigneeCombobox({
   required = false,
   defaultValue = "",
   onSelectedIdChange,
+  selectionHint = "Выберите пользователя из списка",
 }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const initialOption = options.find((option) => option.id === defaultValue);
@@ -126,7 +129,7 @@ export function AssigneeCombobox({
       ) : null}
 
       {required && !selectedId && query.trim() ? (
-        <div className="text-soft assignee-combobox-hint">Выберите пользователя из списка</div>
+        <div className="text-soft assignee-combobox-hint">{selectionHint}</div>
       ) : null}
     </div>
   );
